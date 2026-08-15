@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=EKLK
+Comment=Запуск личного кабинета EKLK (EcomKassa)
+Exec=xfce4-terminal --working-directory=/home/nikita/EKLK/eklk --title=EKLK -e "bash -lc 'source .venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port 8000; echo; read -p \"Сервер остановлен. Enter — закрыть...\"'"
+Icon=applications-internet
+Terminal=false
+Categories=Network;Development;
+StartupNotify=true
