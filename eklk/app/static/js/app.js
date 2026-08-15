@@ -243,7 +243,9 @@
     const payTotal = paymentsSum("#c_payments");
     const warn = $("#sum_warn");
     const issues = [];
-    if (!$("#c_email").value.trim()) issues.push("Укажите email покупателя");
+    if (!$("#c_email").value.trim() && !($("#c_phone") && $("#c_phone").value.trim())) {
+      issues.push("Укажите email или телефон покупателя");
+    }
     if (total <= 0) issues.push("Добавьте товары с ненулевой суммой");
     // Allow empty pay rows (auto-fill), but if user entered payments — must match
     const hasManualPay = $$("#c_payments .pay-row").some(
@@ -271,7 +273,22 @@
   }
 
   function updatePaySummary() {
-    $("#p_sum_total").textContent = money(itemsSum("p_items")) + " ₽";
+    const total = itemsSum("p_items");
+    $("#p_sum_total").textContent = money(total) + " ₽";
+    const warn = $("#p_sum_warn");
+    if (!warn) return;
+    const issues = [];
+    const em = ($("#p_email") && $("#p_email").value.trim()) || "";
+    const ph = ($("#p_phone") && $("#p_phone").value.trim()) || "";
+    if (!em && !ph) issues.push("Укажите email или телефон покупателя");
+    if (total <= 0) issues.push("Добавьте товары с ненулевой суммой");
+    if (issues.length) {
+      warn.className = "warn-box error";
+      warn.textContent = issues.join(". ");
+    } else {
+      warn.className = "warn-box";
+      warn.textContent = "✓ Ошибок нет";
+    }
   }
 
   // ---- Auth ----
@@ -449,7 +466,12 @@
     bindItemTable("r_items");
   };
 
-  ["c_email", "c_operation", "c_sno"].forEach((id) => {
+  ["p_email", "p_phone"].forEach((id) => {
+    const el = $("#" + id);
+    if (el) el.oninput = el.onchange = updatePaySummary;
+  });
+
+  ["c_email", "c_phone", "c_operation", "c_sno"].forEach((id) => {
     const el = $("#" + id);
     if (el) el.oninput = el.onchange = updateCreateSummary;
   });
@@ -477,7 +499,9 @@
 
     // Pre-validate before API
     const issues = [];
-    if (!$("#c_email").value.trim()) issues.push("Укажите email покупателя");
+    if (!$("#c_email").value.trim() && !($("#c_phone") && $("#c_phone").value.trim())) {
+      issues.push("Укажите email или телефон покупателя");
+    }
     if (total <= 0) issues.push("Сумма товаров должна быть больше 0");
     const payTotal = payments.reduce((s, p) => s + p.sum, 0);
     if (Math.abs(payTotal - total) > 0.009) {
@@ -605,7 +629,11 @@
     const items = collectItems("p_items");
     const total = items.reduce((s, i) => s + i.sum, 0);
     if (total <= 0) return showAlert("Сумма товаров должна быть больше 0");
+    const emailP = ($("#p_email") && $("#p_email").value.trim()) || "";
     const phoneRaw = ($("#p_phone") && $("#p_phone").value.trim()) || "";
+    if (!emailP && !phoneRaw) {
+      return showAlert("Укажите email или телефон покупателя (требование ФНС)");
+    }
     let phoneNorm = undefined;
     if (phoneRaw) {
       phoneNorm = normalizePhoneUI(phoneRaw);

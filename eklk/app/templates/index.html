@@ -82,11 +82,15 @@
             <!-- Buyer -->
             <div class="card">
               <div class="section-title">Данные о покупателе</div>
+              <p class="hint" style="margin-bottom:12px">По требованию ФНС нужен <b>email или телефон</b> — иначе чек нельзя доставить покупателю.</p>
               <div class="row">
-                <div style="grid-column: span 2">
-                  <label>Email покупателя <span class="req">*</span></label>
+                <div>
+                  <label>Email</label>
                   <input id="c_email" type="email" placeholder="name@example.com" />
-                  <p class="hint">Чек будет отправлен покупателю на указанный email</p>
+                </div>
+                <div>
+                  <label>Телефон</label>
+                  <input id="c_phone" placeholder="+79001234567" />
                 </div>
                 <div>
                   <label>&nbsp;</label>
@@ -96,7 +100,6 @@
               <div id="c_extraBuyer" class="extra-buyer hidden">
                 <div class="row">
                   <div><label>ФИО</label><input id="c_name" placeholder="Иванов Иван Иванович" /></div>
-                  <div><label>Телефон</label><input id="c_phone" placeholder="8 900 123-45-67" /></div>
                   <div><label>ИНН</label><input id="c_inn" placeholder="7707083893" /></div>
                 </div>
               </div>
@@ -248,34 +251,46 @@
         <div class="check-layout">
           <div>
             <div class="card">
-              <div class="section-title">Ссылка на оплату (INVOICE)</div>
-              <p class="card-desc">После оплаты чек создаётся автоматически</p>
-              <div class="row">
-                <div><label>Email покупателя</label><input id="p_email" type="email" placeholder="name@example.com" /></div>
-                <div><label>Телефон</label><input id="p_phone" placeholder="+79001234567" /></div>
-                <div><label>ФИО</label><input id="p_name" /></div>
-              </div>
-              <div class="row">
+              <div class="section-title">Параметры счёта на оплату</div>
+              <p class="hint" style="margin-bottom:12px">Онлайн-оплата: после успешной оплаты касса сформирует чек. Тип расчёта — <b>безналичный</b>.</p>
+              <div class="row row-3">
                 <div>
-                  <label>Платёжная система</label>
-                  <select id="p_type"></select>
-                </div>
-                <div>
-                  <label>СНО</label>
+                  <label>Система налогообложения</label>
                   <select id="p_sno">
                     <option value="osn">ОСН</option>
                     <option value="usn_income">УСН доходы</option>
                     <option value="usn_income_outcome">УСН доходы-расходы</option>
+                    <option value="esn">ЕСН</option>
+                    <option value="patent">Патент</option>
                   </select>
                 </div>
                 <div>
-                  <label>URL успеха</label>
+                  <label>Платёжная система (эквайринг)</label>
+                  <select id="p_type"></select>
+                </div>
+                <div>
+                  <label>URL успеха (необязательно)</label>
                   <input id="p_success" placeholder="https://site.ru/ok" />
+                </div>
+              </div>
+              <div class="row">
+                <div>
+                  <label>Вид оплаты</label>
+                  <input value="Безналичными (онлайн)" disabled />
                 </div>
               </div>
             </div>
             <div class="card">
-              <div class="section-title" style="display:flex;justify-content:space-between">
+              <div class="section-title">Данные о покупателе</div>
+              <p class="hint" style="margin-bottom:12px">Обязателен <b>email или телефон</b> (требование ФНС).</p>
+              <div class="row">
+                <div><label>Email</label><input id="p_email" type="email" placeholder="name@example.com" /></div>
+                <div><label>Телефон</label><input id="p_phone" placeholder="+79001234567" /></div>
+                <div><label>ФИО</label><input id="p_name" placeholder="Иванов Иван" /></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
                 <span>Товарные позиции</span>
                 <button type="button" class="btn btn-sm" id="p_addItem">+ Добавить</button>
               </div>
@@ -289,14 +304,16 @@
               </table>
             </div>
             <div class="actions-bar">
-              <button type="button" class="btn" id="p_submit">Создать ссылку</button>
+              <button type="button" class="btn" id="p_submit">Создать ссылку на оплату</button>
             </div>
             <div id="p_result" class="hidden mt-3"></div>
           </div>
           <aside class="aside-card">
             <div class="card">
-              <div class="section-title">К оплате</div>
-              <div class="total-line"><span>Сумма</span><span id="p_sum_total">0.00 ₽</span></div>
+              <div class="section-title">Счёт на оплату</div>
+              <div class="kv"><span class="k">Оплата</span><span class="v">Безнал (онлайн)</span></div>
+              <div class="total-line"><span>К оплате</span><span id="p_sum_total">0.00 ₽</span></div>
+              <div class="warn-box" id="p_sum_warn">✓ Ошибок нет</div>
             </div>
           </aside>
         </div>

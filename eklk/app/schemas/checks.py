@@ -1,5 +1,5 @@
 from typing import Optional, List, Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 import re
 
 
@@ -54,6 +54,19 @@ class ClientIn(BaseModel):
                 f"ИНН покупателя: 10 или 12 цифр, сейчас {len(digits)}"
             )
         return digits
+
+
+
+    @model_validator(mode="after")
+    def email_or_phone(self):
+        """ФНС: для онлайн-чека нужен email или телефон покупателя."""
+        email = (self.email or "").strip()
+        phone = (self.phone or "").strip()
+        if not email and not phone:
+            raise ValueError(
+                "Укажите email или телефон покупателя — чек должен быть доставлен (требование ФНС)"
+            )
+        return self
 
 
 class CompanyIn(BaseModel):
@@ -131,7 +144,7 @@ class CreateCheckRequest(BaseModel):
     external_id: Optional[str] = None
     items: List[CheckItemIn] = Field(..., min_length=1)
     payments: List[PaymentIn] = Field(..., min_length=1)
-    client: Optional[ClientIn] = None
+    client: ClientIn
     company: Optional[CompanyIn] = None
     sno: str = "osn"
     success_url: Optional[str] = None
