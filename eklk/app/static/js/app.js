@@ -365,6 +365,14 @@
     $("#c_addPropBox").classList.toggle("hidden", !$("#c_addProp").checked);
   };
 
+  function syncAgentBox() {
+    const on = document.querySelector('input[name="c_agent"]:checked')?.value === "1";
+    $("#c_agentBox").classList.toggle("hidden", !on);
+  }
+  document.querySelectorAll('input[name="c_agent"]').forEach((r) => {
+    r.addEventListener("change", syncAgentBox);
+  });
+
   $("#c_addItem").onclick = () => {
     $("#c_items").insertAdjacentHTML("beforeend", itemRowHtml());
     bindItemTable("c_items", updateCreateSummary);
@@ -451,6 +459,40 @@
         },
         sno: $("#c_sno").value,
       };
+
+      // Additional user props (name + value)
+      if ($("#c_addProp") && $("#c_addProp").checked) {
+        const n = ($("#c_addPropName") && $("#c_addPropName").value.trim()) || "";
+        const v = ($("#c_addPropVal") && $("#c_addPropVal").value.trim()) || "";
+        if (!n || !v) {
+          showAlert("Доп. реквизит: укажите и наименование, и значение");
+          setLoading(btn, false, "Создать чек");
+          return;
+        }
+        body.additional_user_props = { name: n, value: v };
+      }
+
+      // Agent
+      if (document.querySelector('input[name="c_agent"]:checked')?.value === "1") {
+        body.agent = {
+          type: $("#c_agent_type").value,
+          paying_operation: ($("#c_pa_op") && $("#c_pa_op").value.trim()) || undefined,
+          paying_phones: ($("#c_pa_phones") && $("#c_pa_phones").value.trim()) || undefined,
+          receive_phones: ($("#c_recv_phones") && $("#c_recv_phones").value.trim()) || undefined,
+          transfer_name: ($("#c_mt_name") && $("#c_mt_name").value.trim()) || undefined,
+          transfer_address: ($("#c_mt_addr") && $("#c_mt_addr").value.trim()) || undefined,
+          transfer_inn: ($("#c_mt_inn") && $("#c_mt_inn").value.trim()) || undefined,
+          transfer_phones: ($("#c_mt_phones") && $("#c_mt_phones").value.trim()) || undefined,
+          supplier_name: ($("#c_sup_name") && $("#c_sup_name").value.trim()) || undefined,
+          supplier_inn: ($("#c_sup_inn") && $("#c_sup_inn").value.trim()) || undefined,
+          supplier_phones: ($("#c_sup_phones") && $("#c_sup_phones").value.trim()) || undefined,
+        };
+        if (!body.agent.supplier_name && !body.agent.supplier_inn && !body.agent.supplier_phones) {
+          showAlert("При агенте укажите данные поставщика (supplier_info)");
+          setLoading(btn, false, "Создать чек");
+          return;
+        }
+      }
       const op = $("#c_operation").value;
       let data;
       if (op === "sell_refund") {

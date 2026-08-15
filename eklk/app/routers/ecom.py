@@ -52,6 +52,12 @@ async def create_check(body: CreateCheckRequest, user: CurrentUser):
         company = body.company.model_dump(exclude_none=True) if body.company else None
         client_data = body.client.model_dump(exclude_none=True) if body.client else None
 
+        agent = body.agent.model_dump(exclude_none=True) if body.agent else None
+        add_props = (
+            body.additional_user_props.model_dump()
+            if body.additional_user_props
+            else None
+        )
         result = await client.create_sell(
             external_id=external_id,
             items=items,
@@ -62,6 +68,8 @@ async def create_check(body: CreateCheckRequest, user: CurrentUser):
             sno=body.sno or (company or {}).get("sno", "osn"),
             success_url=body.success_url,
             callback_url=body.callback_url,
+            agent=agent,
+            additional_user_props=add_props,
         )
         log_action(
             "check_created",

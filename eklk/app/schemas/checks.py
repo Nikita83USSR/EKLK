@@ -55,6 +55,33 @@ class PaymentIn(BaseModel):
     sum: float = Field(..., gt=0)
 
 
+class AgentInfoIn(BaseModel):
+    """Атол v5 / ФФД 1.2 agent_info + supplier_info."""
+    type: str = Field(
+        ...,
+        description="bank_paying_agent|bank_paying_subagent|paying_agent|paying_subagent|attorney|commission_agent|another",
+    )
+    # paying_agent
+    paying_operation: Optional[str] = None
+    paying_phones: Optional[str] = None  # comma-separated, normalized later
+    # receive_payments_operator
+    receive_phones: Optional[str] = None
+    # money_transfer_operator
+    transfer_phones: Optional[str] = None
+    transfer_name: Optional[str] = None
+    transfer_address: Optional[str] = None
+    transfer_inn: Optional[str] = None
+    # supplier_info (обязателен при agent_info)
+    supplier_name: Optional[str] = None
+    supplier_phones: Optional[str] = None
+    supplier_inn: Optional[str] = None
+
+
+class AdditionalUserPropsIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    value: str = Field(..., min_length=1, max_length=256)
+
+
 class CreateCheckRequest(BaseModel):
     external_id: Optional[str] = None
     items: List[CheckItemIn] = Field(..., min_length=1)
@@ -64,6 +91,8 @@ class CreateCheckRequest(BaseModel):
     sno: str = "osn"
     success_url: Optional[str] = None
     callback_url: Optional[str] = None
+    agent: Optional[AgentInfoIn] = None
+    additional_user_props: Optional[AdditionalUserPropsIn] = None
 
 
 class CreateRefundRequest(BaseModel):

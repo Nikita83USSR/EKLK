@@ -48,6 +48,78 @@ def normalize_phone(phone: str | None) -> str | None:
     )
 
 
+def split_phones(phones: str | None) -> list[str]:
+    """Split comma/semicolon phones and normalize each."""
+    if not phones:
+        return []
+    result = []
+    for part in re.split(r"[,;]+", phones):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            result.append(normalize_phone(part))
+        except EcomKassaError:
+            # keep raw digits-only attempt
+            d = re.sub(r"\D", "", part)
+            if len(d) == 11 and d.startswith("8"):
+                d = "7" + d[1:]
+            if len(d) == 10:
+                d = "7" + d
+            if len(d) == 11 and d.startswith("7"):
+                result.append(f"+{d}")
+    return [p for p in result if p]
+
+
+def build_agent_payload(agent: dict) -> tuple[dict, dict | None]:
+    """
+    Build agent_info + supplier_info for Atol v5.
+    agent dict from AgentInfoIn.model_dump()
+    """
+    agent_info: dict = {"type": agent["type"]}
+    # paying_agent block — relevant for paying_* and bank_paying_*
+    pa_phones = split_phones(agent.get("paying_phones"))
+    if agent.get("paying_operation") or pa_phones:
+        pa: dict = {}
+        if agent.get("paying_operation"):
+            pa["operation"] = str(agent["paying_operation"])[:24]
+        if pa_phones:
+            pa["phones"] = pa_phones
+        if pa:
+            agent_info["paying_agent"] = pa
+
+    r_phones = split_phones(agent.get("receive_phones"))
+    if r_phones:
+        agent_info["receive_payments_operator"] = {"phones": r_phones}
+
+    t_phones = split_phones(agent.get("transfer_phones"))
+    if t_phones or agent.get("transfer_name") or agent.get("transfer_address") or agent.get("transfer_inn"):
+        mt: dict = {}
+        if t_phones:
+            mt["phones"] = t_phones
+        if agent.get("transfer_name"):
+            mt["name"] = agent["transfer_name"]
+        if agent.get("transfer_address"):
+            mt["address"] = agent["transfer_address"]
+        if agent.get("transfer_inn"):
+            mt["inn"] = agent["transfer_inn"]
+        if mt:
+            agent_info["money_transfer_operator"] = mt
+
+    supplier = None
+    s_phones = split_phones(agent.get("supplier_phones"))
+    if agent.get("supplier_name") or s_phones or agent.get("supplier_inn"):
+        supplier = {}
+        if s_phones:
+            supplier["phones"] = s_phones
+        if agent.get("supplier_name"):
+            supplier["name"] = agent["supplier_name"]
+        if agent.get("supplier_inn"):
+            supplier["inn"] = agent["supplier_inn"]
+
+    return agent_info, supplier
+
+
 def to_rubles(amount: Decimal | float | int | str) -> float:
     """Normalize to 2 decimal places as float (API expects rubles)."""
     d = Decimal(str(amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -175,6 +247,8 @@ class EcomKassaClient:
         success_url: str | None = None,
         callback_url: str | None = None,
         timestamp: str | None = None,
+        agent: dict | None = None,
+        additional_user_props: dict | None = None,
     ) -> dict:
         """
         Create SALE check or INVOICE (payment link).
@@ -220,20 +294,37 @@ class EcomKassaClient:
                 )
             prepared_items.append(prepared)
 
+        # Agent / supplier on each item (ФФД: agent per subject of settlement)
+        agent_info = None
+        supplier_info = None
+        if agent:
+            agent_info, supplier_info = build_agent_payload(agent)
+            for prepared in prepared_items:
+                prepared["agent_info"] = agent_info
+                if supplier_info:
+                    prepared["supplier_info"] = supplier_info
+
         prepared_payments = [
             {"type": int(p["type"]), "sum": to_rubles(p["sum"])} for p in payments
         ]
 
+        receipt: dict[str, Any] = {
+            "client": client,
+            "company": company,
+            "items": prepared_items,
+            "payments": prepared_payments,
+            "total": to_rubles(total),
+        }
+        if additional_user_props and additional_user_props.get("name") and additional_user_props.get("value"):
+            receipt["additional_user_props"] = {
+                "name": str(additional_user_props["name"])[:64],
+                "value": str(additional_user_props["value"])[:256],
+            }
+
         body: dict[str, Any] = {
             "external_id": external_id,
             "timestamp": ts,
-            "receipt": {
-                "client": client,
-                "company": company,
-                "items": prepared_items,
-                "payments": prepared_payments,
-                "total": to_rubles(total),
-            },
+            "receipt": receipt,
         }
 
         service: dict[str, Any] = {}
