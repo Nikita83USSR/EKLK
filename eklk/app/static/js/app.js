@@ -517,22 +517,25 @@
           setLoading(btn, false, "Создать чек");
           return;
         }
-        const innDigits = supInn.replace(/\D/g, "");
-        if (innDigits.length !== 10 && innDigits.length !== 12) {
-          showAlert("ИНН поставщика: ровно 10 цифр (юрлицо) или 12 (ИП). Сейчас: " + innDigits.length + " — «" + supInn + "»");
+        const innCheck = validateInnValue(supInn);
+        if (!innCheck.ok) {
+          markField($("#c_sup_inn"), false, innCheck.msg);
+          showAlert(innCheck.msg + " («" + supInn + "»)");
           setLoading(btn, false, "Создать чек");
           return;
         }
+        const innDigits = innCheck.digits;
         const supPhoneNorm = normalizePhoneUI(supPhones);
         if (!supPhoneNorm) {
+          markField($("#c_sup_phones"), false, "Нужен формат +79001234567");
           showAlert(
-            "Телефон поставщика: нужен формат +79001234567 (10 цифр после +7). Сейчас: «" + supPhones + "»"
+            "Телефон поставщика: нужен формат +79001234567. Сейчас: «" + supPhones + "»"
           );
           setLoading(btn, false, "Создать чек");
           return;
         }
-        // write back normalized so user sees correct value
         if ($("#c_sup_phones")) $("#c_sup_phones").value = supPhoneNorm;
+        if ($("#c_sup_inn")) $("#c_sup_inn").value = innDigits;
         body.agent = {
           type: atype,
           supplier_name: supName,
@@ -652,15 +655,71 @@
   };
 
 
-  // Format phone fields on blur so user sees +7XXXXXXXXXX
+  // --- Strict fiscal field helpers ---
+  function markField(el, ok, msg) {
+    if (!el) return;
+    el.classList.toggle("invalid", !ok);
+    el.title = ok ? "" : (msg || "Некорректное значение");
+  }
+
+  function validateInnValue(raw) {
+    if (!raw || !String(raw).trim()) return { ok: false, digits: "", msg: "ИНН обязателен" };
+    const digits = String(raw).replace(/\D/g, "");
+    if (digits.length === 10 || digits.length === 12) return { ok: true, digits, msg: "" };
+    return {
+      ok: false,
+      digits,
+      msg: "ИНН: ровно 10 (юрлицо) или 12 (ИП) цифр, сейчас " + digits.length,
+    };
+  }
+
+  // Phones: normalize on blur; red if cannot normalize
   ["c_phone", "p_phone", "r_phone", "c_sup_phones", "c_pa_phones", "c_recv_phones", "c_mt_phones"].forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener("blur", () => {
       const v = el.value.trim();
-      if (!v) return;
+      if (!v) {
+        markField(el, true);
+        return;
+      }
       const n = normalizePhoneUI(v);
-      if (n) el.value = n;
+      if (n) {
+        el.value = n;
+        markField(el, true);
+      } else {
+        markField(el, false, "Нужен формат +79001234567");
+      }
+    });
+    el.addEventListener("input", () => {
+      // clear error while typing
+      if (el.classList.contains("invalid") && el.value.trim()) {
+        const n = normalizePhoneUI(el.value);
+        if (n) markField(el, true);
+      }
+    });
+  });
+
+  // INN: only digits, length 10 or 12 — live check
+  ["c_inn", "c_sup_inn", "c_mt_inn"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.setAttribute("inputmode", "numeric");
+    el.setAttribute("maxlength", "12");
+    el.addEventListener("input", () => {
+      // strip non-digits immediately
+      const cleaned = el.value.replace(/\D/g, "").slice(0, 12);
+      if (el.value !== cleaned) el.value = cleaned;
+      if (!cleaned) {
+        markField(el, true);
+        return;
+      }
+      const r = validateInnValue(cleaned);
+      markField(el, r.ok, r.msg);
+    });
+    el.addEventListener("blur", () => {
+      const r = validateInnValue(el.value);
+      if (el.value.trim()) markField(el, r.ok, r.msg);
     });
   });
 
