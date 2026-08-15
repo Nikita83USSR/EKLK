@@ -100,6 +100,26 @@ class AgentInfoIn(BaseModel):
             )
         return digits
 
+    @field_validator("supplier_phones", "paying_phones", "receive_phones", "transfer_phones")
+    @classmethod
+    def phones_ok(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        # at least one number with 10-11 digits
+        parts = re.split(r"[,;]+", v)
+        ok = False
+        for part in parts:
+            d = re.sub(r"\D", "", part)
+            if len(d) == 11 and d[0] in "78":
+                ok = True
+            elif len(d) == 10 and d[0] == "9":
+                ok = True
+        if not ok:
+            raise ValueError(
+                f"Телефон агента/поставщика: формат +79001234567, сейчас «{v}»"
+            )
+        return v
+
 
 class AdditionalUserPropsIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)

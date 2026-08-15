@@ -523,11 +523,21 @@
           setLoading(btn, false, "Создать чек");
           return;
         }
+        const supPhoneNorm = normalizePhoneUI(supPhones);
+        if (!supPhoneNorm) {
+          showAlert(
+            "Телефон поставщика: нужен формат +79001234567 (10 цифр после +7). Сейчас: «" + supPhones + "»"
+          );
+          setLoading(btn, false, "Создать чек");
+          return;
+        }
+        // write back normalized so user sees correct value
+        if ($("#c_sup_phones")) $("#c_sup_phones").value = supPhoneNorm;
         body.agent = {
           type: atype,
           supplier_name: supName,
-          supplier_inn: supInn,
-          supplier_phones: supPhones,
+          supplier_inn: innDigits,
+          supplier_phones: supPhoneNorm,
         };
         if (cfg.paying) {
           body.agent.paying_operation = ($("#c_pa_op") && $("#c_pa_op").value.trim()) || undefined;
