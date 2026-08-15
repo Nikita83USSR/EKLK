@@ -24,17 +24,28 @@ class EcomKassaError(Exception):
 
 
 def normalize_phone(phone: str | None) -> str | None:
-    """8 900 123-45-67 / 89001234567 / +7... → +79001234567"""
+    """
+    Any messy input → strict +7XXXXXXXXXX (12 chars total).
+    Accepts: +7(964)537-62-92, 8 964 537 6292, 79645376292, etc.
+    """
     if not phone:
         return None
-    digits = re.sub(r"\D", "", phone)
+    raw = str(phone).strip()
+    if not raw:
+        return None
+    digits = re.sub(r"\D", "", raw)
+    # 8XXXXXXXXXX (Russia local) → 7XXXXXXXXXX
     if len(digits) == 11 and digits.startswith("8"):
         digits = "7" + digits[1:]
-    if len(digits) == 10:
+    # 10 digits without country → assume Russia
+    if len(digits) == 10 and digits[0] in "9":
         digits = "7" + digits
     if len(digits) == 11 and digits.startswith("7"):
         return f"+{digits}"
-    raise EcomKassaError(f"Некорректный телефон: {phone}. Ожидается формат +79001234567")
+    raise EcomKassaError(
+        f"Некорректный телефон: «{phone}». Нужен формат +79001234567 "
+        f"(после очистки получилось «{digits}», длина {len(digits)})"
+    )
 
 
 def to_rubles(amount: Decimal | float | int | str) -> float:

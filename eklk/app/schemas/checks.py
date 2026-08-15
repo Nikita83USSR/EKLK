@@ -26,8 +26,11 @@ class ClientIn(BaseModel):
         if v is None or v == "":
             return None
         digits = re.sub(r"\D", "", v)
+        # 10 digits (mobile without country) or 11 (7/8 + 10 digits)
         if len(digits) not in (10, 11):
-            raise ValueError("Телефон должен содержать 10 или 11 цифр")
+            raise ValueError(
+                "Телефон должен содержать 10 или 11 цифр. Пример: +79001234567"
+            )
         return v
 
     @field_validator("email")

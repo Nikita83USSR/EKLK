@@ -90,6 +90,36 @@
     return (Math.round((Number(n) || 0) * 100) / 100).toFixed(2);
   }
 
+  /** Normalize phone in UI the same way as backend: +7XXXXXXXXXX */
+  function normalizePhoneUI(phone) {
+    if (!phone) return "";
+    let d = String(phone).replace(/\D/g, "");
+    if (d.length === 11 && d.startsWith("8")) d = "7" + d.slice(1);
+    if (d.length === 10 && d[0] === "9") d = "7" + d;
+    if (d.length === 11 && d.startsWith("7")) return "+" + d;
+    return null; // invalid
+  }
+
+  function paymentsSum(containerSel) {
+    return $$(containerSel + " .pay-row").reduce((s, row) => {
+      return s + (parseFloat(row.querySelector(".pay-sum").value) || 0);
+    }, 0);
+  }
+
+  function setLoading(btn, loading, labelIdle, labelBusy) {
+    if (!btn) return;
+    btn.disabled = !!loading;
+    btn.dataset.busy = loading ? "1" : "0";
+    btn.textContent = loading ? (labelBusy || "Отправка…") : (labelIdle || btn.dataset.label || "Создать");
+  }
+
+  // Stable external_id per form attempt — retries return same check
+  let lastExternalId = null;
+  function nextExternalId(prefix) {
+    lastExternalId = prefix + "-" + Date.now() + "-" + Math.random().toString(16).slice(2, 10);
+    return lastExternalId;
+  }
+
   function itemRowHtml() {
     return `<tr class="item-row">
       <td><input class="it-name" placeholder="Товар или услуга" value="Товар" /></td>
@@ -185,13 +215,30 @@
       pays[0].querySelector(".pay-sum").value = money(total);
     }
 
+    const payTotal = paymentsSum("#c_payments");
     const warn = $("#sum_warn");
     const issues = [];
     if (!$("#c_email").value.trim()) issues.push("Укажите email покупателя");
     if (total <= 0) issues.push("Добавьте товары с ненулевой суммой");
+    // Allow empty pay rows (auto-fill), but if user entered payments — must match
+    const hasManualPay = $$("#c_payments .pay-row").some(
+      (r) => (parseFloat(r.querySelector(".pay-sum").value) || 0) > 0
+    );
+    if (hasManualPay && Math.abs(payTotal - total) > 0.009) {
+      issues.push(
+        "Сумма оплат (" + money(payTotal) + ") ≠ сумме товаров (" + money(total) + "). Исправьте до отправки."
+      );
+    }
+    const phoneRaw = ($("#c_phone") && $("#c_phone").value) || "";
+    if (phoneRaw.trim()) {
+      const norm = normalizePhoneUI(phoneRaw);
+      if (!norm) {
+        issues.push("Телефон должен быть вида +79001234567 (сейчас: «" + phoneRaw + "»)");
+      }
+    }
     if (issues.length) {
       warn.className = "warn-box error";
-      warn.textContent = issues.join(". ");
+      warn.textContent = issues.join(" ");
     } else {
       warn.className = "warn-box";
       warn.textContent = "✓ Ошибок нет";
@@ -247,6 +294,9 @@
           updateCreateSummary();
         }
       };
+    });
+    $$("#c_payments .pay-sum, #c_payments .pay-type").forEach((el) => {
+      el.oninput = el.onchange = updateCreateSummary;
     });
   }
 
@@ -347,29 +397,60 @@
 
   $("#c_submit").onclick = async () => {
     const btn = $("#c_submit");
-    btn.disabled = true;
-    try {
-      const items = collectItems("c_items");
-      const total = items.reduce((s, i) => s + i.sum, 0);
-      let payments = $$("#c_payments .pay-row").map((row) => ({
-        type: parseInt(row.querySelector(".pay-type").value, 10),
-        sum: parseFloat(row.querySelector(".pay-sum").value) || 0,
-      }));
-      if (!payments.length || payments.every((p) => p.sum <= 0)) {
-        payments = [{ type: 1, sum: total }];
+    if (btn.dataset.busy === "1") return; // already sending
+    btn.dataset.label = "Создать чек";
+
+    const items = collectItems("c_items");
+    const total = items.reduce((s, i) => s + i.sum, 0);
+    let payments = $$("#c_payments .pay-row").map((row) => ({
+      type: parseInt(row.querySelector(".pay-type").value, 10),
+      sum: parseFloat(row.querySelector(".pay-sum").value) || 0,
+    })).filter((p) => p.sum > 0);
+    if (!payments.length) {
+      payments = [{ type: 1, sum: total }];
+    }
+
+    // Pre-validate before API
+    const issues = [];
+    if (!$("#c_email").value.trim()) issues.push("Укажите email покупателя");
+    if (total <= 0) issues.push("Сумма товаров должна быть больше 0");
+    const payTotal = payments.reduce((s, p) => s + p.sum, 0);
+    if (Math.abs(payTotal - total) > 0.009) {
+      issues.push(
+        "Сумма оплат (" + money(payTotal) + ") не равна сумме товаров (" + money(total) + ")"
+      );
+    }
+    const phoneRaw = ($("#c_phone") && $("#c_phone").value.trim()) || "";
+    let phoneNorm = undefined;
+    if (phoneRaw) {
+      phoneNorm = normalizePhoneUI(phoneRaw);
+      if (!phoneNorm) {
+        issues.push("Телефон: нужен формат +79001234567, сейчас «" + phoneRaw + "»");
       }
+    }
+    if (issues.length) {
+      updateCreateSummary();
+      showAlert(issues.join(". "));
+      return;
+    }
+
+    setLoading(btn, true, "Создать чек", "Отправка на кассу…");
+    try {
+      // Same external_id on retry within this "attempt" after error? 
+      // New attempt gets new id; double-click blocked by busy flag.
+      const external_id = nextExternalId("EKLK");
       const body = {
+        external_id,
         items,
         payments,
         client: {
-          email: $("#c_email").value || undefined,
-          name: $("#c_name").value || undefined,
-          phone: $("#c_phone").value || undefined,
-          inn: $("#c_inn").value || undefined,
+          email: $("#c_email").value.trim() || undefined,
+          name: ($("#c_name") && $("#c_name").value.trim()) || undefined,
+          phone: phoneNorm,
+          inn: ($("#c_inn") && $("#c_inn").value.trim()) || undefined,
         },
         sno: $("#c_sno").value,
       };
-      // operation sell vs refund — refund goes to different endpoint
       const op = $("#c_operation").value;
       let data;
       if (op === "sell_refund") {
@@ -378,26 +459,38 @@
         data = await api("/ecom/checks", { method: "POST", body: JSON.stringify(body) });
       }
       renderResult($("#c_result"), data);
-      showAlert("Чек отправлен", "success");
+      showAlert("Чек принят кассой (uuid: " + (data.uuid || "—") + ")", "success");
+      lastExternalId = null; // next create = new id
     } catch (e) {
       showAlert(e.message);
+      // keep lastExternalId so user can retry same id if needed — actually we generate new each time
+      // EcomKassa dedup is by external_id; busy flag already prevents triple-click
     } finally {
-      btn.disabled = false;
+      setLoading(btn, false, "Создать чек");
     }
   };
 
   $("#p_submit").onclick = async () => {
     const btn = $("#p_submit");
-    btn.disabled = true;
+    if (btn.dataset.busy === "1") return;
+    const items = collectItems("p_items");
+    const total = items.reduce((s, i) => s + i.sum, 0);
+    if (total <= 0) return showAlert("Сумма товаров должна быть больше 0");
+    const phoneRaw = ($("#p_phone") && $("#p_phone").value.trim()) || "";
+    let phoneNorm = undefined;
+    if (phoneRaw) {
+      phoneNorm = normalizePhoneUI(phoneRaw);
+      if (!phoneNorm) return showAlert("Телефон: нужен формат +79001234567");
+    }
+    setLoading(btn, true, "Создать ссылку", "Создание ссылки…");
     try {
-      const items = collectItems("p_items");
-      const total = items.reduce((s, i) => s + i.sum, 0);
       const body = {
+        external_id: nextExternalId("PAY"),
         items,
         payments: [{ type: parseInt($("#p_type").value, 10), sum: total }],
         client: {
           email: $("#p_email").value || undefined,
-          phone: $("#p_phone").value || undefined,
+          phone: phoneNorm,
           name: $("#p_name").value || undefined,
         },
         sno: $("#p_sno").value,
@@ -409,7 +502,7 @@
     } catch (e) {
       showAlert(e.message);
     } finally {
-      btn.disabled = false;
+      setLoading(btn, false, "Создать ссылку");
     }
   };
 
@@ -425,16 +518,25 @@
 
   $("#r_submit").onclick = async () => {
     const btn = $("#r_submit");
-    btn.disabled = true;
+    if (btn.dataset.busy === "1") return;
+    const items = collectItems("r_items");
+    const total = items.reduce((s, i) => s + i.sum, 0);
+    if (total <= 0) return showAlert("Сумма должна быть больше 0");
+    const phoneRaw = ($("#r_phone") && $("#r_phone").value.trim()) || "";
+    let phoneNorm = undefined;
+    if (phoneRaw) {
+      phoneNorm = normalizePhoneUI(phoneRaw);
+      if (!phoneNorm) return showAlert("Телефон: нужен формат +79001234567");
+    }
+    setLoading(btn, true, "Создать возврат", "Отправка…");
     try {
-      const items = collectItems("r_items");
-      const total = items.reduce((s, i) => s + i.sum, 0);
       const body = {
+        external_id: nextExternalId("REF"),
         items,
         payments: [{ type: 1, sum: total }],
         client: {
           email: $("#r_email").value || undefined,
-          phone: $("#r_phone").value || undefined,
+          phone: phoneNorm,
         },
         original_uuid: $("#r_orig").value || undefined,
       };
@@ -443,9 +545,22 @@
     } catch (e) {
       showAlert(e.message);
     } finally {
-      btn.disabled = false;
+      setLoading(btn, false, "Создать возврат");
     }
   };
+
+
+  // Format phone fields on blur so user sees +7XXXXXXXXXX
+  ["c_phone", "p_phone", "r_phone"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("blur", () => {
+      const v = el.value.trim();
+      if (!v) return;
+      const n = normalizePhoneUI(v);
+      if (n) el.value = n;
+    });
+  });
 
   if (token) afterLogin().catch(() => logout(true));
 })();
