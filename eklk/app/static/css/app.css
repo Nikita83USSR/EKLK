@@ -39,6 +39,11 @@ label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 4
 label .req { color: var(--danger); }
 input, select, textarea { width: 100%; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 0.9rem; font-family: inherit; }
 input:focus, select:focus { outline: none; border-color: #86efac; box-shadow: 0 0 0 3px rgba(34,197,94,.15); }
+input.invalid, select.invalid {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px rgba(239,68,68,.18) !important;
+  background: #fef2f2;
+}
 .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .row-3 { grid-template-columns: repeat(3, 1fr); }
 @media (max-width: 700px) { .row-3 { grid-template-columns: 1fr; } }
