@@ -126,6 +126,76 @@
     return lastExternalId;
   }
 
+  // --- Strict fiscal field helpers ---
+  function markField(el, ok, msg) {
+    if (!el) return;
+    el.classList.toggle("invalid", !ok);
+    el.title = ok ? "" : (msg || "Некорректное значение");
+  }
+
+  function validateInnValue(raw) {
+    if (!raw || !String(raw).trim()) return { ok: false, digits: "", msg: "ИНН обязателен" };
+    const digits = String(raw).replace(/\D/g, "");
+    if (digits.length === 10 || digits.length === 12) return { ok: true, digits, msg: "" };
+    return {
+      ok: false,
+      digits,
+      msg: "ИНН: ровно 10 (юрлицо) или 12 (ИП) цифр, сейчас " + digits.length,
+    };
+  }
+
+  // Phones: normalize on blur; red if cannot normalize
+  ["c_phone", "p_phone", "r_phone", "c_sup_phones", "c_pa_phones", "c_recv_phones", "c_mt_phones"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("blur", () => {
+      const v = el.value.trim();
+      if (!v) {
+        markField(el, true);
+        return;
+      }
+      const n = normalizePhoneUI(v);
+      if (n) {
+        el.value = n;
+        markField(el, true);
+      } else {
+        markField(el, false, "Нужен формат +79001234567");
+      }
+    });
+    el.addEventListener("input", () => {
+      // clear error while typing
+      if (el.classList.contains("invalid") && el.value.trim()) {
+        const n = normalizePhoneUI(el.value);
+        if (n) markField(el, true);
+      }
+    });
+  });
+
+  // INN: only digits, length 10 or 12 — live check
+  ["c_inn", "c_sup_inn", "c_mt_inn"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.setAttribute("inputmode", "numeric");
+    el.setAttribute("maxlength", "12");
+    el.addEventListener("input", () => {
+      // strip non-digits immediately
+      const cleaned = el.value.replace(/\D/g, "").slice(0, 12);
+      if (el.value !== cleaned) el.value = cleaned;
+      if (!cleaned) {
+        markField(el, true);
+        return;
+      }
+      const r = validateInnValue(cleaned);
+      markField(el, r.ok, r.msg);
+    });
+    el.addEventListener("blur", () => {
+      const r = validateInnValue(el.value);
+      if (el.value.trim()) markField(el, r.ok, r.msg);
+    });
+  });
+
+
+
   function itemRowHtml() {
     return `<tr class="item-row">
       <td><input class="it-name" placeholder="Товар или услуга" value="Товар" /></td>
@@ -222,20 +292,20 @@
   // ---- Summary ----
   function updateCreateSummary() {
     const total = itemsSum("c_items");
-    const email = $("#c_email").value || "—";
+    const emailVal = ($("#c_email") && $("#c_email").value.trim()) || "";
+    const phoneRaw = ($("#c_phone") && $("#c_phone").value.trim()) || "";
     const op = $("#c_operation").value;
     const sno = $("#c_sno").value;
     $("#sum_shop").textContent = `ID ${groupCode}`;
     $("#sum_op").textContent = OP_LABELS[op] || op;
     $("#sum_sno").textContent = SNO_LABELS[sno] || sno;
-    $("#sum_email").textContent = email;
+    $("#sum_email").textContent = emailVal || phoneRaw || "—";
     $("#sum_items").textContent = String($$("#c_items .item-row").length);
     $("#sum_pay").textContent = money(total) + " ₽";
     $("#sum_total").textContent = money(total) + " ₽";
     $("#c_payHint").textContent = "Автоподсчёт суммы товарных позиций: " + money(total);
     $("#c_total").value = money(total);
 
-    // Sync first payment sum if only one
     const pays = $$("#c_payments .pay-row");
     if (pays.length === 1) {
       pays[0].querySelector(".pay-sum").value = money(total);
@@ -244,68 +314,74 @@
     const payTotal = paymentsSum("#c_payments");
     const warn = $("#sum_warn");
     const issues = [];
-    if (!$("#c_email").value.trim() && !($("#c_phone") && $("#c_phone").value.trim())) {
+
+    const hasContact = !!(emailVal || phoneRaw);
+    if (!hasContact) {
       issues.push("Укажите email или телефон покупателя");
+      markField($("#c_email"), false, "Нужен email или телефон");
+      markField($("#c_phone"), false, "Нужен email или телефон");
+    } else {
+      if (emailVal && (emailVal.indexOf("@") < 1 || !emailVal.split("@")[1] || emailVal.split("@")[1].indexOf(".") < 0)) {
+        issues.push("Некорректный email");
+        markField($("#c_email"), false, "Некорректный email");
+      } else {
+        markField($("#c_email"), true);
+      }
+      if (phoneRaw) {
+        const norm = normalizePhoneUI(phoneRaw);
+        if (!norm) {
+          issues.push("Телефон: формат +79001234567");
+          markField($("#c_phone"), false, "Формат +79001234567");
+        } else {
+          markField($("#c_phone"), true);
+        }
+      } else {
+        markField($("#c_phone"), true);
+      }
     }
+
     if (total <= 0) issues.push("Добавьте товары с ненулевой суммой");
-    // Allow empty pay rows (auto-fill), but if user entered payments — must match
+
     const hasManualPay = $$("#c_payments .pay-row").some(
       (r) => (parseFloat(r.querySelector(".pay-sum").value) || 0) > 0
     );
     if (hasManualPay && Math.abs(payTotal - total) > 0.009) {
       issues.push(
-        "Сумма оплат (" + money(payTotal) + ") ≠ сумме товаров (" + money(total) + "). Исправьте до отправки."
+        "Сумма оплат (" + money(payTotal) + ") ≠ сумме товаров (" + money(total) + ")"
       );
     }
-    const phoneRaw = ($("#c_phone") && $("#c_phone").value) || "";
-    if (phoneRaw.trim()) {
-      const norm = normalizePhoneUI(phoneRaw);
-      if (!norm) {
-        issues.push("Телефон должен быть вида +79001234567 (сейчас: «" + phoneRaw + "»)");
-      }
-    }
-    // Agent fields — only if any item marked
-    if (typeof anyItemAgent === "function" && anyItemAgent("c_items")) {
-      const supName = ($("#c_sup_name") && $("#c_sup_name").value.trim()) || "";
+
+    // Agent panel live
+    if ($("#c_agentBox") && !$("#c_agentBox").classList.contains("hidden")) {
       const supInn = ($("#c_sup_inn") && $("#c_sup_inn").value.trim()) || "";
       const supPh = ($("#c_sup_phones") && $("#c_sup_phones").value.trim()) || "";
-      if (!supName) issues.push("Агент: укажите наименование поставщика");
+      const supName = ($("#c_sup_name") && $("#c_sup_name").value.trim()) || "";
+      if (!supName) {
+        issues.push("Наименование поставщика");
+        markField($("#c_sup_name"), false);
+      } else markField($("#c_sup_name"), true);
       const innR = validateInnValue(supInn);
-      if (!innR.ok) issues.push("Агент: " + (innR.msg || "некорректный ИНН поставщика"));
-      if (!supPh || !normalizePhoneUI(supPh)) {
-        issues.push("Агент: телефон поставщика в формате +79001234567");
-      }
-      const atype = ($("#c_agent_type") && $("#c_agent_type").value) || "another";
-      const cfg = (typeof AGENT_UI !== "undefined" && AGENT_UI[atype]) || null;
-      if (cfg && cfg.paying) {
-        const paPh = ($("#c_pa_phones") && $("#c_pa_phones").value.trim()) || "";
-        if (paPh && !normalizePhoneUI(paPh)) issues.push("Агент: телефон платёжного агента некорректен");
-      }
-      if (cfg && cfg.receive) {
-        const rPh = ($("#c_recv_phones") && $("#c_recv_phones").value.trim()) || "";
-        if (rPh && !normalizePhoneUI(rPh)) issues.push("Агент: телефон оператора приёма некорректен");
-      }
-      if (cfg && cfg.transfer) {
-        const tInn = ($("#c_mt_inn") && $("#c_mt_inn").value.trim()) || "";
-        if (tInn) {
-          const tr = validateInnValue(tInn);
-          if (!tr.ok) issues.push("Агент: ИНН оператора перевода — " + tr.msg);
-        }
-        const tPh = ($("#c_mt_phones") && $("#c_mt_phones").value.trim()) || "";
-        if (tPh && !normalizePhoneUI(tPh)) issues.push("Агент: телефон оператора перевода некорректен");
-      }
+      if (!innR.ok) {
+        issues.push(innR.msg || "ИНН поставщика");
+        markField($("#c_sup_inn"), false, innR.msg);
+      } else markField($("#c_sup_inn"), true);
+      if (!supPh) {
+        issues.push("Телефон поставщика");
+        markField($("#c_sup_phones"), false);
+      } else if (!normalizePhoneUI(supPh)) {
+        issues.push("Телефон поставщика: +79001234567");
+        markField($("#c_sup_phones"), false);
+      } else markField($("#c_sup_phones"), true);
     }
-    // Lock submit button when errors
-    const subBtn = $("#c_submit");
-    if (subBtn && subBtn.dataset.busy !== "1") {
-      subBtn.disabled = issues.length > 0;
-    }
+
     if (issues.length) {
       warn.className = "warn-box error";
-      warn.textContent = issues.join(" ");
+      warn.textContent = issues.join(". ");
+      if ($("#c_submit")) $("#c_submit").disabled = true;
     } else {
       warn.className = "warn-box";
       warn.textContent = "✓ Ошибок нет";
+      if ($("#c_submit") && $("#c_submit").dataset.busy !== "1") $("#c_submit").disabled = false;
     }
   }
 
@@ -515,6 +591,14 @@
   ["p_email", "p_phone"].forEach((id) => {
     const el = $("#" + id);
     if (el) el.oninput = el.onchange = updatePaySummary;
+  });
+
+  ["c_sup_name", "c_sup_inn", "c_sup_phones", "c_pa_phones", "c_recv_phones", "c_mt_phones", "c_mt_inn"].forEach((id) => {
+    const el = $("#" + id);
+    if (el) {
+      el.addEventListener("input", updateCreateSummary);
+      el.addEventListener("change", updateCreateSummary);
+    }
   });
 
   ["c_email", "c_phone", "c_operation", "c_sno"].forEach((id) => {
@@ -752,74 +836,6 @@
     }
   };
 
-
-  // --- Strict fiscal field helpers ---
-  function markField(el, ok, msg) {
-    if (!el) return;
-    el.classList.toggle("invalid", !ok);
-    el.title = ok ? "" : (msg || "Некорректное значение");
-  }
-
-  function validateInnValue(raw) {
-    if (!raw || !String(raw).trim()) return { ok: false, digits: "", msg: "ИНН обязателен" };
-    const digits = String(raw).replace(/\D/g, "");
-    if (digits.length === 10 || digits.length === 12) return { ok: true, digits, msg: "" };
-    return {
-      ok: false,
-      digits,
-      msg: "ИНН: ровно 10 (юрлицо) или 12 (ИП) цифр, сейчас " + digits.length,
-    };
-  }
-
-  // Phones: normalize on blur; red if cannot normalize
-  ["c_phone", "p_phone", "r_phone", "c_sup_phones", "c_pa_phones", "c_recv_phones", "c_mt_phones"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener("blur", () => {
-      const v = el.value.trim();
-      if (!v) {
-        markField(el, true);
-        return;
-      }
-      const n = normalizePhoneUI(v);
-      if (n) {
-        el.value = n;
-        markField(el, true);
-      } else {
-        markField(el, false, "Нужен формат +79001234567");
-      }
-    });
-    el.addEventListener("input", () => {
-      // clear error while typing
-      if (el.classList.contains("invalid") && el.value.trim()) {
-        const n = normalizePhoneUI(el.value);
-        if (n) markField(el, true);
-      }
-    });
-  });
-
-  // INN: only digits, length 10 or 12 — live check
-  ["c_inn", "c_sup_inn", "c_mt_inn"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.setAttribute("inputmode", "numeric");
-    el.setAttribute("maxlength", "12");
-    el.addEventListener("input", () => {
-      // strip non-digits immediately
-      const cleaned = el.value.replace(/\D/g, "").slice(0, 12);
-      if (el.value !== cleaned) el.value = cleaned;
-      if (!cleaned) {
-        markField(el, true);
-        return;
-      }
-      const r = validateInnValue(cleaned);
-      markField(el, r.ok, r.msg);
-    });
-    el.addEventListener("blur", () => {
-      const r = validateInnValue(el.value);
-      if (el.value.trim()) markField(el, r.ok, r.msg);
-    });
-  });
 
   if (token) afterLogin().catch(() => logout(true));
 })();
