@@ -42,6 +42,18 @@ class ClientIn(BaseModel):
             raise ValueError("Некорректный email")
         return v
 
+    @field_validator("inn")
+    @classmethod
+    def client_inn_ok(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        digits = re.sub(r"\D", "", v)
+        if len(digits) not in (10, 12):
+            raise ValueError(
+                f"ИНН покупателя: 10 или 12 цифр, сейчас {len(digits)}"
+            )
+        return digits
+
 
 class CompanyIn(BaseModel):
     email: Optional[str] = None
@@ -75,6 +87,18 @@ class AgentInfoIn(BaseModel):
     supplier_name: Optional[str] = None
     supplier_phones: Optional[str] = None
     supplier_inn: Optional[str] = None
+
+    @field_validator("supplier_inn", "transfer_inn")
+    @classmethod
+    def inn_ok(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        digits = re.sub(r"\D", "", v)
+        if len(digits) not in (10, 12):
+            raise ValueError(
+                f"ИНН должен содержать 10 (юрлицо) или 12 (ИП) цифр, сейчас {len(digits)}: «{v}»"
+            )
+        return digits
 
 
 class AdditionalUserPropsIn(BaseModel):

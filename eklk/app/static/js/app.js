@@ -517,6 +517,12 @@
           setLoading(btn, false, "Создать чек");
           return;
         }
+        const innDigits = supInn.replace(/\D/g, "");
+        if (innDigits.length !== 10 && innDigits.length !== 12) {
+          showAlert("ИНН поставщика: ровно 10 цифр (юрлицо) или 12 (ИП). Сейчас: " + innDigits.length + " — «" + supInn + "»");
+          setLoading(btn, false, "Создать чек");
+          return;
+        }
         body.agent = {
           type: atype,
           supplier_name: supName,
@@ -637,7 +643,7 @@
 
 
   // Format phone fields on blur so user sees +7XXXXXXXXXX
-  ["c_phone", "p_phone", "r_phone"].forEach((id) => {
+  ["c_phone", "p_phone", "r_phone", "c_sup_phones", "c_pa_phones", "c_recv_phones", "c_mt_phones"].forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener("blur", () => {
