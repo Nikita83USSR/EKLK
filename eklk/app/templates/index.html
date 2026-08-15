@@ -16,13 +16,15 @@
       <p class="subtitle">Личный кабинет · чеки и платежи через EcomKassa</p>
       <div id="loginError" class="alert alert-error hidden"></div>
       <form id="loginForm">
-        <label>Логин</label>
-        <input type="text" id="loginUser" value="admin" autocomplete="username" required />
+        <label>Логин EcomKassa</label>
+        <input type="text" id="loginUser" placeholder="sales@ecomkassa.ru" autocomplete="username" required />
         <label>Пароль</label>
-        <input type="password" id="loginPass" value="admin123" autocomplete="current-password" required />
+        <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" required />
+        <label>ID магазина (group_code)</label>
+        <input type="text" id="loginGroup" value="990" placeholder="990" />
         <button type="submit" class="btn btn-block mt-2">Войти</button>
       </form>
-      <p class="subtitle mt-3" style="font-size:0.8rem">Демо: admin / admin123</p>
+      <p class="subtitle mt-3" style="font-size:0.8rem">Вход теми же данными, что и в личном кабинете EcomKassa</p>
     </div>
   </div>
 

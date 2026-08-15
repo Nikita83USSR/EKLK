@@ -1,12 +1,12 @@
 """
 EcomKassa integration endpoints.
+Uses credentials of the logged-in EcomKassa user.
 """
 
 import time
 import uuid as uuid_lib
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 
 from app.clients.ecomkassa import EcomKassaClient, EcomKassaError, to_rubles
 from app.core.deps import CurrentUser
@@ -16,13 +16,17 @@ from app.utils.logger import log_action
 router = APIRouter(prefix="/ecom", tags=["EcomKassa"])
 
 
-def _client() -> EcomKassaClient:
-    return EcomKassaClient()
+def _client_for(user: dict) -> EcomKassaClient:
+    return EcomKassaClient(
+        login=user["username"],
+        password=user["password"],
+        group_code=user.get("group_code") or "990",
+    )
 
 
 @router.get("/payment-types")
 async def payment_types(user: CurrentUser):
-    client = _client()
+    client = _client_for(user)
     try:
         types = await client.get_payment_types()
         return {"items": types}
@@ -34,10 +38,8 @@ async def payment_types(user: CurrentUser):
 
 @router.post("/checks", response_model=CheckResponse)
 async def create_check(body: CreateCheckRequest, user: CurrentUser):
-    """
-    Create SALE check or payment invoice (if payments.type is provider id like 103).
-    """
-    client = _client()
+    """Create SALE check or payment invoice (if payments.type is provider id like 103)."""
+    client = _client_for(user)
     try:
         external_id = body.external_id or f"EKLK-{int(time.time())}-{uuid_lib.uuid4().hex[:8]}"
         items = [it.model_dump() for it in body.items]
@@ -61,7 +63,12 @@ async def create_check(body: CreateCheckRequest, user: CurrentUser):
             success_url=body.success_url,
             callback_url=body.callback_url,
         )
-        log_action("check_created", f"uuid={result.get('uuid')}", user_id=user["id"], uuid=result.get("uuid"))
+        log_action(
+            "check_created",
+            f"uuid={result.get('uuid')}",
+            user_id=user["username"],
+            uuid=result.get("uuid"),
+        )
         return CheckResponse(
             uuid=result.get("uuid"),
             external_id=external_id,
@@ -74,7 +81,7 @@ async def create_check(body: CreateCheckRequest, user: CurrentUser):
             raw=result,
         )
     except EcomKassaError as e:
-        log_action("check_error", str(e), level="error", user_id=user["id"])
+        log_action("check_error", str(e), level="error", user_id=user["username"])
         raise HTTPException(status_code=400, detail={"message": str(e), "code": e.code, "raw": e.raw})
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -84,7 +91,7 @@ async def create_check(body: CreateCheckRequest, user: CurrentUser):
 
 @router.get("/checks/{uuid}", response_model=CheckResponse)
 async def get_check(uuid: str, user: CurrentUser):
-    client = _client()
+    client = _client_for(user)
     try:
         result = await client.get_report(uuid)
         return CheckResponse(
@@ -107,7 +114,7 @@ async def get_check(uuid: str, user: CurrentUser):
 
 @router.post("/refunds", response_model=CheckResponse)
 async def create_refund(body: CreateRefundRequest, user: CurrentUser):
-    client = _client()
+    client = _client_for(user)
     try:
         external_id = body.external_id or f"REF-{int(time.time())}-{uuid_lib.uuid4().hex[:8]}"
         items = [it.model_dump() for it in body.items]

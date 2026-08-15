@@ -27,19 +27,15 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 Открыть: **http://localhost:8000**
 
-### Демо-доступ в ЛК
-| Логин    | Пароль      |
-|----------|-------------|
-| admin    | admin123    |
-| operator | operator123 |
+### Вход в ЛК
+Логин и пароль — **учётная запись EcomKassa** (те же, что в app.ecomkassa.ru).
 
-### EcomKassa (тестовая учётка по умолчанию)
+Тестовые:
 - login: `sales@ecomkassa.ru`
 - password: `ecomkassa1`
-- group_code: `990`
-- API: **v5**
+- group_code / ID магазина: `990`
 
-Задаются в `.env` или через переменные окружения.
+Своих пользователей у ЛК нет — авторизация идёт через `getToken` EcomKassa.
 
 ---
 

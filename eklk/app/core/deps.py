@@ -1,54 +1,75 @@
-from typing import Annotated, Optional
-from fastapi import Depends, HTTPException, status, Request
+"""
+Auth depends on EcomKassa credentials — no local users.
+Session stores password in memory for subsequent API calls.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated, Optional, Any
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from app.core.security import decode_access_token
-from app.core.config import settings
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
-# Simple in-memory users for ЛК (demo). In production → DB.
-DEMO_USERS = {
-    "admin": {
-        "id": 1,
-        "username": "admin",
-        "password": "admin123",  # plain for demo; hash in real use
-        "email": "admin@eklk.local",
-        "full_name": "Администратор EKLK",
-        "role": "admin",
-    },
-    "operator": {
-        "id": 2,
-        "username": "operator",
-        "password": "operator123",
-        "email": "operator@eklk.local",
-        "full_name": "Оператор",
-        "role": "operator",
-    },
-}
+# login -> {password, group_code}
+# In-memory; for multi-worker deploy use Redis later.
+SESSIONS: dict[str, dict[str, Any]] = {}
 
 
-def get_user_by_username(username: str) -> Optional[dict]:
-    return DEMO_USERS.get(username)
+def save_session(login: str, password: str, group_code: str = "990") -> None:
+    SESSIONS[login] = {
+        "login": login,
+        "password": password,
+        "group_code": group_code,
+    }
+
+
+def get_session(login: str) -> Optional[dict[str, Any]]:
+    return SESSIONS.get(login)
+
+
+def clear_session(login: str) -> None:
+    SESSIONS.pop(login, None)
 
 
 async def get_current_user(token: Annotated[Optional[str], Depends(oauth2_scheme)]) -> dict:
     if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated", headers={"WWW-Authenticate": "Bearer"})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Не авторизован",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     payload = decode_access_token(token)
     if not payload:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
-    username = payload.get("username") or payload.get("sub")
-    user = get_user_by_username(str(username)) if not str(username).isdigit() else None
-    if not user:
-        # fallback by id
-        for u in DEMO_USERS.values():
-            if str(u["id"]) == str(payload.get("sub")):
-                user = u
-                break
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    return user
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Сессия истекла. Войдите снова.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    login = payload.get("username") or payload.get("sub")
+    if not login:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный токен")
+
+    session = get_session(str(login))
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Сессия истекла. Войдите снова.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return {
+        "id": login,
+        "username": login,
+        "email": login,
+        "full_name": login,
+        "role": "operator",
+        "password": session["password"],
+        "group_code": session.get("group_code", "990"),
+    }
 
 
 CurrentUser = Annotated[dict, Depends(get_current_user)]

@@ -156,6 +156,7 @@
         body: JSON.stringify({
           username: $("#loginUser").value.trim(),
           password: $("#loginPass").value,
+          group_code: ($("#loginGroup") && $("#loginGroup").value.trim()) || "990",
         }),
       });
       token = data.access_token;
