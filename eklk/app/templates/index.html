@@ -3,45 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ app_name }} — Личный кабинет</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <title>{{ app_name }} — Чек</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/css/app.css" />
 </head>
 <body>
-  <!-- LOGIN -->
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <h1>{{ app_name }}</h1>
-      <p class="subtitle">Личный кабинет · чеки и платежи через EcomKassa</p>
+      <p class="subtitle">Вход учётной записью EcomKassa</p>
       <div id="loginError" class="alert alert-error hidden"></div>
       <form id="loginForm">
         <label>Логин EcomKassa</label>
         <input type="text" id="loginUser" placeholder="sales@ecomkassa.ru" autocomplete="username" required />
-        <label>Пароль</label>
-        <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" required />
-        <label>ID магазина (group_code)</label>
-        <input type="text" id="loginGroup" value="990" placeholder="990" />
-        <button type="submit" class="btn btn-block mt-2">Войти</button>
+        <label style="margin-top:10px">Пароль</label>
+        <input type="password" id="loginPass" autocomplete="current-password" required />
+        <label style="margin-top:10px">ID магазина (group_code)</label>
+        <input type="text" id="loginGroup" value="990" />
+        <button type="submit" class="btn btn-block" style="margin-top:16px">Войти</button>
       </form>
-      <p class="subtitle mt-3" style="font-size:0.8rem">Вход теми же данными, что и в личном кабинете EcomKassa</p>
     </div>
   </div>
 
-  <!-- APP -->
   <div id="appScreen" class="hidden">
     <header class="header">
       <div class="header-inner">
         <div class="logo">{{ app_name }} <span>ЛК</span></div>
         <nav class="nav">
-          <button type="button" class="active" data-tab="create">Создать чек</button>
+          <button type="button" class="active" data-tab="create">Чек</button>
           <button type="button" data-tab="payment">Ссылка на оплату</button>
-          <button type="button" data-tab="status">Статус чека</button>
+          <button type="button" data-tab="status">Статус</button>
           <button type="button" data-tab="refund">Возврат</button>
         </nav>
         <div class="user-info">
           <span id="userName"></span>
-          <button type="button" class="btn btn-secondary" id="logoutBtn" style="padding:6px 12px;margin-left:10px">Выйти</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="logoutBtn">Выйти</button>
         </div>
       </div>
     </header>
@@ -49,104 +45,239 @@
     <main class="container">
       <div id="globalAlert" class="alert hidden"></div>
 
-      <!-- CREATE CHECK -->
+      <!-- ========== CREATE CHECK (по макету EcomKassa) ========== -->
       <section id="tab-create" class="tab-panel">
-        <div class="card">
-          <h2>Создать обычный чек (SALE)</h2>
-          <p class="subtitle" style="color:var(--muted);margin-bottom:16px;font-size:0.9rem">Фискальный чек с оплатой type=1 (наличные/электронные)</p>
+        <div class="check-layout">
+          <div>
+            <!-- Header fields -->
+            <div class="card">
+              <div class="section-title">Параметры чека</div>
+              <div class="row row-3">
+                <div>
+                  <label>Магазин</label>
+                  <input id="c_shop" value="Магазин (group из входа)" disabled />
+                </div>
+                <div>
+                  <label>Признак расчёта</label>
+                  <select id="c_operation">
+                    <option value="sell">Приход</option>
+                    <option value="sell_refund">Возврат прихода</option>
+                    <option value="buy">Расход</option>
+                    <option value="buy_refund">Возврат расхода</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Система налогообложения</label>
+                  <select id="c_sno">
+                    <option value="osn">ОСН</option>
+                    <option value="usn_income">УСН доходы</option>
+                    <option value="usn_income_outcome">УСН доходы-расходы</option>
+                    <option value="esn">ЕСН</option>
+                    <option value="patent">Патент</option>
+                  </select>
+                </div>
+              </div>
+            </div>
 
-          <h3>Покупатель</h3>
-          <div class="row">
-            <div><label>ФИО</label><input id="c_name" placeholder="Иванов Иван" /></div>
-            <div><label>Email</label><input id="c_email" type="email" placeholder="buyer@example.com" /></div>
-            <div><label>Телефон</label><input id="c_phone" placeholder="8 900 123-45-67" /></div>
+            <!-- Buyer -->
+            <div class="card">
+              <div class="section-title">Данные о покупателе</div>
+              <div class="row">
+                <div style="grid-column: span 2">
+                  <label>Email покупателя <span class="req">*</span></label>
+                  <input id="c_email" type="email" placeholder="name@example.com" />
+                  <p class="hint">Чек будет отправлен покупателю на указанный email</p>
+                </div>
+                <div>
+                  <label>&nbsp;</label>
+                  <button type="button" class="btn btn-secondary btn-block" id="c_toggleExtra">Ещё данные ▾</button>
+                </div>
+              </div>
+              <div id="c_extraBuyer" class="extra-buyer hidden">
+                <div class="row">
+                  <div><label>ФИО</label><input id="c_name" placeholder="Иванов Иван Иванович" /></div>
+                  <div><label>Телефон</label><input id="c_phone" placeholder="8 900 123-45-67" /></div>
+                  <div><label>ИНН</label><input id="c_inn" placeholder="7707083893" /></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Extra attr -->
+            <div class="card">
+              <div class="section-title">Дополнительный атрибут чека</div>
+              <div class="checkbox-row">
+                <input type="checkbox" id="c_addProp" />
+                <label for="c_addProp">Указать дополнительный атрибут</label>
+              </div>
+              <div id="c_addPropBox" class="hidden mt-2">
+                <input id="c_addPropVal" placeholder="Значение дополнительного реквизита чека" />
+              </div>
+            </div>
+
+            <!-- Items -->
+            <div class="card">
+              <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+                <span>Товарные позиции</span>
+                <button type="button" class="btn btn-sm" id="c_addItem">+ Добавить</button>
+              </div>
+              <div style="overflow-x:auto">
+                <table class="items-table">
+                  <thead>
+                    <tr>
+                      <th class="col-name">Наименование</th>
+                      <th class="col-num">Цена, руб</th>
+                      <th class="col-num">Количество</th>
+                      <th class="col-sel">НДС</th>
+                      <th class="col-sel">Предмет расчёта</th>
+                      <th class="col-sel">Признак расчёта</th>
+                      <th class="col-act"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="c_items"></tbody>
+                </table>
+              </div>
+              <div class="agent-row">
+                <span>Являетесь ли вы платёжным агентом?</span>
+                <div class="radio-group">
+                  <label><input type="radio" name="c_agent" value="0" checked /> Нет</label>
+                  <label><input type="radio" name="c_agent" value="1" /> Да</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Payments -->
+            <div class="card">
+              <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+                <span>Оплата</span>
+                <button type="button" class="btn btn-sm" id="c_addPay">+ Добавить</button>
+              </div>
+              <p class="hint" id="c_payHint">Автоподсчёт суммы товарных позиций: 0.00</p>
+              <div id="c_payments"></div>
+              <div class="row mt-2" style="max-width:220px">
+                <div>
+                  <label>Итоговая сумма, руб</label>
+                  <input id="c_total" value="0.00" readonly />
+                </div>
+              </div>
+            </div>
+
+            <div class="actions-bar">
+              <button type="button" class="btn" id="c_submit">Создать чек</button>
+              <button type="button" class="btn btn-secondary" id="c_reset">Отмена</button>
+            </div>
+            <div id="c_result" class="hidden mt-3"></div>
           </div>
 
-          <h3>СНО</h3>
-          <select id="c_sno">
-            <option value="osn">ОСН</option>
-            <option value="usn_income">УСН доходы</option>
-            <option value="usn_income_outcome">УСН доходы-расходы</option>
-            <option value="esn">ЕСН</option>
-            <option value="patent">Патент</option>
-          </select>
-
-          <h3>Позиции</h3>
-          <div id="c_items"></div>
-          <button type="button" class="btn btn-secondary" id="c_addItem">+ Позиция</button>
-
-          <div class="mt-3 flex">
-            <button type="button" class="btn" id="c_submit">Создать чек</button>
-          </div>
-          <div id="c_result" class="mt-3 hidden"></div>
+          <!-- Aside -->
+          <aside class="aside-card">
+            <div class="card">
+              <div class="section-title">Информация о чеке</div>
+              <div class="kv"><span class="k">Магазин</span><span class="v" id="sum_shop">—</span></div>
+              <div class="kv"><span class="k">Признак расчёта</span><span class="v" id="sum_op">Приход</span></div>
+              <div class="kv"><span class="k">Система налогообложения</span><span class="v" id="sum_sno">ОСН</span></div>
+              <div class="kv"><span class="k">Покупатель (email)</span><span class="v" id="sum_email">—</span></div>
+              <div class="kv"><span class="k">Товарных позиций</span><span class="v" id="sum_items">0</span></div>
+              <div class="kv"><span class="k">Оплата</span><span class="v" id="sum_pay">0.00 ₽</span></div>
+              <div class="total-line"><span>К оплате</span><span id="sum_total">0.00 ₽</span></div>
+              <div class="warn-box" id="sum_warn">✓ Ошибок нет</div>
+            </div>
+          </aside>
         </div>
       </section>
 
       <!-- PAYMENT LINK -->
       <section id="tab-payment" class="tab-panel hidden">
-        <div class="card">
-          <h2>Создать ссылку на оплату</h2>
-          <p class="subtitle" style="color:var(--muted);margin-bottom:16px;font-size:0.9rem">INVOICE через платёжный шлюз (Сбер, Тинькофф и др.)</p>
-
-          <h3>Покупатель</h3>
-          <div class="row">
-            <div><label>ФИО</label><input id="p_name" placeholder="Иванов Иван" /></div>
-            <div><label>Email</label><input id="p_email" type="email" placeholder="buyer@example.com" /></div>
-            <div><label>Телефон</label><input id="p_phone" placeholder="+79001234567" /></div>
+        <div class="check-layout">
+          <div>
+            <div class="card">
+              <div class="section-title">Ссылка на оплату (INVOICE)</div>
+              <p class="card-desc">После оплаты чек создаётся автоматически</p>
+              <div class="row">
+                <div><label>Email покупателя</label><input id="p_email" type="email" placeholder="name@example.com" /></div>
+                <div><label>Телефон</label><input id="p_phone" placeholder="+79001234567" /></div>
+                <div><label>ФИО</label><input id="p_name" /></div>
+              </div>
+              <div class="row">
+                <div>
+                  <label>Платёжная система</label>
+                  <select id="p_type"></select>
+                </div>
+                <div>
+                  <label>СНО</label>
+                  <select id="p_sno">
+                    <option value="osn">ОСН</option>
+                    <option value="usn_income">УСН доходы</option>
+                    <option value="usn_income_outcome">УСН доходы-расходы</option>
+                  </select>
+                </div>
+                <div>
+                  <label>URL успеха</label>
+                  <input id="p_success" placeholder="https://site.ru/ok" />
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="section-title" style="display:flex;justify-content:space-between">
+                <span>Товарные позиции</span>
+                <button type="button" class="btn btn-sm" id="p_addItem">+ Добавить</button>
+              </div>
+              <table class="items-table">
+                <thead>
+                  <tr>
+                    <th>Наименование</th><th>Цена</th><th>Кол-во</th><th>НДС</th><th>Предмет</th><th>Признак</th><th></th>
+                  </tr>
+                </thead>
+                <tbody id="p_items"></tbody>
+              </table>
+            </div>
+            <div class="actions-bar">
+              <button type="button" class="btn" id="p_submit">Создать ссылку</button>
+            </div>
+            <div id="p_result" class="hidden mt-3"></div>
           </div>
-
-          <h3>Платёжная система</h3>
-          <select id="p_type"></select>
-
-          <h3>Позиции</h3>
-          <div id="p_items"></div>
-          <button type="button" class="btn btn-secondary" id="p_addItem">+ Позиция</button>
-
-          <div class="mt-3">
-            <label>URL успеха (после оплаты)</label>
-            <input id="p_success" placeholder="https://yoursite.ru/success" />
-          </div>
-
-          <div class="mt-3 flex">
-            <button type="button" class="btn" id="p_submit">Создать ссылку</button>
-          </div>
-          <div id="p_result" class="mt-3 hidden"></div>
+          <aside class="aside-card">
+            <div class="card">
+              <div class="section-title">К оплате</div>
+              <div class="total-line"><span>Сумма</span><span id="p_sum_total">0.00 ₽</span></div>
+            </div>
+          </aside>
         </div>
       </section>
 
       <!-- STATUS -->
       <section id="tab-status" class="tab-panel hidden">
-        <div class="card">
-          <h2>Статус чека / счёта</h2>
-          <div class="row">
-            <div style="flex:1"><label>UUID</label><input id="s_uuid" placeholder="113628140" /></div>
-          </div>
-          <button type="button" class="btn" id="s_submit">Проверить</button>
-          <div id="s_result" class="mt-3 hidden"></div>
+        <div class="card" style="max-width:640px">
+          <div class="section-title">Статус чека / счёта</div>
+          <label>UUID</label>
+          <input id="s_uuid" placeholder="113628140" />
+          <button type="button" class="btn mt-2" id="s_submit">Проверить</button>
+          <div id="s_result" class="hidden mt-3"></div>
         </div>
       </section>
 
       <!-- REFUND -->
       <section id="tab-refund" class="tab-panel hidden">
         <div class="card">
-          <h2>Возврат (sell_refund)</h2>
+          <div class="section-title">Возврат прихода (sell_refund)</div>
           <div class="row">
-            <div><label>UUID исходного чека (опционально)</label><input id="r_orig" placeholder="uuid" /></div>
-            <div><label>Email покупателя</label><input id="r_email" type="email" /></div>
+            <div><label>UUID исходного чека</label><input id="r_orig" /></div>
+            <div><label>Email</label><input id="r_email" type="email" /></div>
             <div><label>Телефон</label><input id="r_phone" /></div>
           </div>
-          <h3>Позиции возврата</h3>
-          <div id="r_items"></div>
-          <button type="button" class="btn btn-secondary" id="r_addItem">+ Позиция</button>
-          <div class="mt-3">
-            <button type="button" class="btn btn-danger" id="r_submit">Создать возврат</button>
+          <div class="section-title mt-3" style="display:flex;justify-content:space-between">
+            <span>Позиции возврата</span>
+            <button type="button" class="btn btn-sm" id="r_addItem">+ Добавить</button>
           </div>
-          <div id="r_result" class="mt-3 hidden"></div>
+          <table class="items-table">
+            <thead><tr><th>Наименование</th><th>Цена</th><th>Кол-во</th><th>НДС</th><th>Предмет</th><th>Признак</th><th></th></tr></thead>
+            <tbody id="r_items"></tbody>
+          </table>
+          <button type="button" class="btn btn-danger mt-3" id="r_submit">Создать возврат</button>
+          <div id="r_result" class="hidden mt-3"></div>
         </div>
       </section>
     </main>
   </div>
-
   <script src="/static/js/app.js"></script>
 </body>
 </html>
