@@ -12,6 +12,7 @@ class CheckItemIn(BaseModel):
     payment_method: str = Field(default="full_payment")
     payment_object: int | str = Field(default=1, description="1=commodity, 3=service, ...")
     measure: int = Field(default=0)
+    is_agent: bool = Field(default=False, description="Применить agent_info к этой позиции")
 
 
 class ClientIn(BaseModel):

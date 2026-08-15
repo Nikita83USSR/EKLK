@@ -10,10 +10,16 @@
   const VAT_OPTS = `
     <option value="none">Без НДС</option>
     <option value="vat0">НДС 0%</option>
+    <option value="vat5">НДС 5%</option>
+    <option value="vat7">НДС 7%</option>
     <option value="vat10">НДС 10%</option>
-    <option value="vat20" selected>НДС 20%</option>
+    <option value="vat22" selected>НДС 22%</option>
+    <option value="vat20">НДС 20% (старая)</option>
+    <option value="vat105">НДС 5/105</option>
+    <option value="vat107">НДС 7/107</option>
     <option value="vat110">НДС 10/110</option>
-    <option value="vat120">НДС 20/120</option>`;
+    <option value="vat122">НДС 22/122</option>
+    <option value="vat120">НДС 20/120 (старая)</option>`;
 
   const OBJECT_OPTS = `
     <option value="1">Товар</option>
@@ -128,6 +134,7 @@
       <td><select class="it-vat">${VAT_OPTS}</select></td>
       <td><select class="it-object">${OBJECT_OPTS}</select></td>
       <td><select class="it-method">${METHOD_OPTS}</select></td>
+      <td style="text-align:center"><input type="checkbox" class="it-agent" title="Агент по этой позиции" /></td>
       <td><button type="button" class="btn btn-secondary btn-sm it-rm">🗑</button></td>
     </tr>`;
   }
@@ -157,18 +164,31 @@
         if (tb.querySelectorAll(".item-row").length > 1) {
           btn.closest("tr").remove();
           onChange && onChange();
+          if (tbodyId === "c_items") syncAgentBoxFromItems();
         }
       };
     });
     tb.querySelectorAll("input, select").forEach((el) => {
-      el.oninput = el.onchange = () => onChange && onChange();
+      el.oninput = el.onchange = () => {
+        onChange && onChange();
+        if (tbodyId === "c_items" && el.classList.contains("it-agent")) {
+          syncAgentBoxFromItems();
+        }
+      };
     });
+  }
+
+  function syncAgentBoxFromItems() {
+    const on = anyItemAgent("c_items");
+    $("#c_agentBox").classList.toggle("hidden", !on);
+    if (on) syncAgentTypeFields();
   }
 
   function collectItems(tbodyId) {
     return $$(`#${tbodyId} .item-row`).map((row) => {
       const price = parseFloat(row.querySelector(".it-price").value) || 0;
       const quantity = parseFloat(row.querySelector(".it-qty").value) || 1;
+      const agentCb = row.querySelector(".it-agent");
       return {
         name: (row.querySelector(".it-name").value || "").trim() || "Товар",
         price,
@@ -177,8 +197,13 @@
         vat_type: row.querySelector(".it-vat").value,
         payment_object: parseInt(row.querySelector(".it-object").value, 10) || 1,
         payment_method: row.querySelector(".it-method").value,
+        is_agent: !!(agentCb && agentCb.checked),
       };
     });
+  }
+
+  function anyItemAgent(tbodyId) {
+    return $$(`#${tbodyId} .item-row .it-agent`).some((cb) => cb.checked);
   }
 
   function itemsSum(tbodyId) {
@@ -385,9 +410,8 @@
   };
 
   function syncAgentBox() {
-    const on = document.querySelector('input[name="c_agent"]:checked')?.value === "1";
-    $("#c_agentBox").classList.toggle("hidden", !on);
-    if (on) syncAgentTypeFields();
+    // legacy no-op; visibility from per-item checkboxes
+    syncAgentBoxFromItems();
   }
 
   function syncAgentTypeFields() {
@@ -505,8 +529,8 @@
         body.additional_user_props = { name: n, value: v };
       }
 
-      // Agent — только релевантные поля по типу
-      if (document.querySelector('input[name="c_agent"]:checked')?.value === "1") {
+      // Agent — только если отмечен хотя бы на одной позиции
+      if (items.some((it) => it.is_agent)) {
         const atype = $("#c_agent_type").value;
         const cfg = AGENT_UI[atype] || AGENT_UI.another;
         const supName = ($("#c_sup_name") && $("#c_sup_name").value.trim()) || "";

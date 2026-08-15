@@ -294,15 +294,14 @@ class EcomKassaClient:
                 )
             prepared_items.append(prepared)
 
-        # Agent / supplier on each item (ФФД: agent per subject of settlement)
-        agent_info = None
-        supplier_info = None
+        # Agent / supplier only on items marked is_agent (ФФД: per subject of settlement)
         if agent:
             agent_info, supplier_info = build_agent_payload(agent)
-            for prepared in prepared_items:
-                prepared["agent_info"] = agent_info
-                if supplier_info:
-                    prepared["supplier_info"] = supplier_info
+            for src, prepared in zip(items, prepared_items):
+                if src.get("is_agent"):
+                    prepared["agent_info"] = agent_info
+                    if supplier_info:
+                        prepared["supplier_info"] = supplier_info
 
         prepared_payments = [
             {"type": int(p["type"]), "sum": to_rubles(p["sum"])} for p in payments
