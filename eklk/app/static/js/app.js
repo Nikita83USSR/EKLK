@@ -182,6 +182,7 @@
     const on = anyItemAgent("c_items");
     $("#c_agentBox").classList.toggle("hidden", !on);
     if (on) syncAgentTypeFields();
+    updateCreateSummary();
   }
 
   function collectItems(tbodyId) {
@@ -262,6 +263,42 @@
       if (!norm) {
         issues.push("Телефон должен быть вида +79001234567 (сейчас: «" + phoneRaw + "»)");
       }
+    }
+    // Agent fields — only if any item marked
+    if (typeof anyItemAgent === "function" && anyItemAgent("c_items")) {
+      const supName = ($("#c_sup_name") && $("#c_sup_name").value.trim()) || "";
+      const supInn = ($("#c_sup_inn") && $("#c_sup_inn").value.trim()) || "";
+      const supPh = ($("#c_sup_phones") && $("#c_sup_phones").value.trim()) || "";
+      if (!supName) issues.push("Агент: укажите наименование поставщика");
+      const innR = validateInnValue(supInn);
+      if (!innR.ok) issues.push("Агент: " + (innR.msg || "некорректный ИНН поставщика"));
+      if (!supPh || !normalizePhoneUI(supPh)) {
+        issues.push("Агент: телефон поставщика в формате +79001234567");
+      }
+      const atype = ($("#c_agent_type") && $("#c_agent_type").value) || "another";
+      const cfg = (typeof AGENT_UI !== "undefined" && AGENT_UI[atype]) || null;
+      if (cfg && cfg.paying) {
+        const paPh = ($("#c_pa_phones") && $("#c_pa_phones").value.trim()) || "";
+        if (paPh && !normalizePhoneUI(paPh)) issues.push("Агент: телефон платёжного агента некорректен");
+      }
+      if (cfg && cfg.receive) {
+        const rPh = ($("#c_recv_phones") && $("#c_recv_phones").value.trim()) || "";
+        if (rPh && !normalizePhoneUI(rPh)) issues.push("Агент: телефон оператора приёма некорректен");
+      }
+      if (cfg && cfg.transfer) {
+        const tInn = ($("#c_mt_inn") && $("#c_mt_inn").value.trim()) || "";
+        if (tInn) {
+          const tr = validateInnValue(tInn);
+          if (!tr.ok) issues.push("Агент: ИНН оператора перевода — " + tr.msg);
+        }
+        const tPh = ($("#c_mt_phones") && $("#c_mt_phones").value.trim()) || "";
+        if (tPh && !normalizePhoneUI(tPh)) issues.push("Агент: телефон оператора перевода некорректен");
+      }
+    }
+    // Lock submit button when errors
+    const subBtn = $("#c_submit");
+    if (subBtn && subBtn.dataset.busy !== "1") {
+      subBtn.disabled = issues.length > 0;
     }
     if (issues.length) {
       warn.className = "warn-box error";
@@ -444,8 +481,17 @@
     r.addEventListener("change", syncAgentBox);
   });
   if ($("#c_agent_type")) {
-    $("#c_agent_type").addEventListener("change", syncAgentTypeFields);
+    $("#c_agent_type").addEventListener("change", () => {
+      syncAgentTypeFields();
+      updateCreateSummary();
+    });
   }
+  ["c_sup_name", "c_sup_inn", "c_sup_phones", "c_pa_op", "c_pa_phones", "c_recv_phones", "c_mt_name", "c_mt_addr", "c_mt_inn", "c_mt_phones"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", updateCreateSummary);
+    el.addEventListener("blur", updateCreateSummary);
+  });
 
   $("#c_addItem").onclick = () => {
     $("#c_items").insertAdjacentHTML("beforeend", itemRowHtml());
