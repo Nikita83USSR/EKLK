@@ -1,40 +1,15 @@
-# Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
 .venv/
 venv/
-ENV/
-env/
 .env
-*.egg-info/
-dist/
-build/
-
-# Database
 *.db
-*.sqlite
-*.sqlite3
-
-# IDE
+*.sqlite*
 .idea/
 .vscode/
-*.swp
-*.swo
 .DS_Store
-
-# Logs
 *.log
-logs/
-
-# Testing
-.coverage
-htmlcov/
+dist/
+build/
 .pytest_cache/
 .mypy_cache/
-
-# Local
-eklk.db
-*.local

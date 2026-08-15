@@ -1,98 +1,54 @@
-"""
-FastAPI Dependencies
-Authentication and authorization guards.
-"""
-
 from typing import Annotated, Optional
-
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
 
-from app.database import get_db
 from app.core.security import decode_access_token
-from app.models.user import User, UserRole
-from app.utils.logger import logger, log_action
+from app.core.config import settings
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+# Simple in-memory users for ЛК (demo). In production → DB.
+DEMO_USERS = {
+    "admin": {
+        "id": 1,
+        "username": "admin",
+        "password": "admin123",  # plain for demo; hash in real use
+        "email": "admin@eklk.local",
+        "full_name": "Администратор EKLK",
+        "role": "admin",
+    },
+    "operator": {
+        "id": 2,
+        "username": "operator",
+        "password": "operator123",
+        "email": "operator@eklk.local",
+        "full_name": "Оператор",
+        "role": "operator",
+    },
+}
 
 
-def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
-    db: Annotated[Session, Depends(get_db)],
-) -> User:
-    """
-    Extract and validate current user from JWT.
-    Raises 401 if invalid or inactive.
-    """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    
+def get_user_by_username(username: str) -> Optional[dict]:
+    return DEMO_USERS.get(username)
+
+
+async def get_current_user(token: Annotated[Optional[str], Depends(oauth2_scheme)]) -> dict:
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated", headers={"WWW-Authenticate": "Bearer"})
     payload = decode_access_token(token)
-    if payload is None:
-        log_action("auth_failed", "Invalid or expired token", level="warning")
-        raise credentials_exception
-    
-    user_id = payload.get("sub")
-    if user_id is None:
-        raise credentials_exception
-    
-    try:
-        user_id_int = int(user_id)
-    except (TypeError, ValueError):
-        raise credentials_exception
-    
-    user = db.get(User, user_id_int)
-    if user is None:
-        log_action("auth_failed", f"User not found: id={user_id}", level="warning")
-        raise credentials_exception
-    
-    if not user.is_active:
-        log_action(
-            "auth_failed",
-            f"Inactive user attempted access: id={user.id}",
-            level="warning",
-            user_id=user.id,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive",
-        )
-    
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    username = payload.get("username") or payload.get("sub")
+    user = get_user_by_username(str(username)) if not str(username).isdigit() else None
+    if not user:
+        # fallback by id
+        for u in DEMO_USERS.values():
+            if str(u["id"]) == str(payload.get("sub")):
+                user = u
+                break
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
 
 
-def get_current_active_user(
-    current_user: Annotated[User, Depends(get_current_user)],
-) -> User:
-    return current_user
-
-
-def require_roles(*roles: UserRole):
-    """
-    Dependency factory for role-based access control.
-    """
-    def role_checker(
-        current_user: Annotated[User, Depends(get_current_user)],
-    ) -> User:
-        if current_user.role not in roles and current_user.role != UserRole.ADMIN:
-            log_action(
-                "auth_forbidden",
-                f"Insufficient role: {current_user.role}, required={roles}",
-                level="warning",
-                user_id=current_user.id,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Required roles: {[r.value for r in roles]}",
-            )
-        return current_user
-    return role_checker
-
-
-# Type aliases for cleaner signatures
-CurrentUser = Annotated[User, Depends(get_current_user)]
-DbSession = Annotated[Session, Depends(get_db)]
+CurrentUser = Annotated[dict, Depends(get_current_user)]

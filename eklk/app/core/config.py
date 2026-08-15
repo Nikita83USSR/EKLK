@@ -1,40 +1,26 @@
-"""
-EKLK Configuration
-Centralized settings for reliability and security.
-"""
-
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore",
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    app_name: str = Field(default="EKLK", description="Application name")
-    app_version: str = Field(default="1.0.0")
-    debug: bool = Field(default=True)
-    environment: str = Field(default="development")
+    app_name: str = "EKLK"
+    app_version: str = "1.0.0"
+    debug: bool = True
+    secret_key: str = Field(default="dev-secret-change-in-production-min-32-chars!!")
+    access_token_expire_minutes: int = 480
+    algorithm: str = "HS256"
 
-    # Security
-    secret_key: str = Field(
-        default="dev-secret-key-change-in-production-must-be-long-and-random-32+",
-        min_length=32,
-    )
-    access_token_expire_minutes: int = Field(default=60)
-    algorithm: str = Field(default="HS256")
+    ecomkassa_base_url: str = "https://app.ecomkassa.ru"
+    ecomkassa_login: str = "sales@ecomkassa.ru"
+    ecomkassa_password: str = "ecomkassa1"
+    ecomkassa_group_code: str = "990"
+    ecomkassa_api_version: str = "v5"
 
-    # Database
-    database_url: str = Field(default="sqlite:////tmp/eklk.db")
-
-    # Logging
-    log_level: str = Field(default="DEBUG")
-    log_format: str = Field(default="detailed")
+    database_url: str = "sqlite+aiosqlite:///./eklk.db"
+    log_level: str = "DEBUG"
 
 
 @lru_cache

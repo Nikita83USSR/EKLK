@@ -1,111 +1,63 @@
-"""
-EKLK — Electronic Check & Payment System
-Main application entry point.
-
-Business product focused on reliability of:
-- Authorization
-- Check (чек) creation
-- Payment creation
-"""
-
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
 
 from app.core.config import settings
-from app.database import init_db
 from app.utils.logger import logger, log_action
-from app.routers import auth, checks, payments
+from app.routers import auth, ecom
+
+BASE_DIR = Path(__file__).resolve().parent
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application startup / shutdown lifecycle."""
     logger.info("=" * 60)
-    logger.info(f"Starting {settings.app_name} v{settings.app_version}")
-    logger.info(f"Environment: {settings.environment} | Debug: {settings.debug}")
+    logger.info(f"{settings.app_name} v{settings.app_version} starting")
+    logger.info(f"EcomKassa: {settings.ecomkassa_base_url} / {settings.ecomkassa_api_version} / group={settings.ecomkassa_group_code}")
     logger.info("=" * 60)
-    
-    init_db()
-    log_action("startup", f"{settings.app_name} started successfully", entity="app")
-    
+    log_action("startup", "Application started")
     yield
-    
-    log_action("shutdown", f"{settings.app_name} shutting down", entity="app")
-    logger.info("Application stopped")
+    log_action("shutdown", "Application stopped")
 
 
 app = FastAPI(
     title=settings.app_name,
-    description=(
-        "EKLK — надёжная система электронных чеков и платежей.\n\n"
-        "Основные возможности:\n"
-        "- **Авторизация** (JWT, роли: admin / cashier / manager)\n"
-        "- **Создание чеков** с позициями, НДС, фискальными атрибутами\n"
-        "- **Создание платежей** с привязкой к чеку и автоматическим обновлением статуса\n\n"
-        "Все критические операции логируются в консоль для удобной отладки."
-    ),
     version=settings.app_version,
+    description="EKLK — личный кабинет и API для работы с EcomKassa (чеки + платежи)",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
 )
 
-# CORS — for frontend integration later
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.debug else [],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(ecom.router, prefix="/api/v1")
 
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    logger.warning(
-        f"Validation error on {request.method} {request.url.path}: {exc.errors()}",
-        extra={"action": "validation_error"},
-    )
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": exc.errors(), "body": exc.body},
-    )
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request, "app_name": settings.app_name})
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": settings.app_name, "version": settings.app_version}
 
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(
-        f"Unhandled exception on {request.method} {request.url.path}: {exc}",
-        extra={"action": "unhandled_error"},
-        exc_info=True,
-    )
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "Internal server error. Check logs for details."},
-    )
-
-
-# Include routers
-app.include_router(auth.router, prefix="/api/v1")
-app.include_router(checks.router, prefix="/api/v1")
-app.include_router(payments.router, prefix="/api/v1")
-
-
-@app.get("/", tags=["Health"])
-def root():
-    return {
-        "service": settings.app_name,
-        "version": settings.app_version,
-        "status": "ok",
-        "docs": "/docs",
-    }
-
-
-@app.get("/health", tags=["Health"])
-def health():
-    return {"status": "healthy"}
+async def global_exc(request: Request, exc: Exception):
+    logger.error(f"Unhandled: {exc}", exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ app_name }} — Личный кабинет</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/app.css" />
+</head>
+<body>
+  <!-- LOGIN -->
+  <div id="loginScreen" class="login-wrap">
+    <div class="login-card">
+      <h1>{{ app_name }}</h1>
+      <p class="subtitle">Личный кабинет · чеки и платежи через EcomKassa</p>
+      <div id="loginError" class="alert alert-error hidden"></div>
+      <form id="loginForm">
+        <label>Логин</label>
+        <input type="text" id="loginUser" value="admin" autocomplete="username" required />
+        <label>Пароль</label>
+        <input type="password" id="loginPass" value="admin123" autocomplete="current-password" required />
+        <button type="submit" class="btn btn-block mt-2">Войти</button>
+      </form>
+      <p class="subtitle mt-3" style="font-size:0.8rem">Демо: admin / admin123</p>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div id="appScreen" class="hidden">
+    <header class="header">
+      <div class="header-inner">
+        <div class="logo">{{ app_name }} <span>ЛК</span></div>
+        <nav class="nav">
+          <button type="button" class="active" data-tab="create">Создать чек</button>
+          <button type="button" data-tab="payment">Ссылка на оплату</button>
+          <button type="button" data-tab="status">Статус чека</button>
+          <button type="button" data-tab="refund">Возврат</button>
+        </nav>
+        <div class="user-info">
+          <span id="userName"></span>
+          <button type="button" class="btn btn-secondary" id="logoutBtn" style="padding:6px 12px;margin-left:10px">Выйти</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="container">
+      <div id="globalAlert" class="alert hidden"></div>
+
+      <!-- CREATE CHECK -->
+      <section id="tab-create" class="tab-panel">
+        <div class="card">
+          <h2>Создать обычный чек (SALE)</h2>
+          <p class="subtitle" style="color:var(--muted);margin-bottom:16px;font-size:0.9rem">Фискальный чек с оплатой type=1 (наличные/электронные)</p>
+
+          <h3>Покупатель</h3>
+          <div class="row">
+            <div><label>ФИО</label><input id="c_name" placeholder="Иванов Иван" /></div>
+            <div><label>Email</label><input id="c_email" type="email" placeholder="buyer@example.com" /></div>
+            <div><label>Телефон</label><input id="c_phone" placeholder="8 900 123-45-67" /></div>
+          </div>
+
+          <h3>СНО</h3>
+          <select id="c_sno">
+            <option value="osn">ОСН</option>
+            <option value="usn_income">УСН доходы</option>
+            <option value="usn_income_outcome">УСН доходы-расходы</option>
+            <option value="esn">ЕСН</option>
+            <option value="patent">Патент</option>
+          </select>
+
+          <h3>Позиции</h3>
+          <div id="c_items"></div>
+          <button type="button" class="btn btn-secondary" id="c_addItem">+ Позиция</button>
+
+          <div class="mt-3 flex">
+            <button type="button" class="btn" id="c_submit">Создать чек</button>
+          </div>
+          <div id="c_result" class="mt-3 hidden"></div>
+        </div>
+      </section>
+
+      <!-- PAYMENT LINK -->
+      <section id="tab-payment" class="tab-panel hidden">
+        <div class="card">
+          <h2>Создать ссылку на оплату</h2>
+          <p class="subtitle" style="color:var(--muted);margin-bottom:16px;font-size:0.9rem">INVOICE через платёжный шлюз (Сбер, Тинькофф и др.)</p>
+
+          <h3>Покупатель</h3>
+          <div class="row">
+            <div><label>ФИО</label><input id="p_name" placeholder="Иванов Иван" /></div>
+            <div><label>Email</label><input id="p_email" type="email" placeholder="buyer@example.com" /></div>
+            <div><label>Телефон</label><input id="p_phone" placeholder="+79001234567" /></div>
+          </div>
+
+          <h3>Платёжная система</h3>
+          <select id="p_type"></select>
+
+          <h3>Позиции</h3>
+          <div id="p_items"></div>
+          <button type="button" class="btn btn-secondary" id="p_addItem">+ Позиция</button>
+
+          <div class="mt-3">
+            <label>URL успеха (после оплаты)</label>
+            <input id="p_success" placeholder="https://yoursite.ru/success" />
+          </div>
+
+          <div class="mt-3 flex">
+            <button type="button" class="btn" id="p_submit">Создать ссылку</button>
+          </div>
+          <div id="p_result" class="mt-3 hidden"></div>
+        </div>
+      </section>
+
+      <!-- STATUS -->
+      <section id="tab-status" class="tab-panel hidden">
+        <div class="card">
+          <h2>Статус чека / счёта</h2>
+          <div class="row">
+            <div style="flex:1"><label>UUID</label><input id="s_uuid" placeholder="113628140" /></div>
+          </div>
+          <button type="button" class="btn" id="s_submit">Проверить</button>
+          <div id="s_result" class="mt-3 hidden"></div>
+        </div>
+      </section>
+
+      <!-- REFUND -->
+      <section id="tab-refund" class="tab-panel hidden">
+        <div class="card">
+          <h2>Возврат (sell_refund)</h2>
+          <div class="row">
+            <div><label>UUID исходного чека (опционально)</label><input id="r_orig" placeholder="uuid" /></div>
+            <div><label>Email покупателя</label><input id="r_email" type="email" /></div>
+            <div><label>Телефон</label><input id="r_phone" /></div>
+          </div>
+          <h3>Позиции возврата</h3>
+          <div id="r_items"></div>
+          <button type="button" class="btn btn-secondary" id="r_addItem">+ Позиция</button>
+          <div class="mt-3">
+            <button type="button" class="btn btn-danger" id="r_submit">Создать возврат</button>
+          </div>
+          <div id="r_result" class="mt-3 hidden"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

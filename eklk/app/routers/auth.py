@@ -1,58 +1,37 @@
-"""
-Auth Router
-/api/v1/auth/*
-"""
+from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi.security import OAuth2PasswordRequestForm
 
-from fastapi import APIRouter, Depends, status
-from sqlalchemy.orm import Session
-
-from app.database import get_db
-from app.core.deps import CurrentUser
-from app.schemas.auth import RegisterRequest, LoginRequest, Token, UserResponse
-from app.services.auth_service import AuthService
+from app.core.config import settings
+from app.core.security import create_access_token
+from app.core.deps import get_user_by_username, CurrentUser, DEMO_USERS
+from app.schemas.auth import LoginRequest, TokenResponse, UserOut
 from app.utils.logger import log_action
 
-router = APIRouter(prefix="/auth", tags=["Authorization"])
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@router.post(
-    "/register",
-    response_model=UserResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Register new user",
-)
-def register(data: RegisterRequest, db: Session = Depends(get_db)):
-    """
-    Register a new user.
-    Roles: admin, cashier, manager.
-    First admin can be created freely; subsequent ones logged.
-    """
-    service = AuthService(db)
-    user = service.register(data)
-    return service.get_user_response(user)
+@router.post("/login", response_model=TokenResponse)
+async def login(data: LoginRequest):
+    user = get_user_by_username(data.username)
+    if not user or user["password"] != data.password:
+        log_action("login_failed", f"Failed login: {data.username}", level="warning")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль")
+    token = create_access_token(user["id"], extra={"username": user["username"], "role": user["role"]})
+    log_action("login_success", f"User {user['username']} logged in", user_id=user["id"])
+    return TokenResponse(access_token=token, expires_in=settings.access_token_expire_minutes * 60)
 
 
-@router.post(
-    "/login",
-    response_model=Token,
-    summary="Login and get JWT",
-)
-def login(data: LoginRequest, db: Session = Depends(get_db)):
-    """
-    Authenticate by username or email + password.
-    Returns Bearer access token.
-    """
-    service = AuthService(db)
-    return service.authenticate(data)
+@router.post("/login/form", response_model=TokenResponse)
+async def login_form(form: OAuth2PasswordRequestForm = Depends()):
+    return await login(LoginRequest(username=form.username, password=form.password))
 
 
-@router.get(
-    "/me",
-    response_model=UserResponse,
-    summary="Get current user profile",
-)
-def get_me(current_user: CurrentUser, db: Session = Depends(get_db)):
-    """Return profile of the authenticated user."""
-    service = AuthService(db)
-    log_action("profile_viewed", "User viewed own profile", user_id=current_user.id)
-    return service.get_user_response(current_user)
+@router.get("/me", response_model=UserOut)
+async def me(user: CurrentUser):
+    return UserOut(
+        id=user["id"],
+        username=user["username"],
+        email=user.get("email"),
+        full_name=user.get("full_name"),
+        role=user.get("role", "operator"),
+    )
