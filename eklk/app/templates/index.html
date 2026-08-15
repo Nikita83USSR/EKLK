@@ -157,38 +157,53 @@
                   <div style="grid-column: 1 / -1">
                     <label>Тип агента (тег 1222) <span class="req">*</span></label>
                     <select id="c_agent_type">
-                      <option value="bank_paying_agent">Банковский платёжный агент</option>
-                      <option value="bank_paying_subagent">Банковский платёжный субагент</option>
+                      <option value="another">Другой тип агента (иной)</option>
+                      <option value="commission_agent">Комиссионер</option>
+                      <option value="attorney">Поверенный</option>
                       <option value="paying_agent">Платёжный агент</option>
                       <option value="paying_subagent">Платёжный субагент</option>
-                      <option value="attorney">Поверенный</option>
-                      <option value="commission_agent">Комиссионер</option>
-                      <option value="another">Другой тип агента</option>
+                      <option value="bank_paying_agent">Банковский платёжный агент</option>
+                      <option value="bank_paying_subagent">Банковский платёжный субагент</option>
                     </select>
                   </div>
                 </div>
-                <p class="hint" style="margin-bottom:10px">Поля ниже зависят от типа агента (Атол Online v5 / ФФД 1.2)</p>
-                <div class="section-title" style="font-size:0.85rem;margin-top:8px">Платёжный агент (paying_agent)</div>
-                <div class="row">
-                  <div><label>Наименование операции</label><input id="c_pa_op" placeholder="Операция" maxlength="24" /></div>
-                  <div><label>Телефоны</label><input id="c_pa_phones" placeholder="+79001234567" /></div>
+                <p class="hint" id="c_agent_hint" style="margin:8px 0 12px"></p>
+
+                <!-- Только для платёжных / банковских -->
+                <div id="c_agent_paying" class="hidden">
+                  <div class="section-title" style="font-size:0.85rem;margin-top:4px">Данные платёжного агента</div>
+                  <div class="row">
+                    <div><label>Наименование операции</label><input id="c_pa_op" placeholder="Операция" maxlength="24" /></div>
+                    <div><label>Телефон(ы) агента</label><input id="c_pa_phones" placeholder="+79001234567" /></div>
+                  </div>
                 </div>
-                <div class="section-title" style="font-size:0.85rem">Оператор по приёму платежей</div>
-                <div class="row">
-                  <div><label>Телефоны</label><input id="c_recv_phones" placeholder="+79001234567" /></div>
+
+                <div id="c_agent_receive" class="hidden">
+                  <div class="section-title" style="font-size:0.85rem">Оператор по приёму платежей</div>
+                  <div class="row">
+                    <div><label>Телефон(ы)</label><input id="c_recv_phones" placeholder="+79001234567" /></div>
+                  </div>
                 </div>
-                <div class="section-title" style="font-size:0.85rem">Оператор перевода</div>
-                <div class="row">
-                  <div><label>Наименование</label><input id="c_mt_name" /></div>
-                  <div><label>Адрес</label><input id="c_mt_addr" /></div>
-                  <div><label>ИНН</label><input id="c_mt_inn" /></div>
-                  <div><label>Телефоны</label><input id="c_mt_phones" placeholder="+79001234567" /></div>
+
+                <div id="c_agent_transfer" class="hidden">
+                  <div class="section-title" style="font-size:0.85rem">Оператор перевода денежных средств</div>
+                  <div class="row">
+                    <div><label>Наименование</label><input id="c_mt_name" placeholder="Банк / оператор" /></div>
+                    <div><label>Адрес</label><input id="c_mt_addr" /></div>
+                    <div><label>ИНН</label><input id="c_mt_inn" /></div>
+                    <div><label>Телефон(ы)</label><input id="c_mt_phones" placeholder="+79001234567" /></div>
+                  </div>
                 </div>
-                <div class="section-title" style="font-size:0.85rem">Поставщик (supplier_info) <span class="req">*</span></div>
-                <div class="row">
-                  <div><label>Наименование</label><input id="c_sup_name" placeholder="ООО Поставщик" /></div>
-                  <div><label>ИНН</label><input id="c_sup_inn" /></div>
-                  <div><label>Телефоны</label><input id="c_sup_phones" placeholder="+79001234567" /></div>
+
+                <!-- Поставщик — для ВСЕХ типов агента -->
+                <div id="c_agent_supplier">
+                  <div class="section-title" style="font-size:0.85rem">Поставщик (supplier_info) <span class="req">*</span></div>
+                  <p class="hint" style="margin-bottom:8px">Обязателен для любого типа агента (теги 1224, 1226)</p>
+                  <div class="row">
+                    <div><label>Наименование <span class="req">*</span></label><input id="c_sup_name" placeholder="ООО Поставщик" /></div>
+                    <div><label>ИНН <span class="req">*</span></label><input id="c_sup_inn" placeholder="7707083893" /></div>
+                    <div><label>Телефон(ы) <span class="req">*</span></label><input id="c_sup_phones" placeholder="+79001234567" /></div>
+                  </div>
                 </div>
               </div>
             </div>

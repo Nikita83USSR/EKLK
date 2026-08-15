@@ -365,13 +365,46 @@
     $("#c_addPropBox").classList.toggle("hidden", !$("#c_addProp").checked);
   };
 
+  /**
+   * ФФД 1.2 / письмо ФНС:
+   * - тег 1223 (данные агента) только для платёжных и банковских агентов
+   * - supplier_info обязателен для ВСЕХ типов агента
+   *
+   * bank_paying_*  → paying + transfer (+ receive optional)
+   * paying_*       → paying + receive
+   * attorney / commission_agent / another → только supplier
+   */
+  const AGENT_UI = {
+    bank_paying_agent:    { paying: true,  receive: false, transfer: true,  hint: "Банковский платёжный агент: операция, телефоны агента и данные оператора перевода + поставщик." },
+    bank_paying_subagent: { paying: true,  receive: false, transfer: true,  hint: "Банковский платёжный субагент: операция, телефоны агента и данные оператора перевода + поставщик." },
+    paying_agent:         { paying: true,  receive: true,  transfer: false, hint: "Платёжный агент: операция, телефоны агента и оператора по приёму платежей + поставщик." },
+    paying_subagent:      { paying: true,  receive: true,  transfer: false, hint: "Платёжный субагент: операция, телефоны агента и оператора по приёму платежей + поставщик." },
+    attorney:             { paying: false, receive: false, transfer: false, hint: "Поверенный: укажите только данные поставщика (принципала)." },
+    commission_agent:     { paying: false, receive: false, transfer: false, hint: "Комиссионер: укажите только данные поставщика (комитента)." },
+    another:              { paying: false, receive: false, transfer: false, hint: "Иной агент: укажите только данные поставщика." },
+  };
+
   function syncAgentBox() {
     const on = document.querySelector('input[name="c_agent"]:checked')?.value === "1";
     $("#c_agentBox").classList.toggle("hidden", !on);
+    if (on) syncAgentTypeFields();
   }
+
+  function syncAgentTypeFields() {
+    const type = ($("#c_agent_type") && $("#c_agent_type").value) || "another";
+    const cfg = AGENT_UI[type] || AGENT_UI.another;
+    $("#c_agent_paying").classList.toggle("hidden", !cfg.paying);
+    $("#c_agent_receive").classList.toggle("hidden", !cfg.receive);
+    $("#c_agent_transfer").classList.toggle("hidden", !cfg.transfer);
+    if ($("#c_agent_hint")) $("#c_agent_hint").textContent = cfg.hint;
+  }
+
   document.querySelectorAll('input[name="c_agent"]').forEach((r) => {
     r.addEventListener("change", syncAgentBox);
   });
+  if ($("#c_agent_type")) {
+    $("#c_agent_type").addEventListener("change", syncAgentTypeFields);
+  }
 
   $("#c_addItem").onclick = () => {
     $("#c_items").insertAdjacentHTML("beforeend", itemRowHtml());
@@ -472,25 +505,36 @@
         body.additional_user_props = { name: n, value: v };
       }
 
-      // Agent
+      // Agent — только релевантные поля по типу
       if (document.querySelector('input[name="c_agent"]:checked')?.value === "1") {
-        body.agent = {
-          type: $("#c_agent_type").value,
-          paying_operation: ($("#c_pa_op") && $("#c_pa_op").value.trim()) || undefined,
-          paying_phones: ($("#c_pa_phones") && $("#c_pa_phones").value.trim()) || undefined,
-          receive_phones: ($("#c_recv_phones") && $("#c_recv_phones").value.trim()) || undefined,
-          transfer_name: ($("#c_mt_name") && $("#c_mt_name").value.trim()) || undefined,
-          transfer_address: ($("#c_mt_addr") && $("#c_mt_addr").value.trim()) || undefined,
-          transfer_inn: ($("#c_mt_inn") && $("#c_mt_inn").value.trim()) || undefined,
-          transfer_phones: ($("#c_mt_phones") && $("#c_mt_phones").value.trim()) || undefined,
-          supplier_name: ($("#c_sup_name") && $("#c_sup_name").value.trim()) || undefined,
-          supplier_inn: ($("#c_sup_inn") && $("#c_sup_inn").value.trim()) || undefined,
-          supplier_phones: ($("#c_sup_phones") && $("#c_sup_phones").value.trim()) || undefined,
-        };
-        if (!body.agent.supplier_name && !body.agent.supplier_inn && !body.agent.supplier_phones) {
-          showAlert("При агенте укажите данные поставщика (supplier_info)");
+        const atype = $("#c_agent_type").value;
+        const cfg = AGENT_UI[atype] || AGENT_UI.another;
+        const supName = ($("#c_sup_name") && $("#c_sup_name").value.trim()) || "";
+        const supInn = ($("#c_sup_inn") && $("#c_sup_inn").value.trim()) || "";
+        const supPhones = ($("#c_sup_phones") && $("#c_sup_phones").value.trim()) || "";
+        if (!supName || !supInn || !supPhones) {
+          showAlert("Для агента обязательны: наименование, ИНН и телефон поставщика");
           setLoading(btn, false, "Создать чек");
           return;
+        }
+        body.agent = {
+          type: atype,
+          supplier_name: supName,
+          supplier_inn: supInn,
+          supplier_phones: supPhones,
+        };
+        if (cfg.paying) {
+          body.agent.paying_operation = ($("#c_pa_op") && $("#c_pa_op").value.trim()) || undefined;
+          body.agent.paying_phones = ($("#c_pa_phones") && $("#c_pa_phones").value.trim()) || undefined;
+        }
+        if (cfg.receive) {
+          body.agent.receive_phones = ($("#c_recv_phones") && $("#c_recv_phones").value.trim()) || undefined;
+        }
+        if (cfg.transfer) {
+          body.agent.transfer_name = ($("#c_mt_name") && $("#c_mt_name").value.trim()) || undefined;
+          body.agent.transfer_address = ($("#c_mt_addr") && $("#c_mt_addr").value.trim()) || undefined;
+          body.agent.transfer_inn = ($("#c_mt_inn") && $("#c_mt_inn").value.trim()) || undefined;
+          body.agent.transfer_phones = ($("#c_mt_phones") && $("#c_mt_phones").value.trim()) || undefined;
         }
       }
       const op = $("#c_operation").value;
