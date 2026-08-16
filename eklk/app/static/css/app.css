@@ -272,45 +272,42 @@ input.invalid, select.invalid {
 .footer-col a { color: var(--primary); }
 .footer-col a:hover { text-decoration: underline; }
 
-/* Bitrix24 widget above sticky header */
-.b24-widget-button-wrapper { z-index: 1000 !important; }
-
 /* —— Logo —— */
 .login-logo-wrap {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin: 0 0 16px;
-  padding: 0 8px;
+  width: 100%;
+  margin: 0 0 20px;
 }
 .login-logo {
   display: block;
-  max-width: 240px;
-  width: 100%;
-  height: auto;
+  height: 48px;
+  width: auto;
+  max-width: 100%;
   object-fit: contain;
-  margin: 0 auto;
+  object-position: center;
 }
 .header-logo {
   display: block;
-  height: 36px;
+  height: 28px;
   width: auto;
-  max-width: 180px;
+  max-width: 160px;
   object-fit: contain;
+  object-position: left center;
 }
 .logo {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-weight: 700;
-  font-size: 1.1rem;
 }
 .logo-badge {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  background: var(--accent, #00AEEF);
+  background: #00AEEF;
   color: #fff;
   padding: 2px 8px;
   border-radius: 999px;
-  letter-spacing: 0.02em;
+  line-height: 1.2;
 }
+.b24-widget-button-wrapper { z-index: 1000 !important; }

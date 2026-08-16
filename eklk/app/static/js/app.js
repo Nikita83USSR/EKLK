@@ -75,14 +75,23 @@
     if (token) headers["Authorization"] = `Bearer ${token}`;
     const res = await fetch(API + path, { ...opts, headers });
     const data = await res.json().catch(() => ({}));
+    const detailMsg = (() => {
+      const d = data && data.detail;
+      if (typeof d === "string") return d;
+      if (Array.isArray(d)) {
+        return d.map((x) => (typeof x === "string" ? x : x.msg || x.message || JSON.stringify(x))).join("; ");
+      }
+      if (d && typeof d === "object") return d.message || d.msg || JSON.stringify(d);
+      return data.error || data.message || res.statusText || "Ошибка запроса";
+    })();
+    // 401 on login itself must NOT call logout (no session yet)
     if (res.status === 401) {
-      logout(false);
-      throw new Error(data.detail || "Сессия истекла. Войдите снова.");
+      const isLogin = String(path).indexOf("/auth/login") !== -1;
+      if (!isLogin) logout(false);
+      throw new Error(detailMsg || "Сессия истекла. Войдите снова.");
     }
     if (!res.ok) {
-      const d = data.detail;
-      const msg = typeof d === "string" ? d : d?.message || JSON.stringify(d) || res.statusText;
-      throw new Error(msg);
+      throw new Error(detailMsg);
     }
     return data;
   }

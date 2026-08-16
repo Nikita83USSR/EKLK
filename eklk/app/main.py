@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent
 async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.info(f"{settings.app_name} v{settings.app_version} starting")
-    logger.info(f"EcomKassa: {settings.ecomkassa_base_url} / {settings.ecomkassa_api_version} / group={settings.ecomkassa_group_code}")
+    logger.info(f"API backend (фискальный шлюз EcomKassa): {settings.ecomkassa_base_url} | protocol={settings.ecomkassa_api_version} | default_group={settings.ecomkassa_group_code}")
     logger.info("=" * 60)
     log_action("startup", "Application started")
     yield
