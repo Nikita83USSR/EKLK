@@ -98,9 +98,12 @@
 
   function logout(clearStorage = true) {
     token = "";
-    if (clearStorage) localStorage.removeItem("eklk_token");
-    $("#appScreen").classList.add("hidden");
-    $("#loginScreen").classList.remove("hidden");
+    if (clearStorage) {
+      localStorage.removeItem("eklk_token");
+      // eklk_group (last store) intentionally kept across logout
+    }
+    if ($("#appScreen")) $("#appScreen").classList.add("hidden");
+    if ($("#loginScreen")) $("#loginScreen").classList.remove("hidden");
     if ($("#appFooter")) $("#appFooter").classList.add("hidden");
   }
 
@@ -211,18 +214,21 @@
 
   function ingestFirm(firm, selectedStoreId) {
     if (firm) firmData = firm;
-    if (selectedStoreId != null && selectedStoreId !== "") {
-      groupCode = String(selectedStoreId);
+    const stores = (firmData && firmData.stores) || [];
+    const pick = (id) => {
+      if (id == null || id === "") return null;
+      const sid = String(id);
+      if (!stores.length) return sid;
+      return stores.some((s) => String(s.store_id) === sid) ? sid : null;
+    };
+    let chosen =
+      pick(selectedStoreId) ||
+      pick(localStorage.getItem("eklk_group")) ||
+      pick(groupCode) ||
+      (stores.length ? String(stores[0].store_id) : "");
+    if (chosen) {
+      groupCode = chosen;
       localStorage.setItem("eklk_group", groupCode);
-    } else if (firmData && firmData.stores && firmData.stores.length) {
-      const ls = localStorage.getItem("eklk_group");
-      const ok = ls && firmData.stores.some((s) => String(s.store_id) === String(ls));
-      if (!ok) {
-        groupCode = String(firmData.stores[0].store_id);
-        localStorage.setItem("eklk_group", groupCode);
-      } else {
-        groupCode = String(ls);
-      }
     }
     fillStoreSelects();
     applyFirmToSettings();
@@ -549,11 +555,14 @@
     if ($("#appFooter")) $("#appFooter").classList.remove("hidden");
     try {
       if (loginPayload && loginPayload.firm) {
-        ingestFirm(loginPayload.firm, loginPayload.selected_store_id);
+        // last store chosen by user wins over server default
+        const preferred = localStorage.getItem("eklk_group") || loginPayload.selected_store_id;
+        ingestFirm(loginPayload.firm, preferred);
       } else {
         const me = await api("/auth/me");
         if ($("#userName")) $("#userName").textContent = me.username || me.email || "";
-        ingestFirm(me.firm, me.selected_store_id);
+        const preferred = localStorage.getItem("eklk_group") || me.selected_store_id;
+        ingestFirm(me.firm, preferred);
       }
       const me2 = await api("/auth/me").catch(() => null);
       if (me2 && $("#userName")) $("#userName").textContent = me2.username || me2.email || "";
@@ -981,10 +990,34 @@
     return val;
   }
 
+  const STATUS_LABELS = {
+    wait: "Ожидание",
+    done: "Готов",
+    fail: "Ошибка",
+    failed: "Ошибка",
+    error: "Ошибка",
+    new: "Новый",
+    process: "В обработке",
+    processing: "В обработке",
+    ready: "Готов к печати",
+    print: "Печать",
+    printed: "Напечатан",
+    canceled: "Отменён",
+    cancelled: "Отменён",
+    expired: "Истёк",
+    draft: "Черновик",
+    success: "Успешно",
+    ok: "Успешно",
+  };
+
   function statusBadge(st) {
-    const s = (st || "—").toString();
-    const cls = "badge badge-status-" + s.replace(/\s+/g, "_");
-    return `<span class="${cls}">${s}</span>`;
+    const raw = (st == null || st === "") ? "—" : String(st);
+    const key = raw.toLowerCase();
+    const label = STATUS_LABELS[key] || STATUS_LABELS[raw] || raw;
+    let tone = "wait";
+    if (["done", "ready", "printed", "success", "ok"].includes(key)) tone = "done";
+    if (["fail", "failed", "error", "canceled", "cancelled", "expired"].includes(key)) tone = "fail";
+    return `<span class="badge badge-status-${tone}" title="${raw}">${label}</span>`;
   }
 
   function typeLabel(t) {
@@ -1209,6 +1242,27 @@
         showAlert(e.message);
       }
     };
+  }
+
+  bindOrdersUI();
+
+  // Enter in filter fields triggers search
+  ["o_ext", "o_since", "o_until"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        ordersOffset = 0;
+        loadOrders();
+      }
+    });
+  });
+  if ($("#o_types")) {
+    $("#o_types").onchange = () => { ordersOffset = 0; loadOrders(); };
+  }
+  if ($("#o_limit")) {
+    $("#o_limit").onchange = () => { ordersOffset = 0; loadOrders(); };
   }
 
   if (token) afterLogin().catch(() => logout(true));

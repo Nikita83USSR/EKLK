@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ app_name }} — Чек</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260817" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260818" />
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <div class="login-logo-wrap">
-        <img src="/static/img/logo.png?v=20260817" alt="EcomKassa" class="login-logo" />
+        <img src="/static/img/logo.png?v=20260818" alt="EcomKassa" class="login-logo" />
       </div>
       <p class="subtitle">Личный кабинет · вход учётной записью EcomKassa</p>
       <div id="loginError" class="alert alert-error hidden"></div>
@@ -29,8 +29,7 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <img src="/static/img/logo.png?v=20260817" alt="EcomKassa" class="header-logo" />
-          <span class="logo-badge">ЛК</span>
+          <img src="/static/img/logo.png?v=20260818" alt="EcomKassa" class="header-logo" />
         </div>
         <nav class="nav">
           <button type="button" class="active" data-tab="create">Чек</button>
@@ -462,16 +461,16 @@
       </div>
     </div>
   </footer>
-
-  <!-- Bitrix24 CRM widget (как на app.ecomkassa.ru) -->
-  <script>
+  <script src="/static/js/app.js?v=20260818"></script>
+  <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
+  <script data-skip-moving="true">
   (function(w,d,u){
-    var s=d.createElement('script');s.async=true;
-    s.src=u+'?'+(Date.now()/60000|0);
-    var h=d.getElementsByTagName('script')[0];
-    h.parentNode.insertBefore(s,h);
-  })(window,document,'https://cdn-ru.bitrix24.ru/b24444000/crm/site_button/loader_4_q8v7f4.js');
+    var s=d.createElement("script");
+    s.async=true;
+    s.src=u+"?"+Math.floor(Date.now()/60000);
+    (d.body || d.getElementsByTagName("head")[0]).appendChild(s);
+  })(window,document,"https://cdn-ru.bitrix24.ru/b24444000/crm/site_button/loader_4_q8v7f4.js");
   </script>
-<script src="/static/js/app.js?v=20260817"></script>
+
 </body>
 </html>

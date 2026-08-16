@@ -310,4 +310,13 @@ input.invalid, select.invalid {
   border-radius: 999px;
   line-height: 1.2;
 }
-.b24-widget-button-wrapper { z-index: 1000 !important; }
+
+
+/* Bitrix24 widget — always visible above app chrome */
+.b24-widget-button-wrapper,
+.b24-widget-button-position-bottom-right,
+div[class*="b24-widget"] {
+  z-index: 2147483000 !important;
+  pointer-events: auto !important;
+}
+.b24-widget-button-shadow { z-index: 2147482990 !important; }
