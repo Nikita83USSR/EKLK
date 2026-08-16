@@ -155,6 +155,10 @@ class CreateCheckRequest(BaseModel):
         default=None,
         description="ID магазина (storeId / group_code). Если не указан — из сессии",
     )
+    source_document_id: Optional[str] = Field(
+        default=None,
+        description="ID исходного чека при «создать на основе» (не изменяет исходный документ)",
+    )
 
 
 class CreateRefundRequest(BaseModel):

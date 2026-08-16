@@ -41,11 +41,11 @@
     <option value="credit_payment">Оплата кредита</option>`;
 
   const FISCAL_PAY = `
-    <option value="1">Наличными</option>
-    <option value="2">Безналичными</option>
-    <option value="14">Предоплата (зачёт аванса)</option>
-    <option value="15">Постоплата (кредит)</option>
-    <option value="16">Встречное предоставление</option>`;
+    <option value="0">Наличными</option>
+    <option value="1" selected>Безналичными</option>
+    <option value="2">Предоплата (зачёт аванса)</option>
+    <option value="3">Постоплата (кредит)</option>
+    <option value="4">Встречное предоставление</option>`;
 
   const OP_LABELS = {
     sell: "Приход",
@@ -258,7 +258,312 @@
   }
 
   // Stable external_id per form attempt — retries return same check
-  let lastExternalId = null;
+
+  // --- FFD 1.2 / Atol Online 5: payment_method × payment_object ---
+  // 1105 = признак способа расчёта; UI must block bad combos before API.
+  // object: 1 товар, 3 услуга, 4 работа, 10 платёж, 11 агент.вознагр., 12 составной, 13 иной
+  const OBJECT_BY_METHOD = {
+    full_payment:     [1, 3, 4, 10, 11, 12, 13],
+    full_prepayment:  [10, 12, 13],          // предоплата 100% — не «товар» (1) на Atol → 1105
+    prepayment:       [10, 12, 13],
+    advance:          [10, 13],              // аванс — платёж
+    partial_payment:  [1, 3, 4, 10, 11, 12, 13],
+    credit:           [1, 3, 4, 10, 12, 13],
+    credit_payment:   [10, 13],
+  };
+  const OBJECT_LABELS = {
+    1: "Товар", 3: "Услуга", 4: "Работа", 10: "Платёж",
+    11: "Агентское вознаграждение", 12: "Составной предмет", 13: "Иной предмет",
+  };
+  const METHOD_LABELS = {
+    full_payment: "Полный расчёт",
+    full_prepayment: "Предоплата 100%",
+    prepayment: "Предоплата",
+    advance: "Аванс",
+    partial_payment: "Частичный расчёт",
+    credit: "Передача в кредит",
+    credit_payment: "Оплата кредита",
+  };
+
+  /** Rebuild .it-object options for a row based on .it-method */
+  function syncObjectOptionsForRow(row) {
+    if (!row) return;
+    const methodEl = row.querySelector(".it-method");
+    const objectEl = row.querySelector(".it-object");
+    if (!methodEl || !objectEl) return;
+    const method = methodEl.value || "full_payment";
+    const allowed = OBJECT_BY_METHOD[method] || OBJECT_BY_METHOD.full_payment;
+    let cur = parseInt(objectEl.value, 10);
+    if (!allowed.includes(cur)) cur = allowed[0];
+    objectEl.innerHTML = allowed
+      .map((o) => `<option value="${o}" ${o === cur ? "selected" : ""}>${OBJECT_LABELS[o] || o}</option>`)
+      .join("");
+    markField(objectEl, true);
+    markField(methodEl, true);
+  }
+
+  function syncAllItemConstraints(tbodyId) {
+    $$(`#${tbodyId} .item-row`).forEach(syncObjectOptionsForRow);
+  }
+
+  /** Returns list of human issues for create-check form */
+  function validateCreateCombinations() {
+    const issues = [];
+    $$("#c_items .item-row").forEach((row, idx) => {
+      const n = idx + 1;
+      const method = (row.querySelector(".it-method") && row.querySelector(".it-method").value) || "";
+      const objectEl = row.querySelector(".it-object");
+      const obj = objectEl ? parseInt(objectEl.value, 10) : 1;
+      const allowed = OBJECT_BY_METHOD[method] || OBJECT_BY_METHOD.full_payment;
+      if (!allowed.includes(obj)) {
+        const msg =
+          `Позиция ${n}: способ «${METHOD_LABELS[method] || method}» несовместим с предметом «${OBJECT_LABELS[obj] || obj}». ` +
+          `Допустимо: ${allowed.map((o) => OBJECT_LABELS[o] || o).join(", ")}.`;
+        issues.push(msg);
+        markField(objectEl, false, msg);
+        markField(row.querySelector(".it-method"), false, msg);
+      } else {
+        markField(objectEl, true);
+        markField(row.querySelector(".it-method"), true);
+      }
+      const price = parseFloat(row.querySelector(".it-price").value) || 0;
+      const qty = parseFloat(row.querySelector(".it-qty").value) || 0;
+      if (price < 0 || qty <= 0) {
+        issues.push(`Позиция ${n}: цена и количество должны быть > 0`);
+      }
+    });
+    // payments sum vs items
+    const total = itemsSum("c_items");
+    const payTotal = paymentsSum("#c_payments");
+    if (Math.abs(total - payTotal) > 0.009) {
+      issues.push(
+        `Сумма оплат (${money(payTotal)} ₽) не равна сумме позиций (${money(total)} ₽)`
+      );
+    }
+    // advance/prepayment often requires payment type 2 when settling advance — soft hint only for pure advance items
+    const allAdvance = $$("#c_items .item-row").every((row) => {
+      const m = row.querySelector(".it-method");
+      return m && ["advance", "full_prepayment", "prepayment"].includes(m.value);
+    });
+    if (allAdvance && $$("#c_items .item-row").length) {
+      // ok
+    }
+    return issues;
+  }
+
+  function friendlyApiError(msg) {
+    const s = String(msg || "");
+    if (/1105|способа расч|payment_method|признак способа/i.test(s)) {
+      return {
+        main: "Некорректные параметры расчёта. Выбранный способ расчёта несовместим с предметом расчёта. Измените один из параметров.",
+        detail: s,
+      };
+    }
+    if (/120\s*:/i.test(s)) {
+      return {
+        main: "Касса отклонила чек: некорректные реквизиты. Проверьте способ и предмет расчёта, оплаты и СНО.",
+        detail: s,
+      };
+    }
+    return { main: s, detail: "" };
+  }
+
+  // Clone-from-order state
+  let sourceDocumentId = null; // orderId of source when «Редактировать»
+  let sourceExternalId = null;
+
+  function setCloneBanner() {
+    let el = $("#cloneBanner");
+    if (!sourceDocumentId) {
+      if (el) el.classList.add("hidden");
+      return;
+    }
+    if (!el) {
+      const formHint = $("#tab-create .card");
+      if (formHint) {
+        el = document.createElement("div");
+        el.id = "cloneBanner";
+        el.className = "clone-banner";
+        formHint.parentNode.insertBefore(el, formHint);
+      }
+    }
+    if (el) {
+      el.classList.remove("hidden");
+      el.innerHTML =
+        `<strong>Новый документ на основе чека № ${sourceDocumentId}</strong>` +
+        (sourceExternalId ? ` <span class="hint">(исх. external_id: ${sourceExternalId})</span>` : "") +
+        ` · исходный чек не изменится · будет новый external_id` +
+        ` <button type="button" class="btn btn-secondary btn-sm" id="cloneCancelBtn">Сбросить</button>`;
+      const btn = $("#cloneCancelBtn");
+      if (btn) {
+        btn.onclick = () => {
+          sourceDocumentId = null;
+          sourceExternalId = null;
+          setCloneBanner();
+        };
+      }
+    }
+  }
+
+  function mapAtolVat(v) {
+    if (!v) return "vat22";
+    if (typeof v === "string") return v;
+    if (v.type) return v.type;
+    return "vat22";
+  }
+
+  function mapAtolMethod(m) {
+    if (!m) return "full_payment";
+    const s = String(m).toLowerCase();
+    if (METHOD_LABELS[s]) return s;
+    // numeric legacy
+    const map = {
+      "1": "full_prepayment",
+      "2": "prepayment",
+      "3": "advance",
+      "4": "full_payment",
+      "5": "partial_payment",
+      "6": "credit",
+      "7": "credit_payment",
+    };
+    return map[s] || "full_payment";
+  }
+
+  function fillCreateFormFromOrder(detail) {
+    const atol = detail.atol5 || {};
+    // Atol5 may be {receipt: {...}} or the receipt itself
+    const receipt = atol.receipt || atol;
+    const summary = detail.summary || {};
+    sourceDocumentId = summary.order_id || ordersSelectedId;
+    sourceExternalId = summary.external_id || null;
+    lastExternalId = null; // force new id on submit
+
+    // Operation: sale -> sell, refund heuristics
+    let op = "sell";
+    if (summary.is_sale === false || /refund|возврат/i.test(String(summary.order_type || ""))) {
+      op = "sell_refund";
+    }
+    // atol operation
+    if (receipt.operation) {
+      const o = String(receipt.operation).toLowerCase();
+      if (["sell", "sell_refund", "buy", "buy_refund"].includes(o)) op = o;
+    }
+    if ($("#c_operation")) $("#c_operation").value = op;
+
+    // SNO
+    const sno = (receipt.company && receipt.company.sno) || (firmData && firmData.tax_variant) || "osn";
+    if ($("#c_sno") && [...$("#c_sno").options].some((o) => o.value === sno)) {
+      $("#c_sno").value = sno;
+    }
+
+    // Store
+    if (summary.store_id) setSelectedStoreId(summary.store_id, true);
+
+    // Client
+    const client = receipt.client || {};
+    if ($("#c_email")) $("#c_email").value = client.email || "";
+    if ($("#c_phone")) $("#c_phone").value = client.phone || "";
+    if (client.name && $("#c_name")) {
+      $("#c_extraBuyer") && $("#c_extraBuyer").classList.remove("hidden");
+      $("#c_name").value = client.name;
+    }
+    if (client.inn && $("#c_inn")) {
+      $("#c_extraBuyer") && $("#c_extraBuyer").classList.remove("hidden");
+      $("#c_inn").value = client.inn;
+    }
+
+    // Items
+    const items = receipt.items || [];
+    const tb = $("#c_items");
+    if (tb) {
+      tb.innerHTML = "";
+      if (!items.length) {
+        tb.insertAdjacentHTML("beforeend", itemRowHtml());
+      } else {
+        items.forEach((it) => {
+          tb.insertAdjacentHTML("beforeend", itemRowHtml());
+          const row = tb.querySelector(".item-row:last-child");
+          if (!row) return;
+          const name = it.name || it.text || "Товар";
+          const price = it.price != null ? it.price : 0;
+          const qty = it.quantity != null ? it.quantity : 1;
+          row.querySelector(".it-name").value = name;
+          row.querySelector(".it-price").value = money(price);
+          row.querySelector(".it-qty").value = qty;
+          const vat = mapAtolVat(it.vat || it.vat_type);
+          const vatEl = row.querySelector(".it-vat");
+          if (vatEl && [...vatEl.options].some((o) => o.value === vat)) vatEl.value = vat;
+          const method = mapAtolMethod(it.payment_method);
+          row.querySelector(".it-method").value = method;
+          syncObjectOptionsForRow(row);
+          let obj = parseInt(it.payment_object, 10);
+          if (isNaN(obj)) obj = 1;
+          const objEl = row.querySelector(".it-object");
+          if (objEl && [...objEl.options].some((o) => parseInt(o.value, 10) === obj)) {
+            objEl.value = String(obj);
+          }
+        });
+      }
+      bindItemTable("c_items", updateCreateSummary);
+      syncAllItemConstraints("c_items");
+    }
+
+    // Payments
+    const pays = receipt.payments || [];
+    const payBox = $("#c_payments");
+    if (payBox) {
+      payBox.innerHTML = "";
+      if (!pays.length) {
+        payBox.insertAdjacentHTML("beforeend", payRowHtml(true));
+      } else {
+        pays.forEach((p) => {
+          payBox.insertAdjacentHTML("beforeend", payRowHtml(true));
+          const row = payBox.querySelector(".pay-row:last-child");
+          if (!row) return;
+          let t = parseInt(p.type, 10);
+          // map legacy UI values if any
+          if (t === 14) t = 2;
+          if (t === 15) t = 3;
+          if (t === 16) t = 4;
+          if (![0, 1, 2, 3, 4].includes(t)) t = 1;
+          row.querySelector(".pay-type").value = String(t);
+          row.querySelector(".pay-sum").value = money(p.sum != null ? p.sum : 0);
+        });
+      }
+      bindPays();
+    }
+
+    setCloneBanner();
+    updateCreateSummary();
+    // switch to create tab
+    $$(".nav button[data-tab]").forEach((b) => b.classList.remove("active"));
+    const tabBtn = document.querySelector('.nav button[data-tab="create"]');
+    if (tabBtn) tabBtn.classList.add("active");
+    $$(".tab-panel").forEach((p) => p.classList.add("hidden"));
+    if ($("#tab-create")) $("#tab-create").classList.remove("hidden");
+    showAlert(
+      "Форма заполнена из чека № " + sourceDocumentId + ". Исходный документ не изменится — будет создан новый.",
+      "success"
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function editOrderAsNew(orderId) {
+    try {
+      const data = await api("/orders/" + encodeURIComponent(orderId));
+      if (!data.atol5 && !data.raw_summary) {
+        showAlert("Не удалось загрузить состав чека для редактирования");
+        return;
+      }
+      fillCreateFormFromOrder(data);
+    } catch (e) {
+      const f = friendlyApiError(e.message);
+      showAlert(f.main + (f.detail ? " — " + f.detail : ""));
+    }
+  }
+
+
+    let lastExternalId = null;
   function nextExternalId(prefix) {
     lastExternalId = prefix + "-" + Date.now() + "-" + Math.random().toString(16).slice(2, 10);
     return lastExternalId;
@@ -378,12 +683,17 @@
     });
     tb.querySelectorAll("input, select").forEach((el) => {
       el.oninput = el.onchange = () => {
+        if (el.classList.contains("it-method")) {
+          syncObjectOptionsForRow(el.closest("tr"));
+        }
         onChange && onChange();
         if (tbodyId === "c_items" && el.classList.contains("it-agent")) {
           syncAgentBoxFromItems();
         }
       };
     });
+    // initial constraint sync
+    tb.querySelectorAll(".item-row").forEach(syncObjectOptionsForRow);
   }
 
   function syncAgentBoxFromItems() {
@@ -516,6 +826,14 @@
         issues.push("Телефон поставщика: +79001234567");
         markField($("#c_sup_phones"), false);
       } else markField($("#c_sup_phones"), true);
+    }
+
+    // FFD combination rules (method × object, sums)
+    try {
+      const combo = validateCreateCombinations();
+      issues.push(...combo);
+    } catch (e) {
+      console.warn("validateCreateCombinations", e);
     }
 
     if (issues.length) {
@@ -784,7 +1102,29 @@
   $("#c_submit").onclick = async () => {
     const btn = $("#c_submit");
     if (btn.dataset.busy === "1") return; // already sending
-    btn.dataset.label = "Создать чек";
+    btn.dataset.label = sourceDocumentId ? "Создать новый документ" : "Создать чек";
+
+    // Final UI validation before send
+    updateCreateSummary();
+    const comboIssues = validateCreateCombinations();
+    const emailVal = ($("#c_email") && $("#c_email").value.trim()) || "";
+    const phoneRaw = ($("#c_phone") && $("#c_phone").value.trim()) || "";
+    if (!emailVal && !phoneRaw) {
+      comboIssues.unshift("Укажите email или телефон покупателя");
+    }
+    if (comboIssues.length) {
+      showAlert(comboIssues.join(" "));
+      return;
+    }
+
+    if (sourceDocumentId) {
+      const ok = window.confirm(
+        "Будет создан новый документ. Исходный чек № " +
+          sourceDocumentId +
+          " останется без изменений.\n\nСоздать новый документ?"
+      );
+      if (!ok) return;
+    }
 
     const items = collectItems("c_items");
     const total = items.reduce((s, i) => s + i.sum, 0);
@@ -808,7 +1148,6 @@
         "Сумма оплат (" + money(payTotal) + ") не равна сумме товаров (" + money(total) + ")"
       );
     }
-    const phoneRaw = ($("#c_phone") && $("#c_phone").value.trim()) || "";
     let phoneNorm = undefined;
     if (phoneRaw) {
       phoneNorm = normalizePhoneUI(phoneRaw);
@@ -826,9 +1165,11 @@
     try {
       // Same external_id on retry within this "attempt" after error? 
       // New attempt gets new id; double-click blocked by busy flag.
-      const external_id = nextExternalId("EKLK");
+      // Always new external_id (never reuse source)
+      const external_id = nextExternalId(sourceDocumentId ? "EKLK-FROM-" + sourceDocumentId : "EKLK");
       const body = {
         external_id,
+        source_document_id: sourceDocumentId ? String(sourceDocumentId) : undefined,
         items,
         payments,
         client: {
@@ -912,14 +1253,17 @@
         data = await api("/ecom/checks", { method: "POST", body: JSON.stringify(body) });
       }
       renderResult($("#c_result"), data);
-      showAlert("Чек принят кассой (uuid: " + (data.uuid || "—") + ")", "success");
-      lastExternalId = null; // next create = new id
+      const srcNote = sourceDocumentId ? " (на основе № " + sourceDocumentId + ")" : "";
+      showAlert("Чек принят кассой (uuid: " + (data.uuid || "—") + ")" + srcNote, "success");
+      lastExternalId = null;
+      sourceDocumentId = null;
+      sourceExternalId = null;
+      setCloneBanner();
     } catch (e) {
-      showAlert(e.message);
-      // keep lastExternalId so user can retry same id if needed — actually we generate new each time
-      // EcomKassa dedup is by external_id; busy flag already prevents triple-click
+      const f = friendlyApiError(e.message);
+      showAlert(f.main + (f.detail ? " Подробнее: " + f.detail : ""));
     } finally {
-      setLoading(btn, false, "Создать чек");
+      setLoading(btn, false, sourceDocumentId ? "Создать новый документ" : "Создать чек");
     }
   };
 
@@ -1066,7 +1410,7 @@
       } else {
         list.innerHTML = `<table class="orders-table">
           <thead><tr>
-            <th>ID</th><th>Дата</th><th>Тип</th><th>Статус</th><th>Сумма</th><th>Магазин</th>
+            <th>ID</th><th>Дата</th><th>Тип</th><th>Статус</th><th>Сумма</th><th>Магазин</th><th></th>
           </tr></thead>
           <tbody>
             ${rows
@@ -1080,13 +1424,24 @@
                   <td>${statusBadge(r.status)}</td>
                   <td>${formatMoney(r.total)}</td>
                   <td>${r.store_name || r.store_id || "—"}</td>
+                  <td><button type="button" class="btn btn-sm btn-secondary o-edit-btn" data-order-id="${id}" title="Создать новый документ на основе этого чека">Редактировать</button></td>
                 </tr>`;
               })
               .join("")}
           </tbody>
         </table>`;
         list.querySelectorAll("tr[data-order-id]").forEach((tr) => {
-          tr.onclick = () => openOrderDetail(tr.dataset.orderId);
+          tr.onclick = (ev) => {
+            if (ev.target && ev.target.closest && ev.target.closest(".o-edit-btn")) return;
+            openOrderDetail(tr.dataset.orderId);
+          };
+        });
+        list.querySelectorAll(".o-edit-btn").forEach((btn) => {
+          btn.onclick = (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            editOrderAsNew(btn.dataset.orderId);
+          };
         });
       }
       const info = $("#o_page_info");
@@ -1126,8 +1481,10 @@
     const payments = receipt.payments || [];
     const total = receipt.total != null ? receipt.total : summary && summary.total;
 
+    const oid = summary && summary.order_id != null ? summary.order_id : ordersSelectedId;
     let html = `<div class="r-head">
       <div class="r-title">Кассовый чек</div>
+      <button type="button" class="btn btn-sm" id="o_detail_edit" data-order-id="${oid}">Редактировать</button>
       <div class="r-meta">ID ${summary?.order_id ?? "—"} · ${typeLabel(summary?.order_type)} · ${statusBadge(summary?.status || "")}</div>
       <div class="r-meta">${formatDt(summary?.updated)}</div>
       ${atol5?.external_id ? `<div class="r-meta">ext: ${atol5.external_id}</div>` : ""}
@@ -1169,6 +1526,10 @@
     </details>`;
 
     el.innerHTML = html;
+    const editBtn = $("#o_detail_edit");
+    if (editBtn) {
+      editBtn.onclick = () => editOrderAsNew(editBtn.dataset.orderId || oid);
+    }
   }
 
   async function openOrderDetail(orderId) {

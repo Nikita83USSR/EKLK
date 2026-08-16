@@ -320,3 +320,20 @@ div[class*="b24-widget"] {
   pointer-events: auto !important;
 }
 .b24-widget-button-shadow { z-index: 2147482990 !important; }
+
+.clone-banner {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.orders-table .o-edit-btn { white-space: nowrap; }
+.r-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
+.r-head .r-title { font-weight: 700; margin-right: auto; }
