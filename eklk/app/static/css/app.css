@@ -151,19 +151,11 @@ input.invalid, select.invalid {
 .hidden { display: none !important; }
 
 /* Logo */
-.login-logo-wrap { text-align: center; margin-bottom: 8px; }
-.login-logo { max-width: 220px; height: auto; display: inline-block; }
-.header-logo { height: 32px; width: auto; display: block; }
+
+
+
 .logo { display: flex; align-items: center; gap: 10px; }
-.logo-badge {
-  font-size: 0.7rem;
-  font-weight: 700;
-  background: #ecfdf5;
-  color: #15803d;
-  padding: 2px 8px;
-  border-radius: 6px;
-  letter-spacing: 0.04em;
-}
+
 
 /* Orders list */
 .orders-layout {
@@ -282,3 +274,43 @@ input.invalid, select.invalid {
 
 /* Bitrix24 widget above sticky header */
 .b24-widget-button-wrapper { z-index: 1000 !important; }
+
+/* —— Logo —— */
+.login-logo-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 0 16px;
+  padding: 0 8px;
+}
+.login-logo {
+  display: block;
+  max-width: 240px;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  margin: 0 auto;
+}
+.header-logo {
+  display: block;
+  height: 36px;
+  width: auto;
+  max-width: 180px;
+  object-fit: contain;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.logo-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--accent, #00AEEF);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}

@@ -63,6 +63,7 @@
 
   function showAlert(msg, type = "error") {
     const el = $("#globalAlert");
+    if (!el) return;
     el.className = `alert alert-${type}`;
     el.textContent = msg;
     el.classList.remove("hidden");
@@ -416,22 +417,23 @@
     const total = itemsSum("c_items");
     const emailVal = ($("#c_email") && $("#c_email").value.trim()) || "";
     const phoneRaw = ($("#c_phone") && $("#c_phone").value.trim()) || "";
-    const op = $("#c_operation").value;
-    const sno = $("#c_sno").value;
+    const op = ($("#c_operation") && $("#c_operation").value) || "sell";
+    const sno = ($("#c_sno") && $("#c_sno").value) || "osn";
     {
       const st = storesList().find((s) => String(s.store_id) === String(getSelectedStoreId()));
-      $("#sum_shop").textContent = st
-        ? `${st.store_name} (ID ${st.store_id})`
-        : `ID ${getSelectedStoreId() || "—"}`;
+      if ($("#sum_shop"))
+        $("#sum_shop").textContent = st
+          ? `${st.store_name} (ID ${st.store_id})`
+          : `ID ${getSelectedStoreId() || "—"}`;
     }
-    $("#sum_op").textContent = OP_LABELS[op] || op;
-    $("#sum_sno").textContent = SNO_LABELS[sno] || sno;
-    $("#sum_email").textContent = emailVal || phoneRaw || "—";
-    $("#sum_items").textContent = String($$("#c_items .item-row").length);
-    $("#sum_pay").textContent = money(total) + " ₽";
-    $("#sum_total").textContent = money(total) + " ₽";
-    $("#c_payHint").textContent = "Автоподсчёт суммы товарных позиций: " + money(total);
-    $("#c_total").value = money(total);
+    if ($("#sum_op")) $("#sum_op").textContent = OP_LABELS[op] || op;
+    if ($("#sum_sno")) $("#sum_sno").textContent = SNO_LABELS[sno] || sno;
+    if ($("#sum_email")) $("#sum_email").textContent = emailVal || phoneRaw || "—";
+    if ($("#sum_items")) $("#sum_items").textContent = String($$("#c_items .item-row").length);
+    if ($("#sum_pay")) $("#sum_pay").textContent = money(total) + " ₽";
+    if ($("#sum_total")) $("#sum_total").textContent = money(total) + " ₽";
+    if ($("#c_payHint")) $("#c_payHint").textContent = "Автоподсчёт суммы товарных позиций: " + money(total);
+    if ($("#c_total")) $("#c_total").value = money(total);
 
     const pays = $$("#c_payments .pay-row");
     if (pays.length === 1) {
@@ -533,53 +535,56 @@
 
   // ---- Auth ----
   async function afterLogin(loginPayload) {
-    $("#loginScreen").classList.add("hidden");
-    $("#appScreen").classList.remove("hidden");
+    if ($("#loginScreen")) $("#loginScreen").classList.add("hidden");
+    if ($("#appScreen")) $("#appScreen").classList.remove("hidden");
     if ($("#appFooter")) $("#appFooter").classList.remove("hidden");
     try {
       if (loginPayload && loginPayload.firm) {
         ingestFirm(loginPayload.firm, loginPayload.selected_store_id);
       } else {
         const me = await api("/auth/me");
-        $("#userName").textContent = me.username || me.email || "";
+        if ($("#userName")) $("#userName").textContent = me.username || me.email || "";
         ingestFirm(me.firm, me.selected_store_id);
       }
       const me2 = await api("/auth/me").catch(() => null);
-      if (me2) $("#userName").textContent = me2.username || me2.email || "";
+      if (me2 && $("#userName")) $("#userName").textContent = me2.username || me2.email || "";
+      await loadPaymentTypes();
+      ensureItem("c_items", updateCreateSummary);
+      ensureItem("p_items", updatePaySummary);
+      if ($("#c_payments") && !$("#c_payments .pay-row")) {
+        $("#c_payments").insertAdjacentHTML("beforeend", payRowHtml(true));
+        bindPays();
+      }
+      ["c_store", "p_store"].forEach((sid) => {
+        const el = document.getElementById(sid);
+        if (!el) return;
+        el.onchange = () => {
+          setSelectedStoreId(el.value, true);
+          updateCreateSummary();
+        };
+      });
+      updateCreateSummary();
+      updatePaySummary();
     } catch (e) {
-      showAlert(e.message);
+      console.error("afterLogin", e);
+      showAlert(e.message || String(e));
+      throw e;
     }
-    await loadPaymentTypes();
-    ensureItem("c_items", updateCreateSummary);
-    ensureItem("p_items", updatePaySummary);
-    if (!$("#c_payments .pay-row")) {
-      $("#c_payments").insertAdjacentHTML("beforeend", payRowHtml(true));
-      bindPays();
-    }
-    // bind store change
-    ["c_store", "p_store", "r_store"].forEach((sid) => {
-      const el = document.getElementById(sid);
-      if (!el) return;
-      el.onchange = () => {
-        setSelectedStoreId(el.value, true);
-        updateCreateSummary();
-      };
-    });
-    updateCreateSummary();
-    updatePaySummary();
   }
 
   async function loadPaymentTypes() {
+    const sel = $("#p_type");
     try {
       const data = await api("/ecom/payment-types");
       paymentTypes = data.items || [];
-      const sel = $("#p_type");
       const providers = paymentTypes.filter((t) => t.id >= 100);
-      sel.innerHTML = providers.length
-        ? providers.map((t) => `<option value="${t.id}">${t.id} — ${t.description}</option>`).join("")
-        : `<option value="103">103 — Сбербанк</option>`;
+      if (sel) {
+        sel.innerHTML = providers.length
+          ? providers.map((t) => `<option value="${t.id}">${t.id} — ${t.description}</option>`).join("")
+          : `<option value="103">103 — Сбербанк</option>`;
+      }
     } catch (e) {
-      $("#p_type").innerHTML = `<option value="103">103 — Сбербанк</option>`;
+      if (sel) sel.innerHTML = `<option value="103">103 — Сбербанк</option>`;
     }
   }
 
@@ -623,21 +628,31 @@
   // Events
   $("#loginForm").onsubmit = async (e) => {
     e.preventDefault();
-    $("#loginError").classList.add("hidden");
+    const errEl = $("#loginError");
+    if (errEl) errEl.classList.add("hidden");
     try {
+      const userEl = $("#loginUser");
+      const passEl = $("#loginPass");
+      if (!userEl || !passEl) {
+        throw new Error("Форма входа не загружена. Обновите страницу (Ctrl+F5).");
+      }
       const data = await api("/auth/login", {
         method: "POST",
         body: JSON.stringify({
-          username: $("#loginUser").value.trim(),
-          password: $("#loginPass").value,
+          username: (userEl.value || "").trim(),
+          password: passEl.value || "",
         }),
       });
       token = data.access_token;
       localStorage.setItem("eklk_token", token);
       await afterLogin(data);
     } catch (err) {
-      $("#loginError").textContent = err.message;
-      $("#loginError").classList.remove("hidden");
+      if (errEl) {
+        errEl.textContent = err.message || String(err);
+        errEl.classList.remove("hidden");
+      } else {
+        alert(err.message || String(err));
+      }
     }
   };
 
