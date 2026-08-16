@@ -201,3 +201,15 @@ source .venv/bin/activate
 - ИП Носов А.С., ИНН 643890985437  
 - support@ecomkassa.ru, Пн–Пт 9:00–18:00 Мск  
 - https://ecomkassa.ru/helpcenter , https://ecomkassa.ru/docs  
+
+
+---
+
+## 11. Клон чека («Редактировать»)
+
+- В списке чеков и в деталке: кнопка **Редактировать**.
+- **Не** меняет исходный документ. Заполняет форму «Создать чек» из Atol-5.
+- `sourceDocumentId` / `sourceExternalId` в `app.js`; при submit — **новый** `external_id` (`EKLK-FROM-{orderId}-…`).
+- Confirm: «Будет создан новый документ…».
+- Валидация `payment_method` × `payment_object` через `OBJECT_BY_METHOD` (блок 1105 до API).
+- Fiscal `payments.type`: 0–4 (Atol v5).
