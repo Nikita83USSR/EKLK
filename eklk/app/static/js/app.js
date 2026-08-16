@@ -495,6 +495,7 @@
           if (vatEl && [...vatEl.options].some((o) => o.value === vat)) vatEl.value = vat;
           const method = mapAtolMethod(it.payment_method);
           row.querySelector(".it-method").value = method;
+          // Сначала ограничиваем допустимые предметы, затем ставим значение
           syncObjectOptionsForRow(row);
           let obj = parseInt(it.payment_object, 10);
           if (isNaN(obj)) obj = 1;
@@ -502,10 +503,58 @@
           if (objEl && [...objEl.options].some((o) => parseInt(o.value, 10) === obj)) {
             objEl.value = String(obj);
           }
+          // Агентская позиция
+          const agentCb = row.querySelector(".it-agent");
+          if (agentCb && (it.agent_info || it.supplier_info || it.is_agent)) {
+            agentCb.checked = true;
+          }
         });
       }
       bindItemTable("c_items", updateCreateSummary);
       syncAllItemConstraints("c_items");
+      syncAgentBoxFromItems();
+    }
+
+    // Агентские реквизиты — берём из первой позиции с agent_info / supplier_info
+    const agentSrc = (receipt.items || []).find((it) => it.agent_info || it.supplier_info);
+    if (agentSrc) {
+      const ai = agentSrc.agent_info || {};
+      const si = agentSrc.supplier_info || {};
+      if ($("#c_agent_type") && ai.type) {
+        const tEl = $("#c_agent_type");
+        if ([...tEl.options].some((o) => o.value === ai.type)) tEl.value = ai.type;
+      }
+      if ($("#c_sup_name") && si.name) $("#c_sup_name").value = si.name;
+      if ($("#c_sup_inn") && si.inn) $("#c_sup_inn").value = String(si.inn);
+      if ($("#c_sup_phones") && si.phones) {
+        $("#c_sup_phones").value = Array.isArray(si.phones) ? si.phones.join(", ") : String(si.phones);
+      }
+      const pa = ai.paying_agent || {};
+      if ($("#c_pa_op") && pa.operation) $("#c_pa_op").value = pa.operation;
+      if ($("#c_pa_phones") && pa.phones) {
+        $("#c_pa_phones").value = Array.isArray(pa.phones) ? pa.phones.join(", ") : String(pa.phones);
+      }
+      const recv = ai.receive_payments_operator || {};
+      if ($("#c_recv_phones") && recv.phones) {
+        $("#c_recv_phones").value = Array.isArray(recv.phones) ? recv.phones.join(", ") : String(recv.phones);
+      }
+      const mt = ai.money_transfer_operator || {};
+      if ($("#c_mt_name") && mt.name) $("#c_mt_name").value = mt.name;
+      if ($("#c_mt_addr") && mt.address) $("#c_mt_addr").value = mt.address;
+      if ($("#c_mt_inn") && mt.inn) $("#c_mt_inn").value = String(mt.inn);
+      if ($("#c_mt_phones") && mt.phones) {
+        $("#c_mt_phones").value = Array.isArray(mt.phones) ? mt.phones.join(", ") : String(mt.phones);
+      }
+      if (typeof syncAgentTypeFields === "function") syncAgentTypeFields();
+    }
+
+    // Доп. реквизит пользователя (1084)
+    const aup = receipt.additional_user_props;
+    if (aup && aup.name && aup.value) {
+      if ($("#c_addProp")) $("#c_addProp").checked = true;
+      if ($("#c_addPropBox")) $("#c_addPropBox").classList.remove("hidden");
+      if ($("#c_addPropName")) $("#c_addPropName").value = aup.name;
+      if ($("#c_addPropVal")) $("#c_addPropVal").value = aup.value;
     }
 
     // Payments
@@ -562,8 +611,7 @@
     }
   }
 
-
-    let lastExternalId = null;
+  let lastExternalId = null;
   function nextExternalId(prefix) {
     lastExternalId = prefix + "-" + Date.now() + "-" + Math.random().toString(16).slice(2, 10);
     return lastExternalId;
@@ -940,12 +988,8 @@
 
   function renderResult(el, data) {
     el.classList.remove("hidden");
-    const status = data.status || "—";
-    let badge = "badge-wait";
-    if (status === "done") badge = "badge-done";
-    if (status === "fail") badge = "badge-fail";
     let html = `<div class="flex" style="margin-bottom:10px">
-      <span class="badge ${badge}">${status}</span>
+      ${statusBadge(data.status || "—")}
       <span class="badge badge-invoice">${data.kind || "—"}</span>
       ${data.uuid ? `<code style="color:var(--muted);font-size:0.85rem">${data.uuid}</code>` : ""}
     </div>`;
@@ -1334,38 +1378,76 @@
     return val;
   }
 
+  // Статусы EcomKassa / Atol (fiscal + invoice) → русский UI
   const STATUS_LABELS = {
-    wait: "Ожидание",
-    done: "Готов",
+    // ожидание оплаты / обработки
+    wait: "Ожидает",
+    waiting: "Ожидает оплаты",
+    pending: "Ожидает",
+    created: "Создан",
+    new: "Новый",
+    draft: "Черновик",
+    // в работе
+    process: "В обработке",
+    processing: "В обработке",
+    in_progress: "В обработке",
+    // оплата / фискализация
+    paid: "Фискализация",
+    payment: "Оплата",
+    // успешное завершение
+    done: "Завершён",
+    completed: "Завершён",
+    complete: "Завершён",
+    success: "Успешно",
+    ok: "Успешно",
+    ready: "Готов",
+    print: "Печать",
+    printed: "Напечатан",
+    // ошибки и отмены
     fail: "Ошибка",
     failed: "Ошибка",
     error: "Ошибка",
-    new: "Новый",
-    process: "В обработке",
-    processing: "В обработке",
-    ready: "Готов к печати",
-    print: "Печать",
-    printed: "Напечатан",
     canceled: "Отменён",
     cancelled: "Отменён",
     expired: "Истёк",
-    draft: "Черновик",
-    success: "Успешно",
-    ok: "Успешно",
+    timeout: "Истёк",
   };
 
   function statusBadge(st) {
     const raw = (st == null || st === "") ? "—" : String(st);
-    const key = raw.toLowerCase();
-    const label = STATUS_LABELS[key] || STATUS_LABELS[raw] || raw;
+    const key = raw.toLowerCase().trim();
+    const label = STATUS_LABELS[key] || raw;
     let tone = "wait";
-    if (["done", "ready", "printed", "success", "ok"].includes(key)) tone = "done";
-    if (["fail", "failed", "error", "canceled", "cancelled", "expired"].includes(key)) tone = "fail";
+    // зелёный — завершён / успешно
+    if (["done", "completed", "complete", "ready", "printed", "success", "ok"].includes(key)) {
+      tone = "done";
+    }
+    // синий — фискализация / оплачен
+    else if (["paid", "payment"].includes(key)) {
+      tone = "paid";
+    }
+    // красный — ошибки
+    else if (["fail", "failed", "error", "canceled", "cancelled", "expired", "timeout"].includes(key)) {
+      tone = "fail";
+    }
+    // жёлтый — ожидание / обработка
+    else if (["wait", "waiting", "pending", "process", "processing", "in_progress", "created", "new", "draft"].includes(key)) {
+      tone = "wait";
+    }
     return `<span class="badge badge-status-${tone}" title="${raw}">${label}</span>`;
   }
 
   function typeLabel(t) {
-    return { VCHR: "Чек", INVC: "Счёт", CORD: "Курьер" }[t] || t || "—";
+    const map = {
+      VCHR: "Чек",
+      INVC: "Счёт на оплату",
+      CORD: "Курьер",
+      sell: "Приход",
+      sell_refund: "Возврат прихода",
+      buy: "Расход",
+      buy_refund: "Возврат расхода",
+    };
+    return map[t] || t || "—";
   }
 
   function formatMoney(n) {

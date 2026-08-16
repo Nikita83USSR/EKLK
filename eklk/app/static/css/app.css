@@ -239,9 +239,11 @@ input.invalid, select.invalid {
   font-size: 0.8rem;
   color: var(--muted);
 }
-.badge-status-done, .badge-status-COMPLETED, .badge-status-PAID { background: #dcfce7; color: #15803d; }
-.badge-status-wait, .badge-status-WAITING, .badge-status-CREATED { background: #fef3c7; color: #b45309; }
-.badge-status-fail, .badge-status-FAILED, .badge-status-CANCELED { background: #fee2e2; color: #b91c1c; }
+/* Статусы чеков в списке / деталке */
+.badge-status-done { background: #dcfce7; color: #15803d; }       /* Завершён — зелёный */
+.badge-status-paid { background: #dbeafe; color: #1d4ed8; }       /* Фискализация — синий */
+.badge-status-wait { background: #fef3c7; color: #b45309; }       /* Ожидает / в обработке — жёлтый */
+.badge-status-fail { background: #fee2e2; color: #b91c1c; }       /* Ошибка / отменён — красный */
 
 /* Footer */
 .app-footer {
