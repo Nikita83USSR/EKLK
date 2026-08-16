@@ -147,6 +147,9 @@ class EcomKassaClient:
         ver = version or self.api_version
         return f"{self.base_url}/fiscalorder/{ver}/{path.lstrip('/')}"
 
+    def _mobile_url(self, path: str) -> str:
+        return f"{self.base_url}/api/mobile/v1/{path.lstrip('/')}"
+
     async def close(self) -> None:
         await self._client.aclose()
 
@@ -171,7 +174,139 @@ class EcomKassaClient:
         log_action("ecom_auth", "Token obtained successfully")
         return self._token
 
+    async def get_firm_profile(self) -> dict:
+        """
+        GET /api/mobile/v1/profile/firm
+        Returns firm + stores (storeId is used as group_code for fiscal API).
+        """
+        token = await self.get_token()
+        url = self._mobile_url("profile/firm")
+        log_action("ecom_firm", f"GET {url}")
+        resp = await self._client.get(
+            url,
+            headers={
+                "Content-Type": "application/json; charset=utf-8",
+                "Token": token,
+            },
+        )
+        try:
+            data = resp.json()
+        except Exception:
+            raise EcomKassaError(
+                f"Invalid firm profile response: {resp.text[:300]}",
+                code=resp.status_code,
+            )
+        if resp.status_code >= 400:
+            err = data.get("error") or data
+            text = err.get("text") if isinstance(err, dict) else str(err)
+            raise EcomKassaError(text or f"HTTP {resp.status_code}", code=resp.status_code, raw=data)
+        # Mobile API uses errorCode
+        if isinstance(data, dict) and data.get("errorCode") not in (0, None, "0"):
+            raise EcomKassaError(
+                data.get("errorMessage") or data.get("error") or "Firm profile error",
+                code=data.get("errorCode"),
+                raw=data,
+            )
+        payload = data.get("payload") if isinstance(data, dict) else None
+        if not payload:
+            raise EcomKassaError("Empty firm profile payload", raw=data)
+        log_action(
+            "ecom_firm",
+            f"Firm {payload.get('firmName')} stores={len(payload.get('stores') or [])}",
+        )
+        return payload
+
+    async def _mobile_request(
+        self,
+        method: str,
+        path: str,
+        json_body: dict | None = None,
+        retry_auth: bool = True,
+    ) -> dict:
+        """Request to /api/mobile/v1/... with Token header."""
+        token = await self.get_token()
+        headers = {
+            "Content-Type": "application/json; charset=utf-8",
+            "Token": token,
+        }
+        url = self._mobile_url(path)
+        log_action("ecom_mobile", f"{method} {url}", level="debug")
+        resp = await self._client.request(method, url, json=json_body, headers=headers)
+
+        if resp.status_code == 401 and retry_auth:
+            log_action("ecom_auth", "Token expired (mobile), refreshing", level="warning")
+            await self.get_token(force=True)
+            return await self._mobile_request(method, path, json_body, retry_auth=False)
+
+        try:
+            data = resp.json()
+        except Exception:
+            raise EcomKassaError(f"Invalid response: {resp.text[:300]}", code=resp.status_code)
+
+        if resp.status_code >= 400:
+            err = data.get("error") or data
+            text = err if isinstance(err, str) else (err.get("text") or err.get("error") if isinstance(err, dict) else str(err))
+            raise EcomKassaError(text or f"HTTP {resp.status_code}", code=resp.status_code, raw=data)
+
+        if isinstance(data, dict) and data.get("errorCode") not in (0, None, "0"):
+            raise EcomKassaError(
+                data.get("error") or data.get("errorMessage") or "Mobile API error",
+                code=data.get("errorCode"),
+                raw=data,
+            )
+        return data
+
+    async def search_orders(
+        self,
+        *,
+        offset: int = 0,
+        limit: int = 30,
+        external_id: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        order_types: list[str] | None = None,
+    ) -> dict:
+        """
+        POST /api/mobile/v1/orders/search
+        Default: last 30, sorted by update date (API side).
+        """
+        body: dict = {
+            "offset": max(0, offset),
+            "limit": min(max(1, limit), 500),
+        }
+        if external_id:
+            body["externalId"] = external_id
+        if since:
+            body["since"] = since
+        if until:
+            body["until"] = until
+        if order_types:
+            body["orderTypes"] = order_types
+        log_action("ecom_orders_search", f"offset={offset} limit={limit}")
+        data = await self._mobile_request("POST", "orders/search", json_body=body)
+        # Response may be {query, result} without errorCode wrapper
+        if "result" in data:
+            return data
+        if "payload" in data:
+            return data["payload"] if isinstance(data["payload"], dict) else {"result": data["payload"]}
+        return data
+
+    async def get_order(self, order_id: int | str) -> dict:
+        """GET /api/mobile/v1/orders/:orderId"""
+        data = await self._mobile_request("GET", f"orders/{order_id}")
+        if "payload" in data and isinstance(data["payload"], dict):
+            return data["payload"]
+        return data
+
+    async def get_order_atol5(self, order_id: int | str) -> dict:
+        """GET /api/mobile/v1/orders/:orderId/atol-5 — receipt in Atol Online v5 format."""
+        data = await self._mobile_request("GET", f"orders/{order_id}/atol-5")
+        if "payload" in data and isinstance(data["payload"], dict):
+            return data["payload"]
+        return data
+
     async def _request(
+
         self,
         method: str,
         path: str,

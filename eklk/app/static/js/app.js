@@ -2,7 +2,8 @@
   const API = "/api/v1";
   let token = localStorage.getItem("eklk_token") || "";
   let paymentTypes = [];
-  let groupCode = localStorage.getItem("eklk_group") || "990";
+  let groupCode = localStorage.getItem("eklk_group") || "";
+  let firmData = null; // { firm_id, firm_name, tax_identity, tax_variant, stores: [...] }
 
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
@@ -90,10 +91,131 @@
     if (clearStorage) localStorage.removeItem("eklk_token");
     $("#appScreen").classList.add("hidden");
     $("#loginScreen").classList.remove("hidden");
+    if ($("#appFooter")) $("#appFooter").classList.add("hidden");
   }
 
   function money(n) {
     return (Math.round((Number(n) || 0) * 100) / 100).toFixed(2);
+  }
+
+  function storesList() {
+    return (firmData && firmData.stores) || [];
+  }
+
+  function getSelectedStoreId() {
+    const fromLs = localStorage.getItem("eklk_group");
+    const stores = storesList();
+    if (fromLs && stores.some((s) => String(s.store_id) === String(fromLs))) return String(fromLs);
+    if (groupCode && stores.some((s) => String(s.store_id) === String(groupCode))) return String(groupCode);
+    if (stores.length) return String(stores[0].store_id);
+    return fromLs || groupCode || "";
+  }
+
+  function setSelectedStoreId(id, persistServer) {
+    groupCode = String(id);
+    localStorage.setItem("eklk_group", groupCode);
+    ["c_store", "p_store", "r_store"].forEach((sid) => {
+      const el = document.getElementById(sid);
+      if (el && String(el.value) !== groupCode) el.value = groupCode;
+    });
+    if ($("#sum_shop")) {
+      const st = storesList().find((s) => String(s.store_id) === groupCode);
+      $("#sum_shop").textContent = st
+        ? `${st.store_name} (ID ${st.store_id})`
+        : `ID ${groupCode}`;
+    }
+    if (persistServer && token) {
+      api("/auth/select-store", {
+        method: "POST",
+        body: JSON.stringify({ store_id: id }),
+      }).catch(() => {});
+    }
+  }
+
+  function fillStoreSelects() {
+    const stores = storesList();
+    const selected = getSelectedStoreId();
+    const opts = stores.length
+      ? stores
+          .map(
+            (s) =>
+              `<option value="${s.store_id}">${s.store_name} (ID ${s.store_id})</option>`
+          )
+          .join("")
+      : `<option value="${selected || ""}">${selected ? "ID " + selected : "Нет магазинов"}</option>`;
+    ["c_store", "p_store", "r_store"].forEach((sid) => {
+      const el = document.getElementById(sid);
+      if (!el) return;
+      el.innerHTML = opts;
+      if (selected) el.value = selected;
+    });
+    setSelectedStoreId(selected || groupCode, false);
+  }
+
+  function applyFirmToSettings() {
+    if (!firmData) {
+      ["set_firm_name", "set_firm_id", "set_firm_inn", "set_firm_sno"].forEach((id) => {
+        if ($("#" + id)) $("#" + id).textContent = "—";
+      });
+      if ($("#set_stores_list")) $("#set_stores_list").innerHTML = "<p class=\"hint\">Нет данных</p>";
+      return;
+    }
+    if ($("#set_firm_name")) $("#set_firm_name").textContent = firmData.firm_name || "—";
+    if ($("#set_firm_id")) $("#set_firm_id").textContent = firmData.firm_id || "—";
+    if ($("#set_firm_inn")) $("#set_firm_inn").textContent = firmData.tax_identity || "—";
+    if ($("#set_firm_sno")) $("#set_firm_sno").textContent = firmData.tax_variant || "—";
+    // Preselect SNO from firm if present
+    if (firmData.tax_variant) {
+      if ($("#c_sno")) $("#c_sno").value = firmData.tax_variant;
+      if ($("#p_sno")) $("#p_sno").value = firmData.tax_variant;
+    }
+    const stores = storesList();
+    const selected = getSelectedStoreId();
+    if ($("#set_stores_list")) {
+      if (!stores.length) {
+        $("#set_stores_list").innerHTML = "<p class=\"hint\">Магазины не найдены</p>";
+      } else {
+        $("#set_stores_list").innerHTML = stores
+          .map((s) => {
+            const active = String(s.store_id) === String(selected);
+            return `<div class="store-card ${active ? "active" : ""}" data-store-id="${s.store_id}">
+              <div class="store-card-title">${s.store_name || "—"} ${active ? "<span class=\"badge badge-done\">текущий</span>" : ""}</div>
+              <div class="store-card-meta">ID: <code>${s.store_id}</code></div>
+              <div class="store-card-meta">${s.store_address || "—"}</div>
+              ${active ? "" : `<button type="button" class="btn btn-sm mt-2 store-pick" data-store-id="${s.store_id}">Выбрать</button>`}
+            </div>`;
+          })
+          .join("");
+        $$("#set_stores_list .store-pick").forEach((btn) => {
+          btn.onclick = () => {
+            setSelectedStoreId(btn.dataset.storeId, true);
+            applyFirmToSettings();
+            fillStoreSelects();
+            updateCreateSummary();
+            showAlert("Магазин выбран: " + btn.dataset.storeId, "success");
+          };
+        });
+      }
+    }
+  }
+
+  function ingestFirm(firm, selectedStoreId) {
+    if (firm) firmData = firm;
+    if (selectedStoreId != null && selectedStoreId !== "") {
+      groupCode = String(selectedStoreId);
+      localStorage.setItem("eklk_group", groupCode);
+    } else if (firmData && firmData.stores && firmData.stores.length) {
+      const ls = localStorage.getItem("eklk_group");
+      const ok = ls && firmData.stores.some((s) => String(s.store_id) === String(ls));
+      if (!ok) {
+        groupCode = String(firmData.stores[0].store_id);
+        localStorage.setItem("eklk_group", groupCode);
+      } else {
+        groupCode = String(ls);
+      }
+    }
+    fillStoreSelects();
+    applyFirmToSettings();
   }
 
   /** Normalize phone in UI the same way as backend: +7XXXXXXXXXX */
@@ -296,7 +418,12 @@
     const phoneRaw = ($("#c_phone") && $("#c_phone").value.trim()) || "";
     const op = $("#c_operation").value;
     const sno = $("#c_sno").value;
-    $("#sum_shop").textContent = `ID ${groupCode}`;
+    {
+      const st = storesList().find((s) => String(s.store_id) === String(getSelectedStoreId()));
+      $("#sum_shop").textContent = st
+        ? `${st.store_name} (ID ${st.store_id})`
+        : `ID ${getSelectedStoreId() || "—"}`;
+    }
     $("#sum_op").textContent = OP_LABELS[op] || op;
     $("#sum_sno").textContent = SNO_LABELS[sno] || sno;
     $("#sum_email").textContent = emailVal || phoneRaw || "—";
@@ -405,24 +532,39 @@
   }
 
   // ---- Auth ----
-  async function afterLogin() {
+  async function afterLogin(loginPayload) {
     $("#loginScreen").classList.add("hidden");
     $("#appScreen").classList.remove("hidden");
+    if ($("#appFooter")) $("#appFooter").classList.remove("hidden");
     try {
-      const me = await api("/auth/me");
-      $("#userName").textContent = me.username || me.email || "";
-      $("#c_shop").value = `Магазин ID ${groupCode}`;
+      if (loginPayload && loginPayload.firm) {
+        ingestFirm(loginPayload.firm, loginPayload.selected_store_id);
+      } else {
+        const me = await api("/auth/me");
+        $("#userName").textContent = me.username || me.email || "";
+        ingestFirm(me.firm, me.selected_store_id);
+      }
+      const me2 = await api("/auth/me").catch(() => null);
+      if (me2) $("#userName").textContent = me2.username || me2.email || "";
     } catch (e) {
       showAlert(e.message);
     }
     await loadPaymentTypes();
     ensureItem("c_items", updateCreateSummary);
     ensureItem("p_items", updatePaySummary);
-    ensureItem("r_items");
     if (!$("#c_payments .pay-row")) {
       $("#c_payments").insertAdjacentHTML("beforeend", payRowHtml(true));
       bindPays();
     }
+    // bind store change
+    ["c_store", "p_store", "r_store"].forEach((sid) => {
+      const el = document.getElementById(sid);
+      if (!el) return;
+      el.onchange = () => {
+        setSelectedStoreId(el.value, true);
+        updateCreateSummary();
+      };
+    });
     updateCreateSummary();
     updatePaySummary();
   }
@@ -483,19 +625,16 @@
     e.preventDefault();
     $("#loginError").classList.add("hidden");
     try {
-      groupCode = ($("#loginGroup").value || "990").trim();
-      localStorage.setItem("eklk_group", groupCode);
       const data = await api("/auth/login", {
         method: "POST",
         body: JSON.stringify({
           username: $("#loginUser").value.trim(),
           password: $("#loginPass").value,
-          group_code: groupCode,
         }),
       });
       token = data.access_token;
       localStorage.setItem("eklk_token", token);
-      await afterLogin();
+      await afterLogin(data);
     } catch (err) {
       $("#loginError").textContent = err.message;
       $("#loginError").classList.remove("hidden");
@@ -510,6 +649,7 @@
       btn.classList.add("active");
       $$(".tab-panel").forEach((p) => p.classList.add("hidden"));
       $(`#tab-${btn.dataset.tab}`).classList.remove("hidden");
+      if (btn.dataset.tab === "orders") loadOrders();
     };
   });
 
@@ -582,10 +722,6 @@
     $("#p_items").insertAdjacentHTML("beforeend", itemRowHtml());
     bindItemTable("p_items", updatePaySummary);
     updatePaySummary();
-  };
-  $("#r_addItem").onclick = () => {
-    $("#r_items").insertAdjacentHTML("beforeend", itemRowHtml());
-    bindItemTable("r_items");
   };
 
   ["p_email", "p_phone"].forEach((id) => {
@@ -669,6 +805,7 @@
           inn: ($("#c_inn") && $("#c_inn").value.trim()) || undefined,
         },
         sno: $("#c_sno").value,
+        group_code: String(($("#c_store") && $("#c_store").value) || getSelectedStoreId() || ""),
       };
 
       // Additional user props (name + value)
@@ -782,6 +919,7 @@
         },
         sno: $("#p_sno").value,
         success_url: $("#p_success").value || undefined,
+        group_code: String(($("#p_store") && $("#p_store").value) || getSelectedStoreId() || ""),
       };
       const data = await api("/ecom/checks", { method: "POST", body: JSON.stringify(body) });
       renderResult($("#p_result"), data);
@@ -803,39 +941,251 @@
     }
   };
 
-  $("#r_submit").onclick = async () => {
-    const btn = $("#r_submit");
-    if (btn.dataset.busy === "1") return;
-    const items = collectItems("r_items");
-    const total = items.reduce((s, i) => s + i.sum, 0);
-    if (total <= 0) return showAlert("Сумма должна быть больше 0");
-    const phoneRaw = ($("#r_phone") && $("#r_phone").value.trim()) || "";
-    let phoneNorm = undefined;
-    if (phoneRaw) {
-      phoneNorm = normalizePhoneUI(phoneRaw);
-      if (!phoneNorm) return showAlert("Телефон: нужен формат +79001234567");
-    }
-    setLoading(btn, true, "Создать возврат", "Отправка…");
-    try {
-      const body = {
-        external_id: nextExternalId("REF"),
-        items,
-        payments: [{ type: 1, sum: total }],
-        client: {
-          email: $("#r_email").value || undefined,
-          phone: phoneNorm,
-        },
-        original_uuid: $("#r_orig").value || undefined,
-      };
-      renderResult($("#r_result"), await api("/ecom/refunds", { method: "POST", body: JSON.stringify(body) }));
-      showAlert("Возврат создан", "success");
-    } catch (e) {
-      showAlert(e.message);
-    } finally {
-      setLoading(btn, false, "Создать возврат");
-    }
-  };
 
+
+
+  // ---- Orders list ----
+  let ordersOffset = 0;
+  let ordersLimit = 30;
+  let ordersSelectedId = null;
+
+  function toIsoLocal(val) {
+    if (!val) return undefined;
+    // datetime-local -> ISO-ish UTC guess: treat as local, append Z-less; API wants ISO 8601
+    // Convert: 2026-08-17T10:00 -> 2026-08-17T10:00:00Z (user enters as filter approx)
+    if (val.length === 16) return val + ":00Z";
+    return val;
+  }
+
+  function statusBadge(st) {
+    const s = (st || "—").toString();
+    const cls = "badge badge-status-" + s.replace(/\s+/g, "_");
+    return `<span class="${cls}">${s}</span>`;
+  }
+
+  function typeLabel(t) {
+    return { VCHR: "Чек", INVC: "Счёт", CORD: "Курьер" }[t] || t || "—";
+  }
+
+  function formatMoney(n) {
+    if (n == null || n === "") return "—";
+    return money(n) + " ₽";
+  }
+
+  function formatDt(iso) {
+    if (!iso) return "—";
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return iso;
+    }
+  }
+
+  async function loadOrders() {
+    const list = $("#o_list");
+    if (!list) return;
+    list.innerHTML = `<p class="hint">Загрузка…</p>`;
+    ordersLimit = parseInt(($("#o_limit") && $("#o_limit").value) || "30", 10);
+    const body = {
+      offset: ordersOffset,
+      limit: ordersLimit,
+    };
+    const ext = ($("#o_ext") && $("#o_ext").value.trim()) || "";
+    if (ext) body.external_id = ext;
+    const types = ($("#o_types") && $("#o_types").value) || "";
+    if (types) body.order_types = types.split(",").map((x) => x.trim()).filter(Boolean);
+    const since = toIsoLocal($("#o_since") && $("#o_since").value);
+    const until = toIsoLocal($("#o_until") && $("#o_until").value);
+    if (since) body.since = since;
+    if (until) body.until = until;
+
+    try {
+      const data = await api("/orders/search", { method: "POST", body: JSON.stringify(body) });
+      const rows = data.result || [];
+      if (!rows.length) {
+        list.innerHTML = `<p class="hint">Чеков не найдено</p>`;
+      } else {
+        list.innerHTML = `<table class="orders-table">
+          <thead><tr>
+            <th>ID</th><th>Дата</th><th>Тип</th><th>Статус</th><th>Сумма</th><th>Магазин</th>
+          </tr></thead>
+          <tbody>
+            ${rows
+              .map((r) => {
+                const id = r.order_id;
+                const active = String(id) === String(ordersSelectedId) ? "active" : "";
+                return `<tr class="${active}" data-order-id="${id}">
+                  <td><code>${id ?? "—"}</code></td>
+                  <td>${formatDt(r.updated)}</td>
+                  <td>${typeLabel(r.order_type)}</td>
+                  <td>${statusBadge(r.status)}</td>
+                  <td>${formatMoney(r.total)}</td>
+                  <td>${r.store_name || r.store_id || "—"}</td>
+                </tr>`;
+              })
+              .join("")}
+          </tbody>
+        </table>`;
+        list.querySelectorAll("tr[data-order-id]").forEach((tr) => {
+          tr.onclick = () => openOrderDetail(tr.dataset.orderId);
+        });
+      }
+      const info = $("#o_page_info");
+      if (info) {
+        info.textContent = `показано ${rows.length} · смещение ${ordersOffset}`;
+      }
+      if ($("#o_prev")) $("#o_prev").disabled = ordersOffset <= 0;
+      if ($("#o_next")) $("#o_next").disabled = rows.length < ordersLimit;
+    } catch (e) {
+      list.innerHTML = `<p class="hint" style="color:var(--danger)">${e.message}</p>`;
+      showAlert(e.message);
+    }
+  }
+
+  function paymentTypeLabel(t) {
+    const map = {
+      0: "Наличные",
+      1: "Безналичные",
+      2: "Предоплата (аванс)",
+      3: "Постоплата (кредит)",
+      4: "Встречное предоставление",
+    };
+    return map[t] || ("Тип " + t);
+  }
+
+  function renderReceipt(atol5, summary) {
+    const el = $("#o_detail");
+    const ph = $("#o_detail_placeholder");
+    if (!el) return;
+    if (ph) ph.classList.add("hidden");
+    el.classList.remove("hidden");
+
+    const receipt = (atol5 && atol5.receipt) || {};
+    const company = receipt.company || {};
+    const client = receipt.client || {};
+    const items = receipt.items || [];
+    const payments = receipt.payments || [];
+    const total = receipt.total != null ? receipt.total : summary && summary.total;
+
+    let html = `<div class="r-head">
+      <div class="r-title">Кассовый чек</div>
+      <div class="r-meta">ID ${summary?.order_id ?? "—"} · ${typeLabel(summary?.order_type)} · ${statusBadge(summary?.status || "")}</div>
+      <div class="r-meta">${formatDt(summary?.updated)}</div>
+      ${atol5?.external_id ? `<div class="r-meta">ext: ${atol5.external_id}</div>` : ""}
+    </div>`;
+
+    html += `<div class="r-line"><span>Магазин</span><span>${summary?.store_name || company.payment_address || "—"}</span></div>`;
+    html += `<div class="r-line"><span>ИНН</span><span>${company.inn || "—"}</span></div>`;
+    html += `<div class="r-line"><span>СНО</span><span>${company.sno || "—"}</span></div>`;
+    if (client.email || client.phone || client.name) {
+      html += `<div class="r-line"><span>Покупатель</span><span>${[client.name, client.email, client.phone].filter(Boolean).join(" · ") || "—"}</span></div>`;
+    }
+    if (receipt.cashier) {
+      html += `<div class="r-line"><span>Кассир</span><span>${receipt.cashier}</span></div>`;
+    }
+
+    html += `<div style="margin:12px 0 4px;font-weight:600;font-size:0.8rem;color:var(--muted)">Позиции</div>`;
+    if (!items.length) {
+      html += `<p class="hint">Нет позиций (или формат Atol 5 недоступен)</p>`;
+    } else {
+      items.forEach((it) => {
+        const vat = (it.vat && it.vat.type) || "—";
+        html += `<div class="r-item">
+          <div class="r-item-name">${it.name || "—"}</div>
+          <div class="r-item-sub">${it.quantity ?? 1} × ${formatMoney(it.price)} · ${it.payment_method || ""} · НДС ${vat}</div>
+          <div class="r-line"><span></span><span>${formatMoney(it.sum)}</span></div>
+        </div>`;
+      });
+    }
+
+    html += `<div class="r-total"><span>Итого</span><span>${formatMoney(total)}</span></div>`;
+    if (payments.length) {
+      html += `<div class="r-pay">Оплата: ${payments
+        .map((p) => paymentTypeLabel(p.type) + " " + formatMoney(p.sum))
+        .join("; ")}</div>`;
+    }
+
+    html += `<details style="margin-top:14px"><summary class="hint" style="cursor:pointer">JSON Atol 5</summary>
+      <div class="result-box" style="max-height:240px">${JSON.stringify(atol5 || {}, null, 2)}</div>
+    </details>`;
+
+    el.innerHTML = html;
+  }
+
+  async function openOrderDetail(orderId) {
+    ordersSelectedId = orderId;
+    $$("#o_list tr[data-order-id]").forEach((tr) => {
+      tr.classList.toggle("active", String(tr.dataset.orderId) === String(orderId));
+    });
+    const el = $("#o_detail");
+    const ph = $("#o_detail_placeholder");
+    if (ph) {
+      ph.classList.remove("hidden");
+      ph.textContent = "Загрузка чека…";
+    }
+    if (el) el.classList.add("hidden");
+    try {
+      const data = await api("/orders/" + encodeURIComponent(orderId));
+      renderReceipt(data.atol5, data.summary);
+    } catch (e) {
+      if (ph) ph.textContent = e.message;
+      showAlert(e.message);
+    }
+  }
+
+  function bindOrdersUI() {
+    if ($("#o_search")) $("#o_search").onclick = () => { ordersOffset = 0; loadOrders(); };
+    if ($("#o_refresh")) $("#o_refresh").onclick = () => loadOrders();
+    if ($("#o_reset")) {
+      $("#o_reset").onclick = () => {
+        if ($("#o_ext")) $("#o_ext").value = "";
+        if ($("#o_types")) $("#o_types").value = "";
+        if ($("#o_since")) $("#o_since").value = "";
+        if ($("#o_until")) $("#o_until").value = "";
+        if ($("#o_limit")) $("#o_limit").value = "30";
+        ordersOffset = 0;
+        loadOrders();
+      };
+    }
+    if ($("#o_prev")) {
+      $("#o_prev").onclick = () => {
+        ordersOffset = Math.max(0, ordersOffset - ordersLimit);
+        loadOrders();
+      };
+    }
+    if ($("#o_next")) {
+      $("#o_next").onclick = () => {
+        ordersOffset += ordersLimit;
+        loadOrders();
+      };
+    }
+  }
+
+
+  // Settings sub-tabs
+  $$(".settings-tab").forEach((btn) => {
+    btn.onclick = () => {
+      $$(".settings-tab").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const name = btn.dataset.settingsTab;
+      $("#settings-org").classList.toggle("hidden", name !== "org");
+      $("#settings-stores").classList.toggle("hidden", name !== "stores");
+    };
+  });
+
+  if ($("#set_refresh")) {
+    $("#set_refresh").onclick = async () => {
+      try {
+        const firm = await api("/auth/firm");
+        ingestFirm(firm, getSelectedStoreId());
+        showAlert("Профиль обновлён", "success");
+      } catch (e) {
+        showAlert(e.message);
+      }
+    };
+  }
 
   if (token) afterLogin().catch(() => logout(true));
 })();

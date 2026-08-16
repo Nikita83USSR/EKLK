@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.utils.logger import logger, log_action
-from app.routers import auth, ecom
+from app.routers import auth, ecom, orders
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -42,6 +42,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(ecom.router, prefix="/api/v1")
+app.include_router(orders.router, prefix="/api/v1")
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")

@@ -33,7 +33,10 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 Тестовые:
 - login: `sales@ecomkassa.ru`
 - password: `ecomkassa1`
-- group_code / ID магазина: `990`
+
+После входа автоматически загружается профиль фирмы и список магазинов
+(`GET /api/mobile/v1/profile/firm`). ID магазина (`storeId`) используется как
+`group_code` при фискализации. Последний выбранный магазин запоминается.
 
 Своих пользователей у ЛК нет — авторизация идёт через `getToken` EcomKassa.
 
@@ -43,8 +46,10 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 | Метод | Путь | Описание |
 |-------|------|----------|
-| POST | `/api/v1/auth/login` | Логин в ЛК |
+| POST | `/api/v1/auth/login` | Логин в ЛК (+ профиль фирмы) |
 | GET  | `/api/v1/auth/me` | Профиль |
+| GET  | `/api/v1/auth/firm` | Организация и магазины |
+| POST | `/api/v1/auth/select-store` | Выбрать магазин |
 | GET  | `/api/v1/ecom/payment-types` | Список платёжек |
 | POST | `/api/v1/ecom/checks` | Создать чек или ссылку на оплату |
 | GET  | `/api/v1/ecom/checks/{uuid}` | Статус |

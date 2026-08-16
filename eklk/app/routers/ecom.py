@@ -1,6 +1,7 @@
 """
 EcomKassa integration endpoints.
 Uses credentials of the logged-in EcomKassa user.
+group_code = storeId from firm profile (or explicit in request body).
 """
 
 import time
@@ -9,18 +10,51 @@ import uuid as uuid_lib
 from fastapi import APIRouter, HTTPException
 
 from app.clients.ecomkassa import EcomKassaClient, EcomKassaError, to_rubles
-from app.core.deps import CurrentUser
+from app.core.deps import CurrentUser, update_session_store
 from app.schemas.checks import CreateCheckRequest, CreateRefundRequest, CheckResponse
 from app.utils.logger import log_action
 
 router = APIRouter(prefix="/ecom", tags=["EcomKassa"])
 
 
-def _client_for(user: dict) -> EcomKassaClient:
+def _resolve_group(user: dict, body_group: str | None) -> str:
+    if body_group:
+        update_session_store(user["username"], body_group)
+        return str(body_group)
+    return str(user.get("group_code") or user.get("selected_store_id") or "990")
+
+
+def _company_from_firm(user: dict, sno: str | None) -> dict | None:
+    """Build default company block from firm profile if available."""
+    firm = user.get("firm") or {}
+    if not firm:
+        return None
+    inn = firm.get("taxIdentity")
+    tax = firm.get("taxVariant") or sno or "osn"
+    email = user.get("username")
+    stores = firm.get("stores") or []
+    selected = str(user.get("selected_store_id") or user.get("group_code") or "")
+    addr = None
+    for s in stores:
+        if str(s.get("storeId")) == selected:
+            addr = s.get("storeAddress")
+            break
+    if not addr and stores:
+        addr = stores[0].get("storeAddress")
+    company = {
+        "email": email,
+        "sno": tax,
+        "inn": inn,
+        "payment_address": addr or "https://app.ecomkassa.ru",
+    }
+    return {k: v for k, v in company.items() if v}
+
+
+def _client_for(user: dict, group_code: str | None = None) -> EcomKassaClient:
     return EcomKassaClient(
         login=user["username"],
         password=user["password"],
-        group_code=user.get("group_code") or "990",
+        group_code=group_code or user.get("group_code") or "990",
     )
 
 
@@ -39,7 +73,8 @@ async def payment_types(user: CurrentUser):
 @router.post("/checks", response_model=CheckResponse)
 async def create_check(body: CreateCheckRequest, user: CurrentUser):
     """Create SALE check or payment invoice (if payments.type is provider id like 103)."""
-    client = _client_for(user)
+    group = _resolve_group(user, body.group_code)
+    client = _client_for(user, group)
     try:
         external_id = body.external_id or f"EKLK-{int(time.time())}-{uuid_lib.uuid4().hex[:8]}"
         items = [it.model_dump() for it in body.items]
@@ -50,6 +85,8 @@ async def create_check(body: CreateCheckRequest, user: CurrentUser):
         total = sum(p["sum"] for p in payments)
 
         company = body.company.model_dump(exclude_none=True) if body.company else None
+        if not company:
+            company = _company_from_firm(user, body.sno)
         client_data = body.client.model_dump(exclude_none=True) if body.client else None
 
         agent = body.agent.model_dump(exclude_none=True) if body.agent else None
@@ -58,6 +95,7 @@ async def create_check(body: CreateCheckRequest, user: CurrentUser):
             if body.additional_user_props
             else None
         )
+        sno = body.sno or (company or {}).get("sno") or (user.get("firm") or {}).get("taxVariant") or "osn"
         result = await client.create_sell(
             external_id=external_id,
             items=items,
@@ -65,7 +103,7 @@ async def create_check(body: CreateCheckRequest, user: CurrentUser):
             total=total,
             client=client_data,
             company=company,
-            sno=body.sno or (company or {}).get("sno", "osn"),
+            sno=sno,
             success_url=body.success_url,
             callback_url=body.callback_url,
             agent=agent,
@@ -73,7 +111,7 @@ async def create_check(body: CreateCheckRequest, user: CurrentUser):
         )
         log_action(
             "check_created",
-            f"uuid={result.get('uuid')}",
+            f"uuid={result.get('uuid')} group={group}",
             user_id=user["username"],
             uuid=result.get("uuid"),
         )
@@ -122,7 +160,8 @@ async def get_check(uuid: str, user: CurrentUser):
 
 @router.post("/refunds", response_model=CheckResponse)
 async def create_refund(body: CreateRefundRequest, user: CurrentUser):
-    client = _client_for(user)
+    group = _resolve_group(user, body.group_code)
+    client = _client_for(user, group)
     try:
         external_id = body.external_id or f"REF-{int(time.time())}-{uuid_lib.uuid4().hex[:8]}"
         items = [it.model_dump() for it in body.items]
@@ -132,6 +171,8 @@ async def create_refund(body: CreateRefundRequest, user: CurrentUser):
         payments = [p.model_dump() for p in body.payments]
         total = sum(p["sum"] for p in payments)
         company = body.company.model_dump(exclude_none=True) if body.company else None
+        if not company:
+            company = _company_from_firm(user, body.sno)
         client_data = body.client.model_dump(exclude_none=True) if body.client else None
 
         result = await client.create_refund(
@@ -141,7 +182,7 @@ async def create_refund(body: CreateRefundRequest, user: CurrentUser):
             total=total,
             client=client_data,
             company=company,
-            sno=body.sno,
+            sno=body.sno or (company or {}).get("sno", "osn"),
             original_uuid=body.original_uuid,
         )
         return CheckResponse(

@@ -151,6 +151,10 @@ class CreateCheckRequest(BaseModel):
     callback_url: Optional[str] = None
     agent: Optional[AgentInfoIn] = None
     additional_user_props: Optional[AdditionalUserPropsIn] = None
+    group_code: Optional[str] = Field(
+        default=None,
+        description="ID магазина (storeId / group_code). Если не указан — из сессии",
+    )
 
 
 class CreateRefundRequest(BaseModel):
@@ -161,6 +165,10 @@ class CreateRefundRequest(BaseModel):
     company: Optional[CompanyIn] = None
     sno: str = "osn"
     original_uuid: Optional[str] = None
+    group_code: Optional[str] = Field(
+        default=None,
+        description="ID магазина (storeId / group_code). Если не указан — из сессии",
+    )
 
 
 class CheckResponse(BaseModel):

@@ -10,16 +10,16 @@
 <body>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
-      <h1>{{ app_name }}</h1>
-      <p class="subtitle">Вход учётной записью EcomKassa</p>
+      <div class="login-logo-wrap">
+        <img src="/static/img/logo.png" alt="EcomKassa" class="login-logo" />
+      </div>
+      <p class="subtitle">Личный кабинет · вход учётной записью EcomKassa</p>
       <div id="loginError" class="alert alert-error hidden"></div>
       <form id="loginForm">
         <label>Логин EcomKassa</label>
         <input type="text" id="loginUser" placeholder="sales@ecomkassa.ru" autocomplete="username" required />
         <label style="margin-top:10px">Пароль</label>
         <input type="password" id="loginPass" autocomplete="current-password" required />
-        <label style="margin-top:10px">ID магазина (group_code)</label>
-        <input type="text" id="loginGroup" value="990" />
         <button type="submit" class="btn btn-block" style="margin-top:16px">Войти</button>
       </form>
     </div>
@@ -28,12 +28,16 @@
   <div id="appScreen" class="hidden">
     <header class="header">
       <div class="header-inner">
-        <div class="logo">{{ app_name }} <span>ЛК</span></div>
+        <div class="logo">
+          <img src="/static/img/logo.png" alt="EcomKassa" class="header-logo" />
+          <span class="logo-badge">ЛК</span>
+        </div>
         <nav class="nav">
           <button type="button" class="active" data-tab="create">Чек</button>
           <button type="button" data-tab="payment">Ссылка на оплату</button>
           <button type="button" data-tab="status">Статус</button>
-          <button type="button" data-tab="refund">Возврат</button>
+          <button type="button" data-tab="orders">Список чеков</button>
+          <button type="button" data-tab="settings">Настройки</button>
         </nav>
         <div class="user-info">
           <span id="userName"></span>
@@ -55,7 +59,7 @@
               <div class="row row-3">
                 <div>
                   <label>Магазин</label>
-                  <input id="c_shop" value="Магазин (group из входа)" disabled />
+                  <select id="c_store"></select>
                 </div>
                 <div>
                   <label>Признак расчёта</label>
@@ -255,6 +259,10 @@
               <p class="hint" style="margin-bottom:12px">Онлайн-оплата: после успешной оплаты касса сформирует чек. Тип расчёта — <b>безналичный</b>.</p>
               <div class="row row-3">
                 <div>
+                  <label>Магазин</label>
+                  <select id="p_store"></select>
+                </div>
+                <div>
                   <label>Система налогообложения</label>
                   <select id="p_sno">
                     <option value="osn">ОСН</option>
@@ -268,6 +276,8 @@
                   <label>Платёжная система (эквайринг)</label>
                   <select id="p_type"></select>
                 </div>
+              </div>
+              <div class="row">
                 <div>
                   <label>URL успеха (необязательно)</label>
                   <input id="p_success" placeholder="https://site.ru/ok" />
@@ -330,29 +340,138 @@
         </div>
       </section>
 
-      <!-- REFUND -->
-      <section id="tab-refund" class="tab-panel hidden">
-        <div class="card">
-          <div class="section-title">Возврат прихода (sell_refund)</div>
-          <div class="row">
-            <div><label>UUID исходного чека</label><input id="r_orig" /></div>
-            <div><label>Email</label><input id="r_email" type="email" /></div>
-            <div><label>Телефон</label><input id="r_phone" /></div>
+      
+      <!-- ORDERS LIST -->
+      <section id="tab-orders" class="tab-panel hidden">
+        <div class="orders-layout">
+          <div class="orders-list-pane">
+            <div class="card">
+              <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                <span>Список чеков</span>
+                <button type="button" class="btn btn-sm" id="o_refresh">Обновить</button>
+              </div>
+              <div class="orders-filters">
+                <div class="row">
+                  <div>
+                    <label>Внешний ID</label>
+                    <input id="o_ext" placeholder="external_id" />
+                  </div>
+                  <div>
+                    <label>Тип</label>
+                    <select id="o_types">
+                      <option value="">Все</option>
+                      <option value="VCHR">Чеки (VCHR)</option>
+                      <option value="INVC">Счета (INVC)</option>
+                      <option value="CORD">Курьерские (CORD)</option>
+                      <option value="VCHR,INVC">Чеки + счета</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>С (UTC)</label>
+                    <input id="o_since" type="datetime-local" />
+                  </div>
+                  <div>
+                    <label>По (UTC)</label>
+                    <input id="o_until" type="datetime-local" />
+                  </div>
+                </div>
+                <div class="row" style="align-items:end">
+                  <div style="max-width:120px">
+                    <label>Лимит</label>
+                    <select id="o_limit">
+                      <option value="30" selected>30</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </select>
+                  </div>
+                  <div>
+                    <button type="button" class="btn" id="o_search">Найти</button>
+                    <button type="button" class="btn btn-secondary" id="o_reset">Сброс</button>
+                  </div>
+                </div>
+              </div>
+              <div id="o_list" class="orders-table-wrap">
+                <p class="hint">Загрузка…</p>
+              </div>
+              <div class="orders-pager">
+                <button type="button" class="btn btn-secondary btn-sm" id="o_prev" disabled>← Назад</button>
+                <span id="o_page_info" class="hint">—</span>
+                <button type="button" class="btn btn-secondary btn-sm" id="o_next" disabled>Вперёд →</button>
+              </div>
+            </div>
           </div>
-          <div class="section-title mt-3" style="display:flex;justify-content:space-between">
-            <span>Позиции возврата</span>
-            <button type="button" class="btn btn-sm" id="r_addItem">+ Добавить</button>
-          </div>
-          <table class="items-table">
-            <thead><tr><th>Наименование</th><th>Цена</th><th>Кол-во</th><th>НДС</th><th>Предмет</th><th>Признак</th><th></th></tr></thead>
-            <tbody id="r_items"></tbody>
-          </table>
-          <button type="button" class="btn btn-danger mt-3" id="r_submit">Создать возврат</button>
-          <div id="r_result" class="hidden mt-3"></div>
+          <aside class="orders-detail-pane">
+            <div class="card" id="o_detail_card">
+              <div class="section-title">Состав чека</div>
+              <p class="hint" id="o_detail_placeholder">Выберите чек в списке слева</p>
+              <div id="o_detail" class="receipt-view hidden"></div>
+            </div>
+          </aside>
         </div>
       </section>
+
+<!-- SETTINGS -->
+      <section id="tab-settings" class="tab-panel hidden">
+        <div class="settings-layout">
+          <div class="settings-tabs">
+            <button type="button" class="settings-tab active" data-settings-tab="org">Организация</button>
+            <button type="button" class="settings-tab" data-settings-tab="stores">Магазины</button>
+          </div>
+          <div id="settings-org" class="settings-pane">
+            <div class="card" style="max-width:640px">
+              <div class="section-title">Организация</div>
+              <p class="hint" style="margin-bottom:14px">Данные загружаются из EcomKassa при входе (<code>GET /api/mobile/v1/profile/firm</code>).</p>
+              <div class="kv"><span class="k">Наименование</span><span class="v" id="set_firm_name">—</span></div>
+              <div class="kv"><span class="k">ID фирмы</span><span class="v" id="set_firm_id">—</span></div>
+              <div class="kv"><span class="k">ИНН</span><span class="v" id="set_firm_inn">—</span></div>
+              <div class="kv"><span class="k">СНО (taxVariant)</span><span class="v" id="set_firm_sno">—</span></div>
+              <button type="button" class="btn btn-secondary mt-3" id="set_refresh">Обновить из EcomKassa</button>
+            </div>
+          </div>
+          <div id="settings-stores" class="settings-pane hidden">
+            <div class="card">
+              <div class="section-title">Магазины (точки продаж)</div>
+              <p class="hint" style="margin-bottom:14px">storeId используется как group_code при фискализации. Последний выбранный магазин запоминается.</p>
+              <div id="set_stores_list"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
-  <script src="/static/js/app.js"></script>
+
+  <footer class="app-footer hidden" id="appFooter">
+    <div class="footer-inner">
+      <div class="footer-col">
+        <div class="footer-title">О компании</div>
+        <div>ИП Носов А.С.</div>
+        <div>ИНН: 643890985437</div>
+      </div>
+      <div class="footer-col">
+        <div class="footer-title">Техподдержка</div>
+        <div>Пн–Пт 9:00 – 18:00 Мск</div>
+        <div><a href="mailto:support@ecomkassa.ru">support@ecomkassa.ru</a></div>
+      </div>
+      <div class="footer-col">
+        <div class="footer-title">Документы</div>
+        <div><a href="https://ecomkassa.ru/helpcenter" target="_blank" rel="noopener">Инструкции</a></div>
+        <div><a href="https://app.ecomkassa.ru/assets/docs/leasing-public-ru.pdf" target="_blank" rel="noopener">Оферта на аренду касс</a></div>
+        <div><a href="https://app.ecomkassa.ru/assets/docs/license-agreement-ru.pdf" target="_blank" rel="noopener">Публичный договор оферты</a></div>
+        <div><a href="https://ecomkassa.ru/docs" target="_blank" rel="noopener">Все документы</a></div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Bitrix24 CRM widget (как на app.ecomkassa.ru) -->
+  <script>
+  (function(w,d,u){
+    var s=d.createElement('script');s.async=true;
+    s.src=u+'?'+(Date.now()/60000|0);
+    var h=d.getElementsByTagName('script')[0];
+    h.parentNode.insertBefore(s,h);
+  })(window,document,'https://cdn-ru.bitrix24.ru/b24444000/crm/site_button/loader_4_q8v7f4.js');
+  </script>
+<script src="/static/js/app.js"></script>
 </body>
 </html>
