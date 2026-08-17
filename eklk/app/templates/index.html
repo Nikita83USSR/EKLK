@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ app_name }} — Чек</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260818d" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260818e" />
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <div class="login-logo-wrap">
-        <img src="/static/img/logo.png?v=20260818d" alt="EcomKassa" class="login-logo" />
+        <img src="/static/img/logo.png?v=20260818e" alt="EcomKassa" class="login-logo" />
       </div>
       <p class="subtitle">Личный кабинет · вход учётной записью EcomKassa</p>
       <div id="loginError" class="alert alert-error hidden"></div>
@@ -29,7 +29,7 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <img src="/static/img/logo.png?v=20260818d" alt="EcomKassa" class="header-logo" />
+          <img src="/static/img/logo.png?v=20260818e" alt="EcomKassa" class="header-logo" />
         </div>
         <nav class="nav">
           <!-- URL: /create /payment /orders /settings (см. app.js route) -->
@@ -408,6 +408,7 @@
           <div class="settings-tabs">
             <button type="button" class="settings-tab active" data-settings-tab="org">Организация</button>
             <button type="button" class="settings-tab" data-settings-tab="stores">Магазины</button>
+            <button type="button" class="settings-tab" data-settings-tab="appearance">Внешний вид</button>
           </div>
           <div id="settings-org" class="settings-pane">
             <div class="card" style="max-width:640px">
@@ -425,6 +426,29 @@
               <div class="section-title">Магазины (точки продаж)</div>
               <p class="hint" style="margin-bottom:14px">storeId используется как group_code при фискализации. Последний выбранный магазин запоминается.</p>
               <div id="set_stores_list"></div>
+            </div>
+          </div>
+          <div id="settings-appearance" class="settings-pane hidden">
+            <div class="card" style="max-width:640px">
+              <div class="section-title">Тема оформления</div>
+              <p class="hint" style="margin-bottom:14px">Выбор сохраняется в браузере. Для тёмной и glass логотип инвертируется.</p>
+              <div class="theme-picker" role="radiogroup" aria-label="Тема">
+                <label class="theme-option">
+                  <input type="radio" name="eklk_theme" value="light" />
+                  <span class="theme-swatch theme-swatch-light"></span>
+                  <span class="theme-label">Светлая</span>
+                </label>
+                <label class="theme-option">
+                  <input type="radio" name="eklk_theme" value="dark" />
+                  <span class="theme-swatch theme-swatch-dark"></span>
+                  <span class="theme-label">Тёмная</span>
+                </label>
+                <label class="theme-option">
+                  <input type="radio" name="eklk_theme" value="glass" />
+                  <span class="theme-swatch theme-swatch-glass"></span>
+                  <span class="theme-label">Glass</span>
+                </label>
+              </div>
             </div>
           </div>
         </div>
@@ -454,7 +478,7 @@
       </div>
     </div>
   </footer>
-  <script src="/static/js/app.js?v=20260818d"></script>
+  <script src="/static/js/app.js?v=20260818e"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
   <script data-skip-moving="true">
   (function(w,d,u){

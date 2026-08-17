@@ -9,6 +9,25 @@
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
 
+  // Тема: light | dark | glass (localStorage eklk_theme). Logo invert в CSS для dark/glass.
+  const THEME_KEY = "eklk_theme";
+  const THEMES = ["light", "dark", "glass"];
+  function getStoredTheme() {
+    const t = localStorage.getItem(THEME_KEY) || "light";
+    return THEMES.includes(t) ? t : "light";
+  }
+  function applyTheme(theme) {
+    const t = THEMES.includes(theme) ? theme : "light";
+    document.body.setAttribute("data-theme", t === "light" ? "" : t);
+    if (t === "light") document.body.removeAttribute("data-theme");
+    else document.body.setAttribute("data-theme", t);
+    localStorage.setItem(THEME_KEY, t);
+    $$('input[name="eklk_theme"]').forEach((el) => {
+      el.checked = el.value === t;
+    });
+  }
+  applyTheme(getStoredTheme());
+
   const VAT_OPTS = `
     <option value="none" selected>Без НДС</option>
     <option value="vat0">НДС 0%</option>
@@ -1806,10 +1825,19 @@
       $$(".settings-tab").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       const name = btn.dataset.settingsTab;
-      $("#settings-org").classList.toggle("hidden", name !== "org");
-      $("#settings-stores").classList.toggle("hidden", name !== "stores");
+      $("#settings-org") && $("#settings-org").classList.toggle("hidden", name !== "org");
+      $("#settings-stores") && $("#settings-stores").classList.toggle("hidden", name !== "stores");
+      $("#settings-appearance") && $("#settings-appearance").classList.toggle("hidden", name !== "appearance");
     };
   });
+
+  // Theme picker
+  $$('input[name="eklk_theme"]').forEach((el) => {
+    el.addEventListener("change", () => {
+      if (el.checked) applyTheme(el.value);
+    });
+  });
+  applyTheme(getStoredTheme());
 
   if ($("#set_refresh")) {
     $("#set_refresh").onclick = async () => {

@@ -339,3 +339,262 @@ div[class*="b24-widget"] {
 .orders-table .o-edit-btn { white-space: nowrap; }
 .r-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
 .r-head .r-title { font-weight: 700; margin-right: auto; }
+
+
+/* ========== Темы: light (default) | dark | glass ========== */
+/* data-theme на <body>; логотип инвертируется для dark/glass */
+
+body[data-theme="dark"] {
+  --bg: #0b1220;
+  --surface: #111827;
+  --surface2: #1a2332;
+  --border: #2a3548;
+  --text: #e8eef7;
+  --muted: #94a3b8;
+  --accent: #34d399;
+  --accent-hover: #10b981;
+  --primary: #60a5fa;
+  --danger: #f87171;
+  --shadow: 0 1px 3px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+body[data-theme="glass"] {
+  --bg: transparent;
+  --surface: rgba(255, 255, 255, 0.12);
+  --surface2: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.22);
+  --text: #f1f5f9;
+  --muted: #cbd5e1;
+  --accent: #34d399;
+  --accent-hover: #10b981;
+  --primary: #7dd3fc;
+  --danger: #fb7185;
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  color-scheme: dark;
+}
+
+body[data-theme="glass"] {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(56, 189, 248, 0.35), transparent 55%),
+    radial-gradient(900px 500px at 90% 10%, rgba(52, 211, 153, 0.28), transparent 50%),
+    radial-gradient(800px 500px at 50% 100%, rgba(167, 139, 250, 0.22), transparent 45%),
+    linear-gradient(160deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+body[data-theme="dark"] .header,
+body[data-theme="glass"] .header {
+  background: var(--surface);
+  border-bottom-color: var(--border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+body[data-theme="glass"] .header {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+body[data-theme="dark"] .card,
+body[data-theme="glass"] .card,
+body[data-theme="dark"] .aside-card,
+body[data-theme="glass"] .aside-card {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+body[data-theme="glass"] .card,
+body[data-theme="glass"] .aside-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+body[data-theme="dark"] input,
+body[data-theme="dark"] select,
+body[data-theme="dark"] textarea,
+body[data-theme="glass"] input,
+body[data-theme="glass"] select,
+body[data-theme="glass"] textarea {
+  background: var(--surface2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+body[data-theme="dark"] .nav button.active,
+body[data-theme="dark"] .nav button:hover,
+body[data-theme="glass"] .nav button.active,
+body[data-theme="glass"] .nav button:hover {
+  background: rgba(52, 211, 153, 0.15);
+  color: #6ee7b7;
+}
+
+body[data-theme="dark"] .btn-secondary,
+body[data-theme="glass"] .btn-secondary {
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+body[data-theme="dark"] .btn-secondary:hover,
+body[data-theme="glass"] .btn-secondary:hover {
+  background: var(--border);
+}
+
+body[data-theme="dark"] .orders-table tr:hover,
+body[data-theme="glass"] .orders-table tr:hover {
+  background: rgba(52, 211, 153, 0.08);
+}
+
+body[data-theme="dark"] .orders-table tr.active,
+body[data-theme="glass"] .orders-table tr.active {
+  background: rgba(52, 211, 153, 0.18);
+}
+
+body[data-theme="dark"] .orders-table th,
+body[data-theme="glass"] .orders-table th {
+  background: var(--surface2);
+  color: var(--muted);
+  border-color: var(--border);
+}
+
+body[data-theme="dark"] .orders-table td,
+body[data-theme="glass"] .orders-table td {
+  border-color: var(--border);
+}
+
+body[data-theme="dark"] .app-footer,
+body[data-theme="glass"] .app-footer {
+  background: var(--surface);
+  border-top-color: var(--border);
+}
+
+body[data-theme="glass"] .app-footer {
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(12px);
+}
+
+body[data-theme="dark"] .pay-row,
+body[data-theme="glass"] .pay-row {
+  background: var(--surface2);
+  border-color: var(--border);
+}
+
+body[data-theme="dark"] .clone-banner,
+body[data-theme="glass"] .clone-banner {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(96, 165, 250, 0.4);
+  color: #bfdbfe;
+}
+
+body[data-theme="dark"] .warn-box,
+body[data-theme="glass"] .warn-box {
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+body[data-theme="dark"] .warn-box.error,
+body[data-theme="glass"] .warn-box.error {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #fecaca;
+}
+
+body[data-theme="dark"] .items-table th,
+body[data-theme="glass"] .items-table th {
+  color: var(--muted);
+  border-bottom-color: var(--border);
+}
+
+body[data-theme="dark"] .result-box,
+body[data-theme="glass"] .result-box {
+  background: #020617;
+  color: #e2e8f0;
+}
+
+body[data-theme="dark"] .settings-tab.active,
+body[data-theme="glass"] .settings-tab.active {
+  background: rgba(52, 211, 153, 0.15);
+  color: #6ee7b7;
+}
+
+/* Инверсия логотипа для тёмной и glass */
+body[data-theme="dark"] .header-logo,
+body[data-theme="dark"] .login-logo,
+body[data-theme="glass"] .header-logo,
+body[data-theme="glass"] .login-logo {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Login card на dark/glass */
+body[data-theme="dark"] .login-card,
+body[data-theme="glass"] .login-card {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+body[data-theme="glass"] .login-card {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Theme picker UI */
+.theme-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.theme-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface2);
+  min-width: 100px;
+  margin: 0 !important;
+  transition: border-color .15s, box-shadow .15s;
+}
+.theme-option:hover {
+  border-color: var(--accent);
+}
+.theme-option:has(input:checked) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.35);
+}
+.theme-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.theme-swatch {
+  width: 56px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.theme-swatch-light {
+  background: linear-gradient(135deg, #f4f6f9 40%, #fff 40%);
+}
+.theme-swatch-dark {
+  background: linear-gradient(135deg, #0b1220 40%, #1a2332 40%);
+}
+.theme-swatch-glass {
+  background:
+    linear-gradient(135deg, rgba(56,189,248,.4), rgba(52,211,153,.35)),
+    linear-gradient(160deg, #0f172a, #1e293b);
+}
+.theme-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text);
+}
