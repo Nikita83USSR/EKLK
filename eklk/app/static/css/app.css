@@ -168,7 +168,7 @@ input.invalid, select.invalid {
   .orders-layout { grid-template-columns: 1fr; }
 }
 .orders-filters { margin-bottom: 14px; }
-.orders-table-wrap { overflow-x: auto; max-height: 560px; overflow-y: auto; }
+.orders-table-wrap { overflow-x: auto; } /* без внутреннего вертикального скролла — список растёт вниз */
 .orders-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
 .orders-table th {
   text-align: left;

@@ -1503,7 +1503,7 @@
 
   // ---- Orders list ----
   let ordersOffset = 0;
-  let ordersLimit = 30;
+  let ordersLimit = 25;
   let ordersSelectedId = null;
 
   function toIsoLocal(val) {
@@ -1606,7 +1606,7 @@
     const list = $("#o_list");
     if (!list) return;
     list.innerHTML = `<p class="hint">Загрузка…</p>`;
-    ordersLimit = parseInt(($("#o_limit") && $("#o_limit").value) || "30", 10);
+    ordersLimit = parseInt(($("#o_limit") && $("#o_limit").value) || "25", 10);
     const body = {
       offset: ordersOffset,
       limit: ordersLimit,
@@ -1780,7 +1780,7 @@
         if ($("#o_types")) $("#o_types").value = "";
         if ($("#o_since")) $("#o_since").value = "";
         if ($("#o_until")) $("#o_until").value = "";
-        if ($("#o_limit")) $("#o_limit").value = "30";
+        if ($("#o_limit")) $("#o_limit").value = "25";
         ordersOffset = 0;
         loadOrders();
       };
