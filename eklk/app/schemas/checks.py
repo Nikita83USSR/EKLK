@@ -14,6 +14,20 @@ class CheckItemIn(BaseModel):
     measure: int = Field(default=0)
     is_agent: bool = Field(default=False, description="Применить agent_info к этой позиции")
 
+    @field_validator("quantity")
+    @classmethod
+    def quantity_thousandths(cls, v: float) -> float:
+        """Atol/FFD: quantity precision — тысячные (0.001), не мельче."""
+        if v is None or v <= 0:
+            raise ValueError("Количество должно быть > 0")
+        rounded = round(v * 1000) / 1000
+        if abs(v - rounded) > 1e-9:
+            raise ValueError(
+                "Количество: точность не мельче тысячной (пример 1.000 или 1.001), сейчас "
+                + str(v)
+            )
+        return rounded
+
 
 class ClientIn(BaseModel):
     name: Optional[str] = None

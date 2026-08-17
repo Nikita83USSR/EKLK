@@ -253,6 +253,23 @@
     applyFirmToSettings();
   }
 
+  /** Quantity: Atol/FFD — не более 3 знаков после запятой (тысячные). */
+  function normalizeQty(raw) {
+    if (raw === "" || raw == null) return null;
+    const n = parseFloat(String(raw).replace(",", "."));
+    if (!isFinite(n) || n <= 0) return null;
+    const rounded = Math.round(n * 1000) / 1000;
+    // отклоняем значения с точностью тоньше 0.001
+    if (Math.abs(n - rounded) > 1e-9) return null;
+    return rounded;
+  }
+
+  function formatQty(n) {
+    if (n == null || !isFinite(n)) return "";
+    // до 3 знаков, без лишних нулей справа кроме .000 стиля для целых оставляем 1.000
+    return (Math.round(n * 1000) / 1000).toFixed(3);
+  }
+
   /** Normalize phone in UI the same way as backend: +7XXXXXXXXXX */
   function normalizePhoneUI(phone) {
     if (!phone) return "";
@@ -347,9 +364,19 @@
         markField(row.querySelector(".it-method"), true);
       }
       const price = parseFloat(row.querySelector(".it-price").value) || 0;
-      const qty = parseFloat(row.querySelector(".it-qty").value) || 0;
-      if (price < 0 || qty <= 0) {
-        issues.push(`Позиция ${n}: цена и количество должны быть > 0`);
+      const qtyRaw = row.querySelector(".it-qty") && row.querySelector(".it-qty").value;
+      const qty = normalizeQty(qtyRaw);
+      if (price < 0) {
+        issues.push(`Позиция ${n}: цена должна быть ≥ 0`);
+        markField(row.querySelector(".it-price"), false);
+      }
+      if (qty == null) {
+        issues.push(
+          `Позиция ${n}: количество — минимум 0.001, точность не мельче тысячной (пример: 1.000 или 1.001)`
+        );
+        markField(row.querySelector(".it-qty"), false, "Точность: тысячные (0.001)");
+      } else {
+        markField(row.querySelector(".it-qty"), true);
       }
     });
     // payments sum vs items
@@ -385,7 +412,13 @@
         detail: s,
       };
     }
-    return { main: s, detail: "" };
+    if (/quantity|количеств|0\.001|thousand|decimal|scale|precision/i.test(s)) {
+      return {
+        main: "Количество: допустима точность до тысячных (пример 1.000 или 1.001), не мельче.",
+        detail: s,
+      };
+    }
+    return { main: s || "Ошибка запроса", detail: "" };
   }
 
   // Clone-from-order state
@@ -765,6 +798,19 @@
           syncAgentBoxFromItems();
         }
       };
+      // количество: только тысячные; на blur нормализуем или подсвечиваем ошибку
+      if (el.classList.contains("it-qty")) {
+        el.addEventListener("blur", () => {
+          const n = normalizeQty(el.value);
+          if (n == null) {
+            markField(el, false, "Мин. 0.001, шаг 0.001");
+          } else {
+            el.value = formatQty(n);
+            markField(el, true);
+            onChange && onChange();
+          }
+        });
+      }
     });
     // initial constraint sync
     tb.querySelectorAll(".item-row").forEach(syncObjectOptionsForRow);
@@ -780,7 +826,7 @@
   function collectItems(tbodyId) {
     return $$(`#${tbodyId} .item-row`).map((row) => {
       const price = parseFloat(row.querySelector(".it-price").value) || 0;
-      const quantity = parseFloat(row.querySelector(".it-qty").value) || 1;
+      const quantity = normalizeQty(row.querySelector(".it-qty").value) || 1;
       const agentCb = row.querySelector(".it-agent");
       return {
         name: (row.querySelector(".it-name").value || "").trim() || "Товар",
@@ -1220,6 +1266,19 @@
     if (!$("#c_email").value.trim() && !($("#c_phone") && $("#c_phone").value.trim())) {
       issues.push("Укажите email или телефон покупателя");
     }
+    $$("#c_items .item-row").forEach((row, idx) => {
+      const qEl = row.querySelector(".it-qty");
+      if (!qEl) return;
+      const n = normalizeQty(qEl.value);
+      if (n == null) {
+        issues.push(
+          `Позиция ${idx + 1}: количество — минимум 0.001, точность не мельче тысячной (не 1.0001)`
+        );
+        markField(qEl, false, "Точность: тысячные");
+      } else {
+        qEl.value = formatQty(n);
+      }
+    });
     if (total <= 0) issues.push("Сумма товаров должна быть больше 0");
     const payTotal = payments.reduce((s, p) => s + p.sum, 0);
     if (Math.abs(payTotal - total) > 0.009) {
@@ -1339,8 +1398,16 @@
       sourceExternalId = null;
       setCloneBanner();
     } catch (e) {
-      const f = friendlyApiError(e.message);
-      showAlert(f.main + (f.detail ? " Подробнее: " + f.detail : ""));
+      console.error("create check failed", e);
+      const raw = (e && e.message) ? e.message : String(e || "Неизвестная ошибка");
+      const f = friendlyApiError(raw);
+      const text = (f.main || raw) + (f.detail ? " Подробнее: " + f.detail : "");
+      showAlert(text || "Ошибка создания чека");
+      const warn = $("#sum_warn");
+      if (warn) {
+        warn.className = "warn-box error";
+        warn.textContent = text || "Ошибка создания чека";
+      }
     } finally {
       setLoading(btn, false, sourceDocumentId ? "Создать новый документ" : "Создать чек");
     }
