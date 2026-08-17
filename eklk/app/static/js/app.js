@@ -642,12 +642,8 @@
 
     setCloneBanner();
     updateCreateSummary();
-    // switch to create tab
-    $$(".nav button[data-tab]").forEach((b) => b.classList.remove("active"));
-    const tabBtn = document.querySelector('.nav button[data-tab="create"]');
-    if (tabBtn) tabBtn.classList.add("active");
-    $$(".tab-panel").forEach((p) => p.classList.add("hidden"));
-    if ($("#tab-create")) $("#tab-create").classList.remove("hidden");
+    // switch to create tab (URL /create)
+    if (typeof showTab === "function") showTab("create", true);
     showAlert(
       "Форма заполнена из чека № " + sourceDocumentId + ". Исходный документ не изменится — будет создан новый.",
       "success"
@@ -1028,6 +1024,14 @@
       });
       updateCreateSummary();
       updatePaySummary();
+      // URL-раздел: /create /payment /orders /settings (параметры — позже)
+      if (typeof showTab === "function") {
+        const tab = pathToTab(location.pathname);
+        if (location.pathname === "/" || location.pathname === "") {
+          history.replaceState({ tab: "create" }, "", "/create");
+        }
+        showTab(tab, false);
+      }
     } catch (e) {
       console.error("afterLogin", e);
       showAlert(e.message || String(e));
@@ -1117,14 +1121,54 @@
 
   $("#logoutBtn").onclick = () => logout(true);
 
+  // --- Клиентский роутинг (папки в URL) ---
+  // Разделы: /create | /payment | /orders | /settings
+  // В дальнейшем: URL-параметры (например /orders?external_id=…, /create?from=123).
+  // Вкладка «Статус» (/status) удалена — статус чека в списке/деталки.
+  const APP_TABS = ["create", "payment", "orders", "settings"];
+
+  function pathToTab(pathname) {
+    const p = String(pathname || "/").replace(/\/+$/, "") || "/";
+    if (p === "/" || p === "/create") return "create";
+    const seg = p.split("/").filter(Boolean)[0];
+    return APP_TABS.includes(seg) ? seg : "create";
+  }
+
+  function tabToPath(tab) {
+    return "/" + (APP_TABS.includes(tab) ? tab : "create");
+  }
+
+  /** Показать раздел ЛК. push=true → history.pushState */
+  function showTab(tab, push) {
+    if (!APP_TABS.includes(tab)) tab = "create";
+    $$(".nav button[data-tab]").forEach((b) => {
+      b.classList.toggle("active", b.dataset.tab === tab);
+    });
+    $$(".tab-panel").forEach((p) => p.classList.add("hidden"));
+    const panel = $("#tab-" + tab);
+    if (panel) panel.classList.remove("hidden");
+    if (tab === "orders" && typeof loadOrders === "function") {
+      try { loadOrders(); } catch (e) { console.warn(e); }
+    }
+    if (push) {
+      const path = tabToPath(tab);
+      if (location.pathname !== path) {
+        history.pushState({ tab }, "", path);
+      }
+    }
+  }
+
   $$(".nav button[data-tab]").forEach((btn) => {
     btn.onclick = () => {
-      $$(".nav button[data-tab]").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      $$(".tab-panel").forEach((p) => p.classList.add("hidden"));
-      $(`#tab-${btn.dataset.tab}`).classList.remove("hidden");
-      if (btn.dataset.tab === "orders") loadOrders();
+      const tab = btn.dataset.tab;
+      if (!APP_TABS.includes(tab)) return; // status и прочее игнорируем
+      showTab(tab, true);
     };
+  });
+
+  window.addEventListener("popstate", (ev) => {
+    const tab = (ev.state && ev.state.tab) || pathToTab(location.pathname);
+    showTab(tab, false);
   });
 
   $("#c_toggleExtra").onclick = () => {
@@ -1454,17 +1498,7 @@
     }
   };
 
-  $("#s_submit").onclick = async () => {
-    const uuid = $("#s_uuid").value.trim();
-    if (!uuid) return showAlert("Укажите UUID");
-    try {
-      renderResult($("#s_result"), await api(`/ecom/checks/${encodeURIComponent(uuid)}`));
-    } catch (e) {
-      showAlert(e.message);
-    }
-  };
-
-
+  // tab-status удалён — проверка UUID через список чеков / API
 
 
   // ---- Orders list ----

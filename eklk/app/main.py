@@ -53,6 +53,16 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "app_name": settings.app_name})
 
 
+# SPA-пути разделов ЛК (клиентский роутинг в app.js).
+# В дальнейшем: query/path-параметры (uuid, order_id, фильтры списка и т.д.).
+@app.get("/create", response_class=HTMLResponse)
+@app.get("/payment", response_class=HTMLResponse)
+@app.get("/orders", response_class=HTMLResponse)
+@app.get("/settings", response_class=HTMLResponse)
+async def spa_section(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request, "app_name": settings.app_name})
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": settings.app_name, "version": settings.app_version}

@@ -152,7 +152,7 @@ UI раньше слал 1/2/14 — это **ошибка** относитель
 - Footer: ИП Носов А.С., support@ecomkassa.ru, ссылки на оферты/docs.
 - Cache-bust: query `?v=YYYYMMDD` на css/js/logo в `index.html`.
 
-Вкладки `data-tab`: `create` | `payment` | `status` | `orders` | `settings`.
+Вкладки `data-tab` / URL: `create` | `payment` | `orders` | `settings` (раздел status удалён). Клиентский роутинг: `/create`, `/payment`, `/orders`, `/settings`.
 
 ---
 

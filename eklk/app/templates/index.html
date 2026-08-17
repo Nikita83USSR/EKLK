@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ app_name }} — Чек</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260818b" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260818c" />
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <div class="login-logo-wrap">
-        <img src="/static/img/logo.png?v=20260818b" alt="EcomKassa" class="login-logo" />
+        <img src="/static/img/logo.png?v=20260818c" alt="EcomKassa" class="login-logo" />
       </div>
       <p class="subtitle">Личный кабинет · вход учётной записью EcomKassa</p>
       <div id="loginError" class="alert alert-error hidden"></div>
@@ -29,12 +29,12 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <img src="/static/img/logo.png?v=20260818b" alt="EcomKassa" class="header-logo" />
+          <img src="/static/img/logo.png?v=20260818c" alt="EcomKassa" class="header-logo" />
         </div>
         <nav class="nav">
+          <!-- URL: /create /payment /orders /settings (см. app.js route) -->
           <button type="button" class="active" data-tab="create">Чек</button>
           <button type="button" data-tab="payment">Ссылка на оплату</button>
-          <button type="button" data-tab="status">Статус</button>
           <button type="button" data-tab="orders">Список чеков</button>
           <button type="button" data-tab="settings">Настройки</button>
         </nav>
@@ -329,18 +329,8 @@
         </div>
       </section>
 
-      <!-- STATUS -->
-      <section id="tab-status" class="tab-panel hidden">
-        <div class="card" style="max-width:640px">
-          <div class="section-title">Статус чека / счёта</div>
-          <label>UUID</label>
-          <input id="s_uuid" placeholder="113628140" />
-          <button type="button" class="btn mt-2" id="s_submit">Проверить</button>
-          <div id="s_result" class="hidden mt-3"></div>
-        </div>
-      </section>
+      <!-- tab-status удалён: статус смотрим в «Список чеков» / деталке -->
 
-      
       <!-- ORDERS LIST -->
       <section id="tab-orders" class="tab-panel hidden">
         <div class="orders-layout">
@@ -462,7 +452,7 @@
       </div>
     </div>
   </footer>
-  <script src="/static/js/app.js?v=20260818b"></script>
+  <script src="/static/js/app.js?v=20260818c"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
   <script data-skip-moving="true">
   (function(w,d,u){
