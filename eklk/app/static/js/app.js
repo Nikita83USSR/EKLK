@@ -4,17 +4,18 @@
   let paymentTypes = [];
   let groupCode = localStorage.getItem("eklk_group") || "";
   let firmData = null; // { firm_id, firm_name, tax_identity, tax_variant, stores: [...] }
+  let createAttempted = false; // contact error only after submit attempt
 
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
 
   const VAT_OPTS = `
-    <option value="none">Без НДС</option>
+    <option value="none" selected>Без НДС</option>
     <option value="vat0">НДС 0%</option>
     <option value="vat5">НДС 5%</option>
     <option value="vat7">НДС 7%</option>
     <option value="vat10">НДС 10%</option>
-    <option value="vat22" selected>НДС 22%</option>
+    <option value="vat22">НДС 22%</option>
     <option value="vat20">НДС 20% (старая)</option>
     <option value="vat105">НДС 5/105</option>
     <option value="vat107">НДС 7/107</option>
@@ -24,8 +25,8 @@
 
   const OBJECT_OPTS = `
     <option value="1">Товар</option>
-    <option value="3">Услуга</option>
-    <option value="4">Работа</option>
+    <option value="4">Услуга</option>
+    <option value="3">Работа</option>
     <option value="10">Платёж</option>
     <option value="11">Агентское вознаграждение</option>
     <option value="12">Составной предмет расчёта</option>
@@ -39,6 +40,24 @@
     <option value="partial_payment">Частичный расчёт</option>
     <option value="credit">Передача в кредит</option>
     <option value="credit_payment">Оплата кредита</option>`;
+
+  // Atol Online v5 / ФФД 1.2 measure (тег 2108). 0 = шт
+  const MEASURE_OPTS = `
+    <option value="0" selected>шт</option>
+    <option value="10">г</option>
+    <option value="11">кг</option>
+    <option value="12">т</option>
+    <option value="20">см</option>
+    <option value="21">дм</option>
+    <option value="22">м</option>
+    <option value="40">мл</option>
+    <option value="41">л</option>
+    <option value="42">м³</option>
+    <option value="50">кВт·ч</option>
+    <option value="70">сутки</option>
+    <option value="71">час</option>
+    <option value="72">мин</option>
+    <option value="255">иное</option>`;
 
   const FISCAL_PAY = `
     <option value="0">Наличными</option>
@@ -263,8 +282,9 @@
   // 1105 = признак способа расчёта; UI must block bad combos before API.
   // object: 1 товар, 3 услуга, 4 работа, 10 платёж, 11 агент.вознагр., 12 составной, 13 иной
   const OBJECT_BY_METHOD = {
+    // FFD 1.2: 1=товар, 3=работа, 4=услуга, 10=платёж, ...
     full_payment:     [1, 3, 4, 10, 11, 12, 13],
-    full_prepayment:  [10, 12, 13],          // предоплата 100% — не «товар» (1) на Atol → 1105
+    full_prepayment:  [1, 3, 4, 10, 11, 12, 13], // предоплата 100% — как полный расчёт
     prepayment:       [10, 12, 13],
     advance:          [10, 13],              // аванс — платёж
     partial_payment:  [1, 3, 4, 10, 11, 12, 13],
@@ -272,7 +292,7 @@
     credit_payment:   [10, 13],
   };
   const OBJECT_LABELS = {
-    1: "Товар", 3: "Услуга", 4: "Работа", 10: "Платёж",
+    1: "Товар", 3: "Работа", 4: "Услуга", 10: "Платёж",
     11: "Агентское вознаграждение", 12: "Составной предмет", 13: "Иной предмет",
   };
   const METHOD_LABELS = {
@@ -406,10 +426,10 @@
   }
 
   function mapAtolVat(v) {
-    if (!v) return "vat22";
+    if (!v) return "none";
     if (typeof v === "string") return v;
     if (v.type) return v.type;
-    return "vat22";
+    return "none";
   }
 
   function mapAtolMethod(m) {
@@ -490,6 +510,11 @@
           row.querySelector(".it-name").value = name;
           row.querySelector(".it-price").value = money(price);
           row.querySelector(".it-qty").value = qty;
+          const measEl = row.querySelector(".it-measure");
+          if (measEl && it.measure != null) {
+            const mv = String(it.measure);
+            if ([...measEl.options].some((o) => o.value === mv)) measEl.value = mv;
+          }
           const vat = mapAtolVat(it.vat || it.vat_type);
           const vatEl = row.querySelector(".it-vat");
           if (vatEl && [...vatEl.options].some((o) => o.value === vat)) vatEl.value = vat;
@@ -692,6 +717,7 @@
       <td><input class="it-name" placeholder="Товар или услуга" value="Товар" /></td>
       <td><input class="it-price" type="number" step="0.01" min="0" value="0.00" /></td>
       <td><input class="it-qty" type="number" step="0.001" min="0.001" value="1.000" /></td>
+      <td><select class="it-measure">${MEASURE_OPTS}</select></td>
       <td><select class="it-vat">${VAT_OPTS}</select></td>
       <td><select class="it-object">${OBJECT_OPTS}</select></td>
       <td><select class="it-method">${METHOD_OPTS}</select></td>
@@ -762,6 +788,7 @@
         quantity,
         sum: Math.round(price * quantity * 100) / 100,
         vat_type: row.querySelector(".it-vat").value,
+        measure: parseInt((row.querySelector(".it-measure") || {}).value, 10) || 0,
         payment_object: parseInt(row.querySelector(".it-object").value, 10) || 1,
         payment_method: row.querySelector(".it-method").value,
         is_agent: !!(agentCb && agentCb.checked),
@@ -818,10 +845,16 @@
     const issues = [];
 
     const hasContact = !!(emailVal || phoneRaw);
+    // Показывать ошибку контакта только после попытки создания (createAttempted)
     if (!hasContact) {
-      issues.push("Укажите email или телефон покупателя");
-      markField($("#c_email"), false, "Нужен email или телефон");
-      markField($("#c_phone"), false, "Нужен email или телефон");
+      if (createAttempted) {
+        issues.push("Укажите email или телефон покупателя");
+        markField($("#c_email"), false, "Нужен email или телефон");
+        markField($("#c_phone"), false, "Нужен email или телефон");
+      } else {
+        markField($("#c_email"), true);
+        markField($("#c_phone"), true);
+      }
     } else {
       if (emailVal && (emailVal.indexOf("@") < 1 || !emailVal.split("@")[1] || emailVal.split("@")[1].indexOf(".") < 0)) {
         issues.push("Некорректный email");
@@ -1140,6 +1173,7 @@
   $("#c_reset").onclick = () => {
     $("#c_result").classList.add("hidden");
     $("#c_email").value = "";
+    createAttempted = false;
     updateCreateSummary();
   };
 
@@ -1148,6 +1182,7 @@
     if (btn.dataset.busy === "1") return; // already sending
     btn.dataset.label = sourceDocumentId ? "Создать новый документ" : "Создать чек";
 
+    createAttempted = true; // now show contact / required-field errors
     // Final UI validation before send
     updateCreateSummary();
     const comboIssues = validateCreateCombinations();

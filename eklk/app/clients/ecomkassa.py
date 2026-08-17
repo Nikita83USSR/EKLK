@@ -412,7 +412,7 @@ class EcomKassaClient:
             price = to_rubles(it["price"])
             qty = float(it.get("quantity", 1))
             sum_val = to_rubles(it.get("sum", price * qty))
-            vat_type = it.get("vat_type") or it.get("vat", {}).get("type") or "vat20"
+            vat_type = it.get("vat_type") or it.get("vat", {}).get("type") or "none"
             prepared = {
                 "name": it["name"],
                 "price": price,
@@ -522,7 +522,7 @@ class EcomKassaClient:
                 "measure": it.get("measure", 0),
                 "payment_method": it.get("payment_method", "full_payment"),
                 "payment_object": it.get("payment_object", 1),
-                "vat": {"type": it.get("vat_type") or "vat20"},
+                "vat": {"type": it.get("vat_type") or "none"},
             })
 
         body = {

@@ -8,9 +8,9 @@ class CheckItemIn(BaseModel):
     price: float = Field(..., ge=0)
     quantity: float = Field(default=1, gt=0)
     sum: Optional[float] = None
-    vat_type: str = Field(default="vat20", description="none|vat0|vat10|vat20|vat110|vat120")
+    vat_type: str = Field(default="none", description="none|vat0|vat5|vat7|vat10|vat22|vat20|vat110|vat120|...")
     payment_method: str = Field(default="full_payment")
-    payment_object: int | str = Field(default=1, description="1=commodity, 3=service, ...")
+    payment_object: int | str = Field(default=1, description="1=товар, 3=работа, 4=услуга, 10=платёж, ...")
     measure: int = Field(default=0)
     is_agent: bool = Field(default=False, description="Применить agent_info к этой позиции")
 

@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ app_name }} — Чек</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260817c" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260818a" />
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <div class="login-logo-wrap">
-        <img src="/static/img/logo.png?v=20260817bbb" alt="EcomKassa" class="login-logo" />
+        <img src="/static/img/logo.png?v=20260818a" alt="EcomKassa" class="login-logo" />
       </div>
       <p class="subtitle">Личный кабинет · вход учётной записью EcomKassa</p>
       <div id="loginError" class="alert alert-error hidden"></div>
@@ -29,7 +29,7 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <img src="/static/img/logo.png?v=20260817bbb" alt="EcomKassa" class="header-logo" />
+          <img src="/static/img/logo.png?v=20260818a" alt="EcomKassa" class="header-logo" />
         </div>
         <nav class="nav">
           <button type="button" class="active" data-tab="create">Чек</button>
@@ -142,6 +142,7 @@
                       <th class="col-name">Наименование</th>
                       <th class="col-num">Цена, руб</th>
                       <th class="col-num">Количество</th>
+                      <th class="col-sel">Ед. изм.</th>
                       <th class="col-sel">НДС</th>
                       <th class="col-sel">Предмет расчёта</th>
                       <th class="col-sel">Признак расчёта</th>
@@ -306,7 +307,7 @@
               <table class="items-table">
                 <thead>
                   <tr>
-                    <th>Наименование</th><th>Цена</th><th>Кол-во</th><th>НДС</th><th>Предмет</th><th>Признак</th><th></th>
+                    <th>Наименование</th><th>Цена</th><th>Кол-во</th><th>Ед. изм.</th><th>НДС</th><th>Предмет</th><th>Признак</th><th></th>
                   </tr>
                 </thead>
                 <tbody id="p_items"></tbody>
@@ -461,7 +462,7 @@
       </div>
     </div>
   </footer>
-  <script src="/static/js/app.js?v=20260817c"></script>
+  <script src="/static/js/app.js?v=20260818a"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
   <script data-skip-moving="true">
   (function(w,d,u){
