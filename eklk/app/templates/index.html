@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ app_name }} — Чек</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260818h" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260818i" />
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <div class="login-logo-wrap">
-        <img src="/static/img/logo.png?v=20260818h" alt="EcomKassa" class="login-logo" />
+        <img src="/static/img/logo.png?v=20260818i" alt="EcomKassa" class="login-logo" />
       </div>
       <p class="subtitle">Личный кабинет · логин с учётом регистра букв (как в EcomKassa)</p>
       <div id="loginError" class="alert alert-error hidden"></div>
@@ -29,7 +29,7 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <img src="/static/img/logo.png?v=20260818h" alt="EcomKassa" class="header-logo" />
+          <img src="/static/img/logo.png?v=20260818i" alt="EcomKassa" class="header-logo" />
         </div>
         <nav class="nav">
           <!-- URL: /create /payment /orders /settings (см. app.js route) -->
@@ -256,7 +256,7 @@
           <div>
             <div class="card">
               <div class="section-title">Параметры счёта на оплату</div>
-              <p class="hint" style="margin-bottom:12px">Онлайн-оплата: после успешной оплаты касса сформирует чек. Тип расчёта — <b>безналичный</b>.</p>
+              <p class="hint" style="margin-bottom:12px">Онлайн-оплата: после успешной оплаты касса сформирует чек. Тип оплаты в чеке — <b>безналичный</b> (онлайн-эквайринг).</p>
               <div class="row row-3">
                 <div>
                   <label>Магазин</label>
@@ -282,8 +282,6 @@
                   <label>URL успеха (необязательно)</label>
                   <input id="p_success" placeholder="https://site.ru/ok" />
                 </div>
-              </div>
-              <div class="row">
                 <div>
                   <label>Вид оплаты</label>
                   <input value="Безналичными (онлайн)" disabled />
@@ -296,23 +294,101 @@
               <div class="row">
                 <div><label>Email</label><input id="p_email" type="email" placeholder="name@example.com" /></div>
                 <div><label>Телефон</label><input id="p_phone" placeholder="+79001234567" /></div>
-                <div><label>ФИО</label><input id="p_name" placeholder="Иванов Иван" /></div>
+                <div>
+                  <label>&nbsp;</label>
+                  <button type="button" class="btn btn-secondary btn-block" id="p_toggleExtra">Ещё данные ▾</button>
+                </div>
+              </div>
+              <div id="p_extraBuyer" class="extra-buyer hidden">
+                <div class="row">
+                  <div><label>ФИО</label><input id="p_name" placeholder="Иванов Иван Иванович" /></div>
+                  <div><label>ИНН</label><input id="p_inn" placeholder="7707083893" /></div>
+                </div>
               </div>
             </div>
+
+            <div class="card">
+              <div class="section-title">Дополнительный реквизит пользователя</div>
+              <div class="checkbox-row">
+                <input type="checkbox" id="p_addProp" />
+                <label for="p_addProp">Указать дополнительный реквизит (тег 1084)</label>
+              </div>
+              <div id="p_addPropBox" class="hidden mt-2">
+                <div class="row">
+                  <div>
+                    <label>Наименование <span class="req">*</span></label>
+                    <input id="p_addPropName" placeholder="Название реквизита" maxlength="64" />
+                  </div>
+                  <div>
+                    <label>Значение <span class="req">*</span></label>
+                    <input id="p_addPropVal" placeholder="Значение реквизита" maxlength="256" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="card">
               <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
                 <span>Товарные позиции</span>
                 <button type="button" class="btn btn-sm" id="p_addItem">+ Добавить</button>
               </div>
-              <table class="items-table">
-                <thead>
-                  <tr>
-                    <th>Наименование</th><th>Цена</th><th>Кол-во</th><th>Ед. изм.</th><th>НДС</th><th>Предмет</th><th>Признак</th><th></th>
-                  </tr>
-                </thead>
-                <tbody id="p_items"></tbody>
-              </table>
+              <div style="overflow-x:auto">
+                <table class="items-table">
+                  <thead>
+                    <tr>
+                      <th class="col-name">Наименование</th>
+                      <th class="col-num">Цена, руб</th>
+                      <th class="col-num">Количество</th>
+                      <th class="col-sel">Ед. изм.</th>
+                      <th class="col-sel">НДС</th>
+                      <th class="col-sel">Предмет расчёта</th>
+                      <th class="col-sel">Признак расчёта</th>
+                      <th style="width:48px;text-align:center">Агент</th>
+                      <th class="col-act"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="p_items"></tbody>
+                </table>
+              </div>
+              <p class="hint" style="margin-top:10px">Агент отмечается <b>галочкой в строке позиции</b>. Данные поставщика применятся к отмеченным позициям.</p>
+              <div id="p_agentBox" class="extra-buyer hidden mt-2">
+                <div class="row">
+                  <div style="grid-column: 1 / -1">
+                    <label>Тип агента (тег 1222) <span class="req">*</span></label>
+                    <select id="p_agent_type">
+                      <option value="another">Другой тип агента (иной)</option>
+                      <option value="commission_agent">Комиссионер</option>
+                      <option value="attorney">Поверенный</option>
+                      <option value="paying_agent">Платёжный агент</option>
+                      <option value="paying_subagent">Платёжный субагент</option>
+                      <option value="bank_paying_agent">Банковский платёжный агент</option>
+                      <option value="bank_paying_subagent">Банковский платёжный субагент</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="row">
+                  <div><label>Наименование поставщика <span class="req">*</span></label><input id="p_sup_name" placeholder="ООО Поставщик" /></div>
+                  <div><label>ИНН поставщика <span class="req">*</span></label><input id="p_sup_inn" placeholder="7707083893" /></div>
+                  <div><label>Телефон поставщика <span class="req">*</span></label><input id="p_sup_phones" placeholder="+79001234567" /></div>
+                </div>
+                <div id="p_agentPaying" class="hidden">
+                  <div class="row">
+                    <div><label>Операция платёжного агента</label><input id="p_pa_op" /></div>
+                    <div><label>Телефоны платёжного агента</label><input id="p_pa_phones" placeholder="+79001234567" /></div>
+                    <div><label>Телефоны оператора по приёму платежей</label><input id="p_recv_phones" placeholder="+79001234567" /></div>
+                  </div>
+                </div>
+                <div id="p_agentTransfer" class="hidden">
+                  <div class="row">
+                    <div><label>Наименование оператора перевода</label><input id="p_mt_name" /></div>
+                    <div><label>Адрес оператора перевода</label><input id="p_mt_addr" /></div>
+                    <div><label>ИНН оператора перевода</label><input id="p_mt_inn" /></div>
+                    <div><label>Телефоны оператора перевода</label><input id="p_mt_phones" placeholder="+79001234567" /></div>
+                  </div>
+                </div>
+              </div>
             </div>
+
             <div class="actions-bar">
               <button type="button" class="btn" id="p_submit">Создать ссылку на оплату</button>
             </div>
@@ -322,6 +398,7 @@
             <div class="card">
               <div class="section-title">Счёт на оплату</div>
               <div class="kv"><span class="k">Оплата</span><span class="v">Безнал (онлайн)</span></div>
+              <div class="kv"><span class="k">Позиций</span><span class="v" id="p_sum_items">0</span></div>
               <div class="total-line"><span>К оплате</span><span id="p_sum_total">0.00 ₽</span></div>
               <div class="warn-box" id="p_sum_warn">✓ Ошибок нет</div>
             </div>
@@ -478,7 +555,8 @@
       </div>
     </div>
   </footer>
-  <script src="/static/js/app.js?v=20260818h"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <script src="/static/js/app.js?v=20260818i"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
   <script data-skip-moving="true">
   (function(w,d,u){

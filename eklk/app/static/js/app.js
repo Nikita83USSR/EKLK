@@ -809,8 +809,9 @@
           syncObjectOptionsForRow(el.closest("tr"));
         }
         onChange && onChange();
-        if (tbodyId === "c_items" && el.classList.contains("it-agent")) {
-          syncAgentBoxFromItems();
+        if (el.classList.contains("it-agent")) {
+          if (tbodyId === "c_items") syncAgentBoxFromItems();
+          if (tbodyId === "p_items") syncPayAgentBoxFromItems();
         }
       };
       // количество: только тысячные; на blur нормализуем или подсвечиваем ошибку
@@ -833,9 +834,24 @@
 
   function syncAgentBoxFromItems() {
     const on = anyItemAgent("c_items");
-    $("#c_agentBox").classList.toggle("hidden", !on);
+    if ($("#c_agentBox")) $("#c_agentBox").classList.toggle("hidden", !on);
     if (on) syncAgentTypeFields();
     updateCreateSummary();
+  }
+
+  function syncPayAgentBoxFromItems() {
+    const on = anyItemAgent("p_items");
+    if ($("#p_agentBox")) $("#p_agentBox").classList.toggle("hidden", !on);
+    if (on) syncPayAgentTypeFields();
+    updatePaySummary();
+  }
+
+  function syncPayAgentTypeFields() {
+    const type = ($("#p_agent_type") && $("#p_agent_type").value) || "another";
+    const paying = ["paying_agent", "paying_subagent", "bank_paying_agent", "bank_paying_subagent"].includes(type);
+    const transfer = ["bank_paying_agent", "bank_paying_subagent"].includes(type);
+    if ($("#p_agentPaying")) $("#p_agentPaying").classList.toggle("hidden", !paying);
+    if ($("#p_agentTransfer")) $("#p_agentTransfer").classList.toggle("hidden", !transfer);
   }
 
   function collectItems(tbodyId) {
@@ -991,6 +1007,7 @@
 
   function updatePaySummary() {
     const total = itemsSum("p_items");
+    if ($("#p_sum_items")) $("#p_sum_items").textContent = String($$("#p_items .item-row").length);
     $("#p_sum_total").textContent = money(total) + " ₽";
     const warn = $("#p_sum_warn");
     if (!warn) return;
@@ -1089,22 +1106,160 @@
   }
 
   function renderResult(el, data) {
+    if (!el) return;
     el.classList.remove("hidden");
-    let html = `<div class="flex" style="margin-bottom:10px">
-      ${statusBadge(data.status || "—")}
-      <span class="badge badge-invoice">${data.kind || "—"}</span>
-      ${data.uuid ? `<code style="color:var(--muted);font-size:0.85rem">${data.uuid}</code>` : ""}
-    </div>`;
-    if (data.invoice_payload?.link) {
-      html += `<a class="link-pay" href="${data.invoice_payload.link}" target="_blank" rel="noopener">Открыть страницу оплаты →</a>`;
-      html += `<p class="hint" style="margin-top:8px">provider: ${data.invoice_payload.provider || "—"}</p>`;
+    const link = (data.invoice_payload && data.invoice_payload.link) || "";
+    const provider = (data.invoice_payload && data.invoice_payload.provider) || "";
+    let html = `<div class="result-box pay-result-box">
+      <div class="pay-result-meta">
+        <span class="badge badge-invoice">${escHtml(data.kind || "—")}</span>
+        <div style="margin-top:8px"><b>uuid:</b> ${escHtml(data.uuid || "—")}</div>
+        <div><b>status:</b> ${escHtml(data.status || "—")}</div>
+        <div><b>external_id:</b> ${escHtml(data.external_id || "—")}</div>`;
+    if (data.error) {
+      const errT = typeof data.error === "object" ? JSON.stringify(data.error) : String(data.error);
+      html += `<div class="mt-2" style="color:#fca5a5"><b>error:</b> ${escHtml(errT)}</div>`;
     }
-    if (data.permalink) html += `<p class="mt-2"><a href="${data.permalink}" target="_blank">Permalink чека</a></p>`;
+    if (provider) {
+      html += `<p class="hint" style="margin-top:8px">Провайдер: ${escHtml(provider)}</p>`;
+    }
+    html += `</div>`;
+    if (link) {
+      html += `<div class="pay-link-panel">
+        <label class="pay-link-label">Ссылка на оплату</label>
+        <div class="pay-link-row">
+          <input type="text" class="pay-link-input" id="pay_link_input" readonly value="${escHtml(link)}" />
+          <button type="button" class="btn btn-secondary btn-sm" id="pay_link_copy">Копировать</button>
+        </div>
+        <div class="pay-share-row">
+          <button type="button" class="btn btn-secondary btn-sm" id="pay_share_max">Поделиться в Макс</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="pay_share_vk">Поделиться ВКонтакте</button>
+        </div>
+        <div class="pay-qr-wrap">
+          <canvas id="pay_qr_canvas" width="200" height="200"></canvas>
+          <div class="pay-qr-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="pay_qr_download">Скачать QR</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="pay_qr_share">Поделиться QR</button>
+          </div>
+        </div>
+      </div>`;
+    }
+    if (data.permalink) {
+      html += `<p class="mt-2"><a href="${escHtml(data.permalink)}" target="_blank" rel="noopener">Ссылка на предчек</a></p>`;
+    }
     if (data.payload) {
-      html += `<p class="hint mt-2">ФД: ${data.payload.fiscal_document_number ?? "—"} · ФП: ${data.payload.fiscal_document_attribute ?? "—"} · сумма: ${data.payload.total ?? "—"}</p>`;
+      html += `<p class="hint mt-2">ФД: ${escHtml(data.payload.fiscal_document_number ?? "—")} · ФП: ${escHtml(data.payload.fiscal_document_attribute ?? "—")} · сумма: ${escHtml(data.payload.total ?? "—")}</p>`;
     }
-    html += `<div class="result-box">${JSON.stringify(data.raw || data, null, 2)}</div>`;
+    html += `</div>`;
     el.innerHTML = html;
+    if (link) bindPayLinkActions(link);
+  }
+
+  function bindPayLinkActions(link) {
+    const copyBtn = $("#pay_link_copy");
+    const input = $("#pay_link_input");
+    if (copyBtn && input) {
+      copyBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(link);
+          copyBtn.textContent = "Скопировано";
+          setTimeout(() => { copyBtn.textContent = "Копировать"; }, 1500);
+        } catch (e) {
+          input.select();
+          document.execCommand("copy");
+          copyBtn.textContent = "Скопировано";
+          setTimeout(() => { copyBtn.textContent = "Копировать"; }, 1500);
+        }
+      };
+      input.onclick = () => { input.select(); };
+    }
+    const maxBtn = $("#pay_share_max");
+    if (maxBtn) {
+      maxBtn.onclick = async () => {
+        const text = "Ссылка на оплату: " + link;
+        if (navigator.share) {
+          try {
+            await navigator.share({ title: "Ссылка на оплату", text, url: link });
+            return;
+          } catch (e) { /* cancel or fail → fallback */ }
+        }
+        try {
+          await navigator.clipboard.writeText(link);
+          showAlert("Ссылка скопирована — вставьте в чат Макс", "success");
+        } catch (e) {
+          showAlert("Скопируйте ссылку вручную");
+        }
+        // Открыть веб-Макс (публичного share URL нет)
+        window.open("https://web.max.ru/", "_blank", "noopener");
+      };
+    }
+    const vkBtn = $("#pay_share_vk");
+    if (vkBtn) {
+      vkBtn.onclick = () => {
+        const u = "https://vk.com/share.php?url=" + encodeURIComponent(link) + "&title=" + encodeURIComponent("Ссылка на оплату");
+        window.open(u, "_blank", "noopener,width=600,height=500");
+      };
+    }
+    const canvas = $("#pay_qr_canvas");
+    if (canvas && typeof QRCode !== "undefined") {
+      QRCode.toCanvas(canvas, link, { width: 200, margin: 2, color: { dark: "#0f172a", light: "#ffffff" } }, (err) => {
+        if (err) console.warn("QR error", err);
+      });
+    } else if (canvas) {
+      // fallback image API
+      const img = document.createElement("img");
+      img.alt = "QR";
+      img.width = 200;
+      img.height = 200;
+      img.src = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(link);
+      canvas.replaceWith(img);
+      img.id = "pay_qr_img";
+    }
+    const dl = $("#pay_qr_download");
+    if (dl) {
+      dl.onclick = () => {
+        const c = $("#pay_qr_canvas");
+        const im = $("#pay_qr_img");
+        let href = "";
+        if (c && c.toDataURL) href = c.toDataURL("image/png");
+        else if (im) href = im.src;
+        if (!href) return;
+        const a = document.createElement("a");
+        a.href = href;
+        a.download = "payment-qr.png";
+        a.click();
+      };
+    }
+    const qrShare = $("#pay_qr_share");
+    if (qrShare) {
+      qrShare.onclick = async () => {
+        const c = $("#pay_qr_canvas");
+        try {
+          if (c && navigator.share && c.toBlob) {
+            c.toBlob(async (blob) => {
+              if (!blob) return;
+              const file = new File([blob], "payment-qr.png", { type: "image/png" });
+              try {
+                await navigator.share({ title: "QR оплаты", text: link, files: [file] });
+              } catch (e) {
+                try {
+                  await navigator.share({ title: "QR оплаты", text: link, url: link });
+                } catch (e2) {
+                  showAlert("Скопируйте ссылку или скачайте QR");
+                }
+              }
+            });
+          } else if (navigator.share) {
+            await navigator.share({ title: "Ссылка на оплату", text: link, url: link });
+          } else {
+            await navigator.clipboard.writeText(link);
+            showAlert("Ссылка скопирована", "success");
+          }
+        } catch (e) {
+          showAlert("Не удалось поделиться");
+        }
+      };
+    }
   }
 
   // Events
@@ -1263,7 +1418,27 @@
     updatePaySummary();
   };
 
-  ["p_email", "p_phone"].forEach((id) => {
+  if ($("#p_toggleExtra")) {
+    $("#p_toggleExtra").onclick = () => {
+      const box = $("#p_extraBuyer");
+      if (!box) return;
+      box.classList.toggle("hidden");
+      $("#p_toggleExtra").textContent = box.classList.contains("hidden") ? "Ещё данные ▾" : "Скрыть ▴";
+    };
+  }
+  if ($("#p_addProp")) {
+    $("#p_addProp").onchange = () => {
+      if ($("#p_addPropBox")) $("#p_addPropBox").classList.toggle("hidden", !$("#p_addProp").checked);
+    };
+  }
+  if ($("#p_agent_type")) {
+    $("#p_agent_type").addEventListener("change", () => {
+      syncPayAgentTypeFields();
+      updatePaySummary();
+    });
+  }
+
+  ["p_email", "p_phone", "p_name", "p_inn"].forEach((id) => {
     const el = $("#" + id);
     if (el) el.oninput = el.onchange = updatePaySummary;
   });
@@ -1494,6 +1669,20 @@
       phoneNorm = normalizePhoneUI(phoneRaw);
       if (!phoneNorm) return showAlert("Телефон: нужен формат +79001234567");
     }
+    // qty precision
+    for (let i = 0; i < items.length; i++) {
+      const row = $$("#p_items .item-row")[i];
+      if (!row) continue;
+      const qEl = row.querySelector(".it-qty");
+      const n = normalizeQty(qEl && qEl.value);
+      if (n == null) {
+        return showAlert("Позиция " + (i + 1) + ": количество — минимум 0.001, шаг 0.001");
+      }
+      qEl.value = formatQty(n);
+      items[i].quantity = n;
+      items[i].sum = Math.round(items[i].price * n * 100) / 100;
+    }
+
     setLoading(btn, true, "Создать ссылку", "Создание ссылки…");
     try {
       const body = {
@@ -1501,14 +1690,68 @@
         items,
         payments: [{ type: parseInt($("#p_type").value, 10), sum: total }],
         client: {
-          email: $("#p_email").value || undefined,
+          email: emailP || undefined,
           phone: phoneNorm,
-          name: $("#p_name").value || undefined,
+          name: ($("#p_name") && $("#p_name").value.trim()) || undefined,
+          inn: ($("#p_inn") && $("#p_inn").value.trim()) || undefined,
         },
         sno: $("#p_sno").value,
-        success_url: $("#p_success").value || undefined,
+        success_url: ($("#p_success") && $("#p_success").value.trim()) || undefined,
         group_code: String(($("#p_store") && $("#p_store").value) || getSelectedStoreId() || ""),
       };
+
+      if ($("#p_addProp") && $("#p_addProp").checked) {
+        const n = ($("#p_addPropName") && $("#p_addPropName").value.trim()) || "";
+        const v = ($("#p_addPropVal") && $("#p_addPropVal").value.trim()) || "";
+        if (!n || !v) {
+          showAlert("Доп. реквизит: укажите наименование и значение");
+          setLoading(btn, false, "Создать ссылку");
+          return;
+        }
+        body.additional_user_props = { name: n, value: v };
+      }
+
+      if (items.some((it) => it.is_agent)) {
+        const atype = ($("#p_agent_type") && $("#p_agent_type").value) || "another";
+        const supName = ($("#p_sup_name") && $("#p_sup_name").value.trim()) || "";
+        const supInn = ($("#p_sup_inn") && $("#p_sup_inn").value.trim()) || "";
+        const supPhones = ($("#p_sup_phones") && $("#p_sup_phones").value.trim()) || "";
+        if (!supName || !supInn || !supPhones) {
+          showAlert("Для агента обязательны: наименование, ИНН и телефон поставщика");
+          setLoading(btn, false, "Создать ссылку");
+          return;
+        }
+        const innCheck = validateInnValue(supInn);
+        if (!innCheck.ok) {
+          showAlert(innCheck.msg);
+          setLoading(btn, false, "Создать ссылку");
+          return;
+        }
+        const supPhoneNorm = normalizePhoneUI(supPhones);
+        if (!supPhoneNorm) {
+          showAlert("Телефон поставщика: формат +79001234567");
+          setLoading(btn, false, "Создать ссылку");
+          return;
+        }
+        body.agent = {
+          type: atype,
+          supplier_name: supName,
+          supplier_inn: innCheck.digits,
+          supplier_phones: supPhoneNorm,
+        };
+        if (["paying_agent", "paying_subagent", "bank_paying_agent", "bank_paying_subagent"].includes(atype)) {
+          body.agent.paying_operation = ($("#p_pa_op") && $("#p_pa_op").value.trim()) || undefined;
+          body.agent.paying_phones = ($("#p_pa_phones") && $("#p_pa_phones").value.trim()) || undefined;
+          body.agent.receive_phones = ($("#p_recv_phones") && $("#p_recv_phones").value.trim()) || undefined;
+        }
+        if (["bank_paying_agent", "bank_paying_subagent"].includes(atype)) {
+          body.agent.transfer_name = ($("#p_mt_name") && $("#p_mt_name").value.trim()) || undefined;
+          body.agent.transfer_address = ($("#p_mt_addr") && $("#p_mt_addr").value.trim()) || undefined;
+          body.agent.transfer_inn = ($("#p_mt_inn") && $("#p_mt_inn").value.trim()) || undefined;
+          body.agent.transfer_phones = ($("#p_mt_phones") && $("#p_mt_phones").value.trim()) || undefined;
+        }
+      }
+
       const data = await api("/ecom/checks", { method: "POST", body: JSON.stringify(body) });
       renderResult($("#p_result"), data);
       showAlert("Ссылка создана", "success");
@@ -1949,10 +2192,10 @@
 
     const links = [];
     if (fiscalPayload.ofd_receipt_url) {
-      links.push({ label: "Ссылка на чек", href: fiscalPayload.ofd_receipt_url });
+      links.push({ label: "Ссылка на чек ОФД", href: fiscalPayload.ofd_receipt_url });
     }
     if (fiscal && fiscal.permalink) {
-      links.push({ label: "Ссылка на заказ", href: fiscal.permalink });
+      links.push({ label: "Ссылка на предчек", href: fiscal.permalink });
     }
     if (links.length) {
       html += `<div class="r-section-title">Дополнительно</div>`;
