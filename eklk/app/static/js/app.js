@@ -1110,40 +1110,17 @@
     el.classList.remove("hidden");
     const link = (data.invoice_payload && data.invoice_payload.link) || "";
     const provider = (data.invoice_payload && data.invoice_payload.provider) || "";
-    let html = `<div class="result-box pay-result-box">
-      <div class="pay-result-meta">
-        <span class="badge badge-invoice">${escHtml(data.kind || "—")}</span>
-        <div style="margin-top:8px"><b>uuid:</b> ${escHtml(data.uuid || "—")}</div>
-        <div><b>status:</b> ${escHtml(data.status || "—")}</div>
-        <div><b>external_id:</b> ${escHtml(data.external_id || "—")}</div>`;
+    // Компактный служебный блок (не UI ссылки)
+    let html = `<div class="result-box">
+      <span class="badge badge-invoice">${escHtml(data.kind || "—")}</span>
+      <div style="margin-top:8px"><b>uuid:</b> ${escHtml(data.uuid || "—")}</div>
+      <div><b>status:</b> ${escHtml(data.status || "—")}</div>
+      <div><b>external_id:</b> ${escHtml(data.external_id || "—")}</div>`;
     if (data.error) {
       const errT = typeof data.error === "object" ? JSON.stringify(data.error) : String(data.error);
       html += `<div class="mt-2" style="color:#fca5a5"><b>error:</b> ${escHtml(errT)}</div>`;
     }
-    if (provider) {
-      html += `<p class="hint" style="margin-top:8px">Провайдер: ${escHtml(provider)}</p>`;
-    }
-    html += `</div>`;
-    if (link) {
-      html += `<div class="pay-link-panel">
-        <label class="pay-link-label">Ссылка на оплату</label>
-        <div class="pay-link-row">
-          <input type="text" class="pay-link-input" id="pay_link_input" readonly value="${escHtml(link)}" />
-          <button type="button" class="btn btn-secondary btn-sm" id="pay_link_copy">Копировать</button>
-        </div>
-        <div class="pay-share-row">
-          <button type="button" class="btn btn-secondary btn-sm" id="pay_share_max">Поделиться в Макс</button>
-          <button type="button" class="btn btn-secondary btn-sm" id="pay_share_vk">Поделиться ВКонтакте</button>
-        </div>
-        <div class="pay-qr-wrap">
-          <canvas id="pay_qr_canvas" width="200" height="200"></canvas>
-          <div class="pay-qr-actions">
-            <button type="button" class="btn btn-secondary btn-sm" id="pay_qr_download">Скачать QR</button>
-            <button type="button" class="btn btn-secondary btn-sm" id="pay_qr_share">Поделиться QR</button>
-          </div>
-        </div>
-      </div>`;
-    }
+    if (provider) html += `<p class="hint" style="margin-top:8px">Провайдер: ${escHtml(provider)}</p>`;
     if (data.permalink) {
       html += `<p class="mt-2"><a href="${escHtml(data.permalink)}" target="_blank" rel="noopener">Ссылка на предчек</a></p>`;
     }
@@ -1152,7 +1129,35 @@
     }
     html += `</div>`;
     el.innerHTML = html;
-    if (link) bindPayLinkActions(link);
+    if (link) openPayLinkModal(link, data);
+  }
+
+  function openPayLinkModal(link, data) {
+    const modal = $("#payLinkModal");
+    if (!modal) return;
+    const input = $("#pay_link_input");
+    if (input) input.value = link;
+    const meta = $("#pay_modal_meta");
+    if (meta) {
+      const parts = [];
+      if (data && data.uuid) parts.push("uuid: " + data.uuid);
+      if (data && data.invoice_payload && data.invoice_payload.provider) {
+        parts.push("провайдер: " + data.invoice_payload.provider);
+      }
+      meta.textContent = parts.join(" · ");
+    }
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+    bindPayLinkActions(link);
+  }
+
+  function closePayLinkModal() {
+    const modal = $("#payLinkModal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("modal-open");
   }
 
   function bindPayLinkActions(link) {
@@ -1181,7 +1186,7 @@
           try {
             await navigator.share({ title: "Ссылка на оплату", text, url: link });
             return;
-          } catch (e) { /* cancel or fail → fallback */ }
+          } catch (e) { /* cancel */ }
         }
         try {
           await navigator.clipboard.writeText(link);
@@ -1189,31 +1194,40 @@
         } catch (e) {
           showAlert("Скопируйте ссылку вручную");
         }
-        // Открыть веб-Макс (публичного share URL нет)
         window.open("https://web.max.ru/", "_blank", "noopener");
       };
     }
     const vkBtn = $("#pay_share_vk");
     if (vkBtn) {
       vkBtn.onclick = () => {
-        const u = "https://vk.com/share.php?url=" + encodeURIComponent(link) + "&title=" + encodeURIComponent("Ссылка на оплату");
+        const u = "https://vk.com/share.php?url=" + encodeURIComponent(link) +
+          "&title=" + encodeURIComponent("Ссылка на оплату");
         window.open(u, "_blank", "noopener,width=600,height=500");
       };
     }
     const canvas = $("#pay_qr_canvas");
     if (canvas && typeof QRCode !== "undefined") {
-      QRCode.toCanvas(canvas, link, { width: 200, margin: 2, color: { dark: "#0f172a", light: "#ffffff" } }, (err) => {
+      // clear previous
+      const ctx = canvas.getContext("2d");
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      QRCode.toCanvas(canvas, link, {
+        width: 180,
+        margin: 2,
+        color: { dark: "#0f172a", light: "#ffffff" },
+      }, (err) => {
         if (err) console.warn("QR error", err);
       });
     } else if (canvas) {
-      // fallback image API
-      const img = document.createElement("img");
-      img.alt = "QR";
-      img.width = 200;
-      img.height = 200;
-      img.src = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(link);
-      canvas.replaceWith(img);
-      img.id = "pay_qr_img";
+      let img = $("#pay_qr_img");
+      if (!img) {
+        img = document.createElement("img");
+        img.id = "pay_qr_img";
+        img.alt = "QR";
+        img.width = 180;
+        img.height = 180;
+        canvas.replaceWith(img);
+      }
+      img.src = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=" + encodeURIComponent(link);
     }
     const dl = $("#pay_qr_download");
     if (dl) {
@@ -1260,6 +1274,16 @@
         }
       };
     }
+    // close handlers
+    $$("[data-close-pay-modal]").forEach((el) => {
+      el.onclick = () => closePayLinkModal();
+    });
+    document.addEventListener("keydown", function onEsc(e) {
+      if (e.key === "Escape") {
+        closePayLinkModal();
+        document.removeEventListener("keydown", onEsc);
+      }
+    });
   }
 
   // Events

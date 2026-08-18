@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ app_name }} — Чек</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260818i" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260818j" />
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <div class="login-logo-wrap">
-        <img src="/static/img/logo.png?v=20260818i" alt="EcomKassa" class="login-logo" />
+        <img src="/static/img/logo.png?v=20260818j" alt="EcomKassa" class="login-logo" />
       </div>
       <p class="subtitle">Личный кабинет · логин с учётом регистра букв (как в EcomKassa)</p>
       <div id="loginError" class="alert alert-error hidden"></div>
@@ -29,7 +29,7 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <img src="/static/img/logo.png?v=20260818i" alt="EcomKassa" class="header-logo" />
+          <img src="/static/img/logo.png?v=20260818j" alt="EcomKassa" class="header-logo" />
         </div>
         <nav class="nav">
           <!-- URL: /create /payment /orders /settings (см. app.js route) -->
@@ -555,8 +555,38 @@
       </div>
     </div>
   </footer>
+  
+  <!-- Модальное окно: ссылка на оплату -->
+  <div id="payLinkModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-pay-modal></div>
+    <div class="modal-dialog" role="dialog" aria-labelledby="payLinkModalTitle">
+      <div class="modal-header">
+        <h3 id="payLinkModalTitle">Ссылка на оплату</h3>
+        <button type="button" class="modal-close" data-close-pay-modal aria-label="Закрыть">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="pay-link-row">
+          <input type="text" class="pay-link-input" id="pay_link_input" readonly />
+          <button type="button" class="btn btn-secondary btn-sm" id="pay_link_copy">Копировать</button>
+        </div>
+        <div class="pay-share-row">
+          <button type="button" class="btn btn-secondary btn-sm" id="pay_share_max">Макс</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="pay_share_vk">ВКонтакте</button>
+        </div>
+        <div class="pay-qr-wrap">
+          <canvas id="pay_qr_canvas" width="180" height="180"></canvas>
+          <div class="pay-qr-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="pay_qr_download">Скачать QR</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="pay_qr_share">Поделиться QR</button>
+          </div>
+        </div>
+        <p class="hint pay-modal-meta" id="pay_modal_meta"></p>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-  <script src="/static/js/app.js?v=20260818i"></script>
+  <script src="/static/js/app.js?v=20260818j"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
   <script data-skip-moving="true">
   (function(w,d,u){
