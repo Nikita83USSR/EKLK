@@ -1118,10 +1118,12 @@
       if (!userEl || !passEl) {
         throw new Error("Форма входа не загружена. Обновите страницу (Ctrl+F5).");
       }
+      // Логин EcomKassa: регистр букв сохраняем (не email-normalize)
+      const loginRaw = (userEl.value || "").trim();
       const data = await api("/auth/login", {
         method: "POST",
         body: JSON.stringify({
-          username: (userEl.value || "").trim(),
+          username: loginRaw,
           password: passEl.value || "",
         }),
       });

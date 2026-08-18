@@ -34,6 +34,7 @@ async def login(data: LoginRequest):
     Логин = учётная запись EcomKassa (email + пароль).
     Проверяем через getToken; затем загружаем профиль фирмы и магазины.
     """
+    # Регистр логина сохраняем — EcomKassa чувствителен к case (не .lower())
     login_name = data.username.strip()
     password = data.password
 

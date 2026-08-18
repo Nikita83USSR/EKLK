@@ -3,7 +3,7 @@ from typing import Optional, List, Any
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(..., min_length=2, description="Логин EcomKassa (email)")
+    username: str = Field(..., min_length=2, description="Логин EcomKassa (регистр букв сохраняется, не lower)")
     password: str = Field(..., min_length=1)
 
 
