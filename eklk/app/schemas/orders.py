@@ -39,4 +39,5 @@ class OrderSearchResponse(BaseModel):
 class OrderDetailResponse(BaseModel):
     summary: Optional[OrderListItem] = None
     atol5: Optional[dict] = None
+    fiscal: Optional[dict] = None  # fiscalorder report (payload ФД, ОФД и т.д.)
     raw_summary: Optional[dict] = None

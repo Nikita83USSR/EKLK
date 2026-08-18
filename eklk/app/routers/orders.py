@@ -126,9 +126,32 @@ async def get_order_detail(order_id: int, user: CurrentUser):
                 )
 
         summary = _map_item(summary_raw) if summary_raw else OrderListItem(order_id=order_id)
+
+        # Фискальный report (ФД, ФП, ссылка ОФД) — uuid обычно = orderId
+        fiscal = None
+        store_gc = None
+        if summary.store_id is not None:
+            store_gc = str(summary.store_id)
+        elif user.get("group_code"):
+            store_gc = str(user.get("group_code"))
+        try:
+            # временно group_code магазина чека
+            if store_gc:
+                client.group_code = store_gc
+            fiscal = await client.get_report(str(order_id))
+        except EcomKassaError as e:
+            log_action(
+                "order_fiscal_warn",
+                str(e),
+                level="warning",
+                user_id=user["username"],
+            )
+            fiscal = None
+
         return OrderDetailResponse(
             summary=summary,
             atol5=atol5,
+            fiscal=fiscal,
             raw_summary=summary_raw,
         )
     finally:

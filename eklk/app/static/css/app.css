@@ -199,10 +199,36 @@ input.invalid, select.invalid {
 .orders-detail-pane { position: sticky; top: 70px; }
 .receipt-view {
   font-size: 0.85rem;
-  background: #fafafa;
+  background: var(--surface2);
+  color: var(--text);
   border: 1px dashed var(--border);
   border-radius: 10px;
   padding: 16px;
+}
+.receipt-view .r-section-title {
+  margin: 14px 0 6px;
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.receipt-view .r-link-row {
+  margin: 6px 0;
+  font-size: 0.85rem;
+}
+.receipt-view .r-link-row a {
+  color: var(--primary);
+  word-break: break-all;
+}
+.receipt-view .r-error span:last-child {
+  color: var(--danger);
+}
+.receipt-view .r-json {
+  margin-top: 14px;
+}
+.receipt-view .r-json summary {
+  cursor: pointer;
 }
 .receipt-view .r-head {
   text-align: center;
@@ -694,4 +720,176 @@ body[data-theme="glass"] .login-wrap {
   font-size: 0.85rem;
   font-weight: 500;
   color: var(--text);
+}
+
+
+/* Receipt panel + buttons on dark/glass */
+body[data-theme="dark"] .receipt-view,
+body[data-theme="glass"] .receipt-view {
+  background: var(--surface2);
+  color: var(--text);
+  border-color: var(--border);
+}
+body[data-theme="dark"] .receipt-view .r-item-sub,
+body[data-theme="glass"] .receipt-view .r-item-sub,
+body[data-theme="dark"] .receipt-view .r-meta,
+body[data-theme="glass"] .receipt-view .r-meta,
+body[data-theme="dark"] .receipt-view .r-pay,
+body[data-theme="glass"] .receipt-view .r-pay,
+body[data-theme="dark"] .receipt-view .r-section-title,
+body[data-theme="glass"] .receipt-view .r-section-title {
+  color: var(--muted);
+}
+body[data-theme="dark"] .receipt-view .result-box,
+body[data-theme="glass"] .receipt-view .result-box {
+  background: #0b1220;
+  color: #e2e8f0;
+  border: 1px solid var(--border);
+}
+
+/* Кнопки: менее «кислотные», спокойный контраст */
+body[data-theme="dark"] .btn,
+body[data-theme="glass"] .btn {
+  background: #2f9e66;
+  color: #f0fdf4;
+}
+body[data-theme="dark"] .btn:hover,
+body[data-theme="glass"] .btn:hover {
+  background: #278a58;
+}
+body[data-theme="dark"] .btn-secondary,
+body[data-theme="glass"] .btn-secondary {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+body[data-theme="dark"] .btn-secondary:hover,
+body[data-theme="glass"] .btn-secondary:hover {
+  background: rgba(120, 140, 160, 0.18);
+  border-color: var(--input-border);
+}
+body[data-theme="dark"] .btn-danger,
+body[data-theme="glass"] .btn-danger {
+  background: #c45c5c;
+}
+body[data-theme="dark"] .link-pay,
+body[data-theme="glass"] .link-pay {
+  background: #2f9e66;
+  color: #f0fdf4 !important;
+}
+body[data-theme="dark"] .badge-status-done,
+body[data-theme="glass"] .badge-status-done {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+body[data-theme="dark"] .badge-status-paid,
+body[data-theme="glass"] .badge-status-paid {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+body[data-theme="dark"] .badge-status-wait,
+body[data-theme="glass"] .badge-status-wait {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+}
+body[data-theme="dark"] .badge-status-fail,
+body[data-theme="glass"] .badge-status-fail {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+/* === Receipt layout polish === */
+.receipt-view .r-head-actions {
+  margin-top: 10px;
+}
+.receipt-view .r-head-actions .btn {
+  font-size: 0.8rem;
+}
+.receipt-view .r-line span:first-child {
+  color: var(--muted);
+  flex-shrink: 0;
+  max-width: 48%;
+}
+.receipt-view .r-line span:last-child {
+  text-align: right;
+  word-break: break-word;
+  color: var(--text);
+}
+
+/* Soft primary buttons on dark/glass (Telegram-like) */
+body[data-theme="dark"] .btn:not(.btn-secondary):not(.btn-danger),
+body[data-theme="glass"] .btn:not(.btn-secondary):not(.btn-danger) {
+  background: #2a9d68;
+  color: #ecfdf5;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+body[data-theme="dark"] .btn:not(.btn-secondary):not(.btn-danger):hover,
+body[data-theme="glass"] .btn:not(.btn-secondary):not(.btn-danger):hover {
+  background: #248f5c;
+}
+body[data-theme="dark"] .btn-secondary,
+body[data-theme="glass"] .btn-secondary {
+  background: transparent;
+  border: 1px solid var(--input-border);
+  color: var(--text);
+}
+body[data-theme="dark"] .btn-secondary:hover,
+body[data-theme="glass"] .btn-secondary:hover {
+  background: rgba(120, 140, 160, 0.12);
+}
+
+/* Receipt: never force white paper on dark themes */
+body[data-theme="dark"] .receipt-view,
+body[data-theme="glass"] .receipt-view {
+  background: var(--surface2) !important;
+  color: var(--text) !important;
+  border: 1px dashed var(--border);
+}
+body[data-theme="dark"] .receipt-view .r-title,
+body[data-theme="glass"] .receipt-view .r-title,
+body[data-theme="dark"] .receipt-view .r-item-name,
+body[data-theme="glass"] .receipt-view .r-item-name,
+body[data-theme="dark"] .receipt-view .r-total,
+body[data-theme="glass"] .receipt-view .r-total {
+  color: var(--text) !important;
+}
+body[data-theme="dark"] .receipt-view .r-total,
+body[data-theme="glass"] .receipt-view .r-total {
+  border-top-color: var(--border);
+}
+body[data-theme="dark"] .receipt-view .r-link-row a,
+body[data-theme="glass"] .receipt-view .r-link-row a {
+  color: var(--primary);
+}
+body[data-theme="dark"] .receipt-view .badge,
+body[data-theme="glass"] .receipt-view .badge {
+  border: 1px solid transparent;
+}
+
+/* Table header sticky on dark */
+body[data-theme="dark"] .orders-table thead th,
+body[data-theme="glass"] .orders-table thead th {
+  background: var(--surface);
+  color: var(--muted);
+  border-bottom-color: var(--border);
+}
+body[data-theme="dark"] .orders-table td,
+body[data-theme="glass"] .orders-table td {
+  border-bottom-color: var(--border);
+  color: var(--text);
+}
+
+/* warn-box on dark */
+body[data-theme="dark"] .warn-box,
+body[data-theme="glass"] .warn-box {
+  background: rgba(46, 194, 126, 0.12);
+  border-color: rgba(46, 194, 126, 0.35);
+  color: #86efac;
+}
+body[data-theme="dark"] .warn-box.error,
+body[data-theme="glass"] .warn-box.error {
+  background: rgba(232, 93, 93, 0.12);
+  border-color: rgba(232, 93, 93, 0.35);
+  color: #fca5a5;
 }

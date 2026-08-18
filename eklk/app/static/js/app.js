@@ -1699,14 +1699,118 @@
     const map = {
       0: "Наличные",
       1: "Безналичные",
-      2: "Предоплата (аванс)",
-      3: "Постоплата (кредит)",
-      4: "Встречное предоставление",
+      2: "Предварительная оплата (аванс)",
+      3: "Последующая оплата (кредит)",
+      4: "Иная форма оплаты (встречное предоставление)",
     };
-    return map[t] || ("Тип " + t);
+    return map[t] != null ? map[t] : ("Тип " + t);
   }
 
-  function renderReceipt(atol5, summary) {
+  function snoLabel(s) {
+    const map = {
+      osn: "ОСН",
+      usn_income: "УСН доход",
+      usn_income_outcome: "УСН доход − расход",
+      esn: "ЕСХН",
+      patent: "ПСН",
+    };
+    return map[s] || s || "—";
+  }
+
+  function vatLabel(v) {
+    if (!v) return "—";
+    const t = typeof v === "string" ? v : (v.type || "");
+    const map = {
+      none: "Без НДС",
+      vat0: "НДС 0%",
+      vat10: "НДС 10%",
+      vat20: "НДС 20%",
+      vat22: "НДС 22%",
+      vat5: "НДС 5%",
+      vat7: "НДС 7%",
+      vat105: "НДС 10/110",
+      vat120: "НДС 20/120",
+      vat122: "НДС 22/122",
+      vat110: "НДС 10/110",
+      calculated: "НДС расчётная",
+    };
+    return map[t] || t || "—";
+  }
+
+  function measureLabel(m) {
+    const map = {
+      0: "шт", 10: "г", 11: "кг", 12: "т",
+      20: "см", 21: "дм", 22: "м",
+      30: "кв. см", 31: "кв. дм", 32: "кв. м",
+      40: "мл", 41: "л", 42: "м³",
+      50: "кВт·ч", 51: "Гкал",
+      70: "сутки", 71: "час", 72: "мин", 73: "с",
+      80: "Кбайт", 81: "Мбайт", 82: "Гбайт", 83: "Тбайт",
+      255: "иное",
+    };
+    if (m == null || m === "") return "";
+    return map[m] != null ? map[m] : ("ед. " + m);
+  }
+
+  function paymentMethodLabel(m) {
+    const map = {
+      full_payment: "Полный расчёт",
+      full_prepayment: "Предоплата 100%",
+      prepayment: "Предоплата",
+      advance: "Аванс",
+      partial_payment: "Частичный расчёт и кредит",
+      credit: "Передача в кредит",
+      credit_payment: "Оплата кредита",
+    };
+    return map[m] || m || "—";
+  }
+
+  function paymentObjectLabel(o) {
+    const map = {
+      1: "Товар", 2: "Подакцизный товар", 3: "Работа", 4: "Услуга",
+      5: "Ставка азартной игры", 6: "Выигрыш азартной игры",
+      7: "Лотерейный билет", 8: "Выигрыш лотереи", 9: "Предоставление РИД",
+      10: "Платёж", 11: "Агентское вознаграждение", 12: "Выплата",
+      13: "Иной предмет расчёта", 14: "Имущественное право",
+      15: "Внереализационный доход", 16: "Страховые взносы",
+      17: "Торговый сбор", 18: "Курортный сбор", 19: "Залог", 20: "Расход",
+      21: "Взносы на ОПС ИП", 22: "Взносы на ОПС", 23: "Взносы на ОМС ИП",
+      24: "Взносы на ОМС", 25: "Взносы на ОСС", 26: "Платёж казино",
+      27: "Выдача ДС", 30: "АТНМ", 31: "АТМ", 32: "ТНМ", 33: "ТМ",
+    };
+    if (o == null || o === "") return "—";
+    return map[o] != null ? map[o] : ("Код " + o);
+  }
+
+
+  function kindLabel(k) {
+    const map = {
+      CASH_VOUCHER_V3: "Кассовый чек",
+      CASH_VOUCHER: "Кассовый чек",
+      INVOICE: "Счёт / ссылка на оплату",
+    };
+    return map[k] || k || "—";
+  }
+
+  function fiscalStatusLabel(s) {
+    const map = {
+      done: "Фискализирован",
+      fail: "Ошибка фискализации",
+      wait: "Ожидает фискализации",
+      wait_for_callback: "Ожидает callback",
+    };
+    return map[s] || s || "—";
+  }
+
+  function escHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function renderReceipt(atol5, summary, fiscal) {
     const el = $("#o_detail");
     const ph = $("#o_detail_placeholder");
     if (!el) return;
@@ -1719,35 +1823,55 @@
     const items = receipt.items || [];
     const payments = receipt.payments || [];
     const total = receipt.total != null ? receipt.total : summary && summary.total;
-
+    const fiscalPayload = (fiscal && fiscal.payload) || {};
     const oid = summary && summary.order_id != null ? summary.order_id : ordersSelectedId;
+
     let html = `<div class="r-head">
       <div class="r-title">Кассовый чек</div>
-      <button type="button" class="btn btn-sm" id="o_detail_edit" data-order-id="${oid}">Редактировать</button>
-      <div class="r-meta">ID ${summary?.order_id ?? "—"} · ${typeLabel(summary?.order_type)} · ${statusBadge(summary?.status || "")}</div>
-      <div class="r-meta">${formatDt(summary?.updated)}</div>
-      ${atol5?.external_id ? `<div class="r-meta">ext: ${atol5.external_id}</div>` : ""}
+      <div class="r-meta">№ ${escHtml(summary?.order_id ?? "—")} · ${escHtml(typeLabel(summary?.order_type))} · ${statusBadge(summary?.status || "")}</div>
+      <div class="r-meta">${escHtml(formatDt(summary?.updated))}</div>
+      ${(atol5 && atol5.external_id) ? `<div class="r-meta">Внешний ID: ${escHtml(atol5.external_id)}</div>` : (summary?.external_id ? `<div class="r-meta">Внешний ID: ${escHtml(summary.external_id)}</div>` : "")}
+      <div class="r-head-actions">
+        <button type="button" class="btn btn-sm btn-secondary" id="o_detail_edit" data-order-id="${oid}">Редактировать</button>
+      </div>
     </div>`;
 
-    html += `<div class="r-line"><span>Магазин</span><span>${summary?.store_name || company.payment_address || "—"}</span></div>`;
-    html += `<div class="r-line"><span>ИНН</span><span>${company.inn || "—"}</span></div>`;
-    html += `<div class="r-line"><span>СНО</span><span>${company.sno || "—"}</span></div>`;
-    if (client.email || client.phone || client.name) {
-      html += `<div class="r-line"><span>Покупатель</span><span>${[client.name, client.email, client.phone].filter(Boolean).join(" · ") || "—"}</span></div>`;
+    html += `<div class="r-section-title">Организация</div>`;
+    html += `<div class="r-line"><span>Магазин</span><span>${escHtml(summary?.store_name || company.payment_address || "—")}</span></div>`;
+    if (summary?.store_id != null) {
+      html += `<div class="r-line"><span>Код магазина</span><span>${escHtml(summary.store_id)}</span></div>`;
     }
-    if (receipt.cashier) {
-      html += `<div class="r-line"><span>Кассир</span><span>${receipt.cashier}</span></div>`;
+    html += `<div class="r-line"><span>ИНН</span><span>${escHtml(company.inn || "—")}</span></div>`;
+    html += `<div class="r-line"><span>СНО</span><span>${escHtml(snoLabel(company.sno))}</span></div>`;
+    if (company.email) {
+      html += `<div class="r-line"><span>Email организации</span><span>${escHtml(company.email)}</span></div>`;
+    }
+    if (company.payment_address) {
+      html += `<div class="r-line"><span>Место расчётов</span><span>${escHtml(company.payment_address)}</span></div>`;
+    }
+    if (receipt.cashier || summary?.cashier_name) {
+      html += `<div class="r-line"><span>Кассир</span><span>${escHtml(receipt.cashier || summary.cashier_name)}</span></div>`;
     }
 
-    html += `<div style="margin:12px 0 4px;font-weight:600;font-size:0.8rem;color:var(--muted)">Позиции</div>`;
+    if (client.email || client.phone || client.name || client.inn) {
+      html += `<div class="r-section-title">Покупатель</div>`;
+      if (client.name) html += `<div class="r-line"><span>ФИО</span><span>${escHtml(client.name)}</span></div>`;
+      if (client.email) html += `<div class="r-line"><span>Email</span><span>${escHtml(client.email)}</span></div>`;
+      if (client.phone) html += `<div class="r-line"><span>Телефон</span><span>${escHtml(client.phone)}</span></div>`;
+      if (client.inn) html += `<div class="r-line"><span>ИНН покупателя</span><span>${escHtml(client.inn)}</span></div>`;
+    }
+
+    html += `<div class="r-section-title">Позиции</div>`;
     if (!items.length) {
       html += `<p class="hint">Нет позиций (или формат Atol 5 недоступен)</p>`;
     } else {
       items.forEach((it) => {
-        const vat = (it.vat && it.vat.type) || "—";
+        const meas = measureLabel(it.measure);
+        const qtyStr = (it.quantity != null ? it.quantity : 1) + (meas ? " " + meas : "");
         html += `<div class="r-item">
-          <div class="r-item-name">${it.name || "—"}</div>
-          <div class="r-item-sub">${it.quantity ?? 1} × ${formatMoney(it.price)} · ${it.payment_method || ""} · НДС ${vat}</div>
+          <div class="r-item-name">${escHtml(it.name || "—")}</div>
+          <div class="r-item-sub">${escHtml(qtyStr)} × ${formatMoney(it.price)}</div>
+          <div class="r-item-sub">${escHtml(paymentMethodLabel(it.payment_method))} · ${escHtml(paymentObjectLabel(it.payment_object))} · ${escHtml(vatLabel(it.vat))}</div>
           <div class="r-line"><span></span><span>${formatMoney(it.sum)}</span></div>
         </div>`;
       });
@@ -1755,14 +1879,96 @@
 
     html += `<div class="r-total"><span>Итого</span><span>${formatMoney(total)}</span></div>`;
     if (payments.length) {
-      html += `<div class="r-pay">Оплата: ${payments
-        .map((p) => paymentTypeLabel(p.type) + " " + formatMoney(p.sum))
-        .join("; ")}</div>`;
+      html += `<div class="r-section-title">Оплата</div>`;
+      payments.forEach((pay) => {
+        html += `<div class="r-line"><span>${escHtml(paymentTypeLabel(pay.type))}</span><span>${formatMoney(pay.sum)}</span></div>`;
+      });
     }
 
-    html += `<details style="margin-top:14px"><summary class="hint" style="cursor:pointer">JSON Atol 5</summary>
-      <div class="result-box" style="max-height:240px">${JSON.stringify(atol5 || {}, null, 2)}</div>
+    const hasFiscal =
+      fiscal &&
+      (fiscal.status ||
+        fiscalPayload.fn_number ||
+        fiscalPayload.fiscal_document_number ||
+        fiscalPayload.ofd_receipt_url);
+    if (hasFiscal) {
+      html += `<div class="r-section-title">Фискальные данные</div>`;
+      if (fiscal.status) {
+        html += `<div class="r-line"><span>Статус ФН</span><span>${escHtml(fiscalStatusLabel(fiscal.status))}</span></div>`;
+      }
+      if (fiscal.kind) {
+        html += `<div class="r-line"><span>Тип документа</span><span>${escHtml(kindLabel(fiscal.kind))}</span></div>`;
+      }
+      if (fiscal.uuid || oid) {
+        html += `<div class="r-line"><span>UUID</span><span>${escHtml(fiscal.uuid || oid)}</span></div>`;
+      }
+      if (fiscal.group_code) {
+        html += `<div class="r-line"><span>Код группы</span><span>${escHtml(fiscal.group_code)}</span></div>`;
+      }
+      if (fiscal.timestamp) {
+        html += `<div class="r-line"><span>Время ответа API</span><span>${escHtml(fiscal.timestamp)}</span></div>`;
+      }
+      if (fiscalPayload.receipt_datetime) {
+        html += `<div class="r-line"><span>Дата/время чека</span><span>${escHtml(fiscalPayload.receipt_datetime)}</span></div>`;
+      }
+      if (fiscalPayload.total != null) {
+        html += `<div class="r-line"><span>Сумма (ФД)</span><span>${formatMoney(fiscalPayload.total)}</span></div>`;
+      }
+      if (fiscalPayload.fn_number) {
+        html += `<div class="r-line"><span>Номер ФН</span><span>${escHtml(fiscalPayload.fn_number)}</span></div>`;
+      }
+      if (fiscalPayload.fiscal_document_number != null) {
+        html += `<div class="r-line"><span>Номер ФД</span><span>${escHtml(fiscalPayload.fiscal_document_number)}</span></div>`;
+      }
+      if (fiscalPayload.fiscal_document_attribute != null) {
+        html += `<div class="r-line"><span>ФПД (ФП)</span><span>${escHtml(fiscalPayload.fiscal_document_attribute)}</span></div>`;
+      }
+      if (fiscalPayload.fiscal_receipt_number != null) {
+        html += `<div class="r-line"><span>Номер чека в смене</span><span>${escHtml(fiscalPayload.fiscal_receipt_number)}</span></div>`;
+      }
+      if (fiscalPayload.shift_number != null) {
+        html += `<div class="r-line"><span>Номер смены</span><span>${escHtml(fiscalPayload.shift_number)}</span></div>`;
+      }
+      if (fiscalPayload.ecr_registration_number) {
+        html += `<div class="r-line"><span>РН ККТ</span><span>${escHtml(fiscalPayload.ecr_registration_number)}</span></div>`;
+      }
+      if (fiscalPayload.ofd_inn) {
+        html += `<div class="r-line"><span>ИНН ОФД</span><span>${escHtml(fiscalPayload.ofd_inn)}</span></div>`;
+      }
+      if (fiscalPayload.fns_site) {
+        html += `<div class="r-line"><span>Сайт ФНС</span><span>${escHtml(fiscalPayload.fns_site)}</span></div>`;
+      }
+      if (fiscal.error) {
+        const errText =
+          typeof fiscal.error === "object"
+            ? (fiscal.error.text || fiscal.error.message || JSON.stringify(fiscal.error))
+            : String(fiscal.error);
+        html += `<div class="r-line r-error"><span>Ошибка ФН</span><span>${escHtml(errText)}</span></div>`;
+      }
+    }
+
+    const links = [];
+    if (fiscalPayload.ofd_receipt_url) {
+      links.push({ label: "Ссылка на чек", href: fiscalPayload.ofd_receipt_url });
+    }
+    if (fiscal && fiscal.permalink) {
+      links.push({ label: "Ссылка на заказ", href: fiscal.permalink });
+    }
+    if (links.length) {
+      html += `<div class="r-section-title">Дополнительно</div>`;
+      links.forEach((L) => {
+        html += `<div class="r-link-row"><a href="${escHtml(L.href)}" target="_blank" rel="noopener">${escHtml(L.label)} →</a></div>`;
+      });
+    }
+
+    html += `<details class="r-json"><summary class="hint">Служебный JSON (Atol 5)</summary>
+      <div class="result-box">${escHtml(JSON.stringify(atol5 || {}, null, 2))}</div>
     </details>`;
+    if (fiscal) {
+      html += `<details class="r-json"><summary class="hint">Служебный JSON (фискальный отчёт)</summary>
+        <div class="result-box">${escHtml(JSON.stringify(fiscal || {}, null, 2))}</div>
+      </details>`;
+    }
 
     el.innerHTML = html;
     const editBtn = $("#o_detail_edit");
@@ -1785,7 +1991,7 @@
     if (el) el.classList.add("hidden");
     try {
       const data = await api("/orders/" + encodeURIComponent(orderId));
-      renderReceipt(data.atol5, data.summary);
+      renderReceipt(data.atol5, data.summary, data.fiscal);
     } catch (e) {
       if (ph) ph.textContent = e.message;
       showAlert(e.message);
