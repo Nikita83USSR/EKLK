@@ -1271,3 +1271,87 @@ body[data-theme="glass"] .modal-footer {
 .container {
   box-sizing: border-box;
 }
+
+/* ── Templates / reusable QR Pay ── */
+.templates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tpl-card {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--card-bg, #fff);
+}
+.tpl-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.tpl-card-title {
+  font-weight: 600;
+  font-size: 1rem;
+}
+.tpl-card-meta {
+  font-size: 0.85rem;
+  color: var(--muted, #6b7280);
+  margin-top: 4px;
+}
+.tpl-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tpl-link-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.tpl-link-row input {
+  flex: 1;
+  min-width: 180px;
+  font-size: 0.85rem;
+}
+.tpl-qr {
+  margin-top: 10px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.tpl-qr img,
+.tpl-qr canvas {
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--border, #e5e7eb);
+}
+.tpl-providers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px 12px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+}
+.tpl-providers label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  margin: 0;
+}
+body[data-theme="dark"] .tpl-card,
+body[data-theme="glass"] .tpl-card {
+  background: var(--card-bg, #1f2937);
+  border-color: var(--border, #374151);
+}

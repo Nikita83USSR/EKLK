@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.utils.logger import logger, log_action
 from app.routers import auth, ecom, orders
+from app.routers import templates as templates_router
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -43,24 +44,26 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(ecom.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
+app.include_router(templates_router.router, prefix="/api/v1")
 
-templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+jinja_templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "app_name": settings.app_name})
+    return jinja_templates.TemplateResponse("index.html", {"request": request, "app_name": settings.app_name})
 
 
 # SPA-пути разделов ЛК (клиентский роутинг в app.js).
 # В дальнейшем: query/path-параметры (uuid, order_id, фильтры списка и т.д.).
 @app.get("/create", response_class=HTMLResponse)
 @app.get("/payment", response_class=HTMLResponse)
+@app.get("/templates", response_class=HTMLResponse)
 @app.get("/orders", response_class=HTMLResponse)
 @app.get("/settings", response_class=HTMLResponse)
 async def spa_section(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "app_name": settings.app_name})
+    return jinja_templates.TemplateResponse("index.html", {"request": request, "app_name": settings.app_name})
 
 
 @app.get("/health")

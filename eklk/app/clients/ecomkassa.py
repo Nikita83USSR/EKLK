@@ -543,3 +543,55 @@ class EcomKassaClient:
         result = await self._request("POST", f"{self.group_code}/sell_refund", json_body=body)
         log_action("ecom_refund", f"Refund uuid={result.get('uuid')}", uuid=result.get("uuid"))
         return result
+
+
+    # ── Templates (mobile API) ──────────────────────────────────────────
+
+    async def list_templates(self, firm_id: str | None = None) -> list[dict]:
+        """GET /api/mobile/v1/templates?firmId=…"""
+        path = "templates"
+        if firm_id:
+            path = f"templates?firmId={firm_id}"
+        data = await self._mobile_request("GET", path)
+        if isinstance(data, dict):
+            payload = data.get("payload")
+            if isinstance(payload, list):
+                return payload
+            if isinstance(payload, dict) and "items" in payload:
+                return payload["items"]
+        if isinstance(data, list):
+            return data
+        return []
+
+    async def get_template(self, template_id: str) -> dict:
+        """GET /api/mobile/v1/templates/:templateId"""
+        data = await self._mobile_request("GET", f"templates/{template_id}")
+        if isinstance(data, dict) and "payload" in data and isinstance(data["payload"], dict):
+            return data["payload"]
+        return data if isinstance(data, dict) else {}
+
+    async def create_template(
+        self, body: dict, firm_id: str | None = None
+    ) -> dict:
+        """POST /api/mobile/v1/templates?firmId=…"""
+        path = "templates"
+        if firm_id:
+            path = f"templates?firmId={firm_id}"
+        data = await self._mobile_request("POST", path, json_body=body)
+        if isinstance(data, dict) and "payload" in data and isinstance(data["payload"], dict):
+            return data["payload"]
+        return data if isinstance(data, dict) else {}
+
+    async def update_template(self, template_id: str, body: dict) -> dict:
+        """PUT /api/mobile/v1/templates/:templateId"""
+        data = await self._mobile_request(
+            "PUT", f"templates/{template_id}", json_body=body
+        )
+        if isinstance(data, dict) and "payload" in data and isinstance(data["payload"], dict):
+            return data["payload"]
+        return data if isinstance(data, dict) else {}
+
+    async def delete_template(self, template_id: str) -> dict:
+        """DELETE /api/mobile/v1/templates/:templateId"""
+        data = await self._mobile_request("DELETE", f"templates/{template_id}")
+        return data if isinstance(data, dict) else {"errorCode": 0}

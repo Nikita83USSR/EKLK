@@ -1483,7 +1483,7 @@
   // Разделы: /create | /payment | /orders | /settings
   // В дальнейшем: URL-параметры (например /orders?external_id=…, /create?from=123).
   // Вкладка «Статус» (/status) удалена — статус чека в списке/деталки.
-  const APP_TABS = ["create", "payment", "orders", "settings"];
+  const APP_TABS = ["create", "payment", "templates", "orders", "settings"];
 
   function pathToTab(pathname) {
     const p = String(pathname || "/").replace(/\/+$/, "") || "/";
@@ -1507,6 +1507,9 @@
     if (panel) panel.classList.remove("hidden");
     if (tab === "orders" && typeof loadOrders === "function") {
       try { loadOrders(); } catch (e) { console.warn(e); }
+    }
+    if (tab === "templates" && typeof loadTemplates === "function") {
+      try { loadTemplates(); } catch (e) { console.warn(e); }
     }
     if (push) {
       const path = tabToPath(tab);
@@ -2508,6 +2511,355 @@
       }
     };
   }
+
+
+  // ── Templates / reusable QR Pay ─────────────────────────────────────
+  // Маппинг id платёжного типа → код провайдера для qrPay.allowedProviders
+  const PROVIDER_CODE_BY_ID = {
+    101: "YOOKASSA",
+    102: "TINKOFF_BANK",
+    103: "SBERBANK",
+    104: "RBK_MONEY",
+    105: "TINKOFF_BANK",
+    106: "INVOICE_SU",
+    108: "TOCHKA_SBP",
+    109: "ROBOKASSA",
+    110: "RAIFFEISEN",
+    111: "TINKOFF_BANK_SBP",
+    112: "TINKOFF_BANK_CREDIT",
+    113: "TOCHKA_BANK",
+    114: "ALFABANK",
+    115: "ALFABANK_SBP",
+    116: "GAZPROMBANK",
+    117: "GAZPROMBANK_SBP",
+    118: "ECOMKASSA",
+    119: "PODELI",
+    120: "DOLYAME",
+    121: "SBERBANK_SBP",
+    122: "PLAIT",
+  };
+
+  function providerCodeFromType(t) {
+    if (!t) return null;
+    if (t.provider) return String(t.provider).toUpperCase();
+    if (t.code && typeof t.code === "string" && /[A-Z_]/.test(t.code)) {
+      return t.code.toUpperCase();
+    }
+    if (PROVIDER_CODE_BY_ID[t.id]) return PROVIDER_CODE_BY_ID[t.id];
+    // fallback: пытаемся вытащить из description
+    const d = (t.description || "").toLowerCase();
+    if (d.includes("юkassa") || d.includes("юкасса") || d.includes("yookassa") || d.includes("я.касс")) return "YOOKASSA";
+    if (d.includes("сбер") && d.includes("сбп")) return "SBERBANK_SBP";
+    if (d.includes("сбер")) return "SBERBANK";
+    if (d.includes("тинькофф") && d.includes("сбп")) return "TINKOFF_BANK_SBP";
+    if (d.includes("тинькофф") && (d.includes("рассроч") || d.includes("кредит"))) return "TINKOFF_BANK_CREDIT";
+    if (d.includes("тинькофф") || d.includes("т-банк") || d.includes("tinkoff")) return "TINKOFF_BANK";
+    if (d.includes("точка") && d.includes("сбп")) return "TOCHKA_SBP";
+    if (d.includes("точка")) return "TOCHKA_BANK";
+    if (d.includes("альфа") && d.includes("сбп")) return "ALFABANK_SBP";
+    if (d.includes("альфа")) return "ALFABANK";
+    if (d.includes("газпром") && d.includes("сбп")) return "GAZPROMBANK_SBP";
+    if (d.includes("газпром")) return "GAZPROMBANK";
+    if (d.includes("райф")) return "RAIFFEISEN";
+    if (d.includes("robokassa") || d.includes("робокасс")) return "ROBOKASSA";
+    if (d.includes("invoice")) return "INVOICE_SU";
+    if (d.includes("подели")) return "PODELI";
+    if (d.includes("долями")) return "DOLYAME";
+    if (d.includes("plait") || d.includes("плайт")) return "PLAIT";
+    if (d.includes("ecomkassa") || d.includes("екомкасс")) return "ECOMKASSA";
+    return null;
+  }
+
+  function qrUrlForTemplate(tpl) {
+    if (tpl.qrpay_url) return tpl.qrpay_url;
+    const id = tpl.templateId || tpl.template_id;
+    return id ? "https://app.ecomkassa.ru/public/qrpay/" + id : "";
+  }
+
+  function qrImageUrl(link) {
+    return "https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=" + encodeURIComponent(link);
+  }
+
+  async function loadTemplates() {
+    const box = $("#t_list");
+    if (!box) return;
+    box.innerHTML = '<p class="hint">Загрузка…</p>';
+    try {
+      const items = await api("/templates");
+      const list = Array.isArray(items) ? items : [];
+      if (!list.length) {
+        box.innerHTML = '<p class="hint">Шаблонов пока нет. Нажмите «Создать шаблон».</p>';
+        return;
+      }
+      box.innerHTML = list.map(renderTemplateCard).join("");
+      bindTemplateCardActions();
+    } catch (e) {
+      box.innerHTML = '<p class="hint" style="color:#fca5a5">' + escHtml(e.message || String(e)) + "</p>";
+    }
+  }
+
+  function renderTemplateCard(tpl) {
+    const id = tpl.templateId || "";
+    const name = escHtml(tpl.name || "Без названия");
+    const product = escHtml(tpl.product || "—");
+    const price = tpl.price != null ? Number(tpl.price).toFixed(2) : "—";
+    const count = tpl.count != null ? tpl.count : 1;
+    const link = qrUrlForTemplate(tpl);
+    const providers = (tpl.qrPay && tpl.qrPay.allowedProviders) || [];
+    const provLabel = providers.length ? providers.join(", ") : "не заданы";
+    const storeId = (tpl.qrPay && tpl.qrPay.storeId) || "—";
+    return (
+      '<div class="tpl-card" data-id="' + escHtml(id) + '">' +
+        '<div class="tpl-card-head">' +
+          '<div>' +
+            '<div class="tpl-card-title">' + name + '</div>' +
+            '<div class="tpl-card-meta">' + product + ' · ' + price + ' ₽ × ' + count +
+              ' · НДС: ' + escHtml(tpl.vat || "none") +
+              ' · ' + escHtml(tpl.paymentMethod || "") +
+              ' / ' + escHtml(tpl.paymentObject || "") +
+            '</div>' +
+            '<div class="tpl-card-meta">Магазин: ' + escHtml(String(storeId)) +
+              ' · Провайдеры: ' + escHtml(provLabel) +
+            '</div>' +
+          '</div>' +
+          '<div class="tpl-card-actions">' +
+            '<button type="button" class="btn btn-sm btn-secondary tpl-edit" data-id="' + escHtml(id) + '">Изменить</button>' +
+            '<button type="button" class="btn btn-sm btn-secondary tpl-del" data-id="' + escHtml(id) + '">Удалить</button>' +
+          '</div>' +
+        '</div>' +
+        (link
+          ? '<div class="tpl-link-row">' +
+              '<input type="text" readonly value="' + escHtml(link) + '" class="tpl-link-input" />' +
+              '<button type="button" class="btn btn-sm tpl-copy" data-link="' + escHtml(link) + '">Копировать</button>' +
+              '<a class="btn btn-sm btn-secondary" href="' + escHtml(link) + '" target="_blank" rel="noopener">Открыть</a>' +
+            '</div>' +
+            '<div class="tpl-qr">' +
+              '<img src="' + qrImageUrl(link) + '" alt="QR" width="120" height="120" />' +
+              '<div class="hint">Отсканируйте QR или отправьте ссылку покупателю. Ссылка многоразовая.</div>' +
+            '</div>'
+          : '<p class="hint mt-2">Ссылка появится после настройки QR Pay (провайдеры + магазин).</p>') +
+      '</div>'
+    );
+  }
+
+  function bindTemplateCardActions() {
+    $$(".tpl-copy").forEach((btn) => {
+      btn.onclick = async () => {
+        const link = btn.dataset.link;
+        try {
+          await navigator.clipboard.writeText(link);
+          btn.textContent = "Скопировано";
+          setTimeout(() => { btn.textContent = "Копировать"; }, 1500);
+        } catch (e) {
+          const input = btn.closest(".tpl-card").querySelector(".tpl-link-input");
+          if (input) { input.select(); document.execCommand("copy"); }
+        }
+      };
+    });
+    $$(".tpl-edit").forEach((btn) => {
+      btn.onclick = () => openTplModal(btn.dataset.id);
+    });
+    $$(".tpl-del").forEach((btn) => {
+      btn.onclick = async () => {
+        if (!confirm("Удалить шаблон? Многоразовая ссылка перестанет работать.")) return;
+        try {
+          await api("/templates/" + encodeURIComponent(btn.dataset.id), { method: "DELETE" });
+          showAlert("Шаблон удалён", "success");
+          loadTemplates();
+        } catch (e) {
+          showAlert(e.message || String(e));
+        }
+      };
+    });
+  }
+
+  function fillTplProviders(selected) {
+    const box = $("#tpl_providers");
+    if (!box) return;
+    const selectedSet = new Set((selected || []).map(String));
+    const providers = (paymentTypes || []).filter((t) => t.id >= 100);
+    const seen = new Set();
+    const rows = [];
+    providers.forEach((t) => {
+      const code = providerCodeFromType(t);
+      if (!code || seen.has(code)) return;
+      seen.add(code);
+      const checked = selectedSet.has(code) ? " checked" : "";
+      rows.push(
+        '<label><input type="checkbox" class="tpl-prov" value="' + escHtml(code) + '"' + checked + " /> " +
+        escHtml(code) + " — " + escHtml(t.description || "") + "</label>"
+      );
+    });
+    // Добавить выбранные, которых нет в paymentTypes
+    (selected || []).forEach((code) => {
+      if (seen.has(code)) return;
+      seen.add(code);
+      rows.push(
+        '<label><input type="checkbox" class="tpl-prov" value="' + escHtml(code) + '" checked /> ' +
+        escHtml(code) + "</label>"
+      );
+    });
+    box.innerHTML = rows.length
+      ? rows.join("")
+      : '<p class="hint">Нет доступных платёжных систем. Проверьте интеграции в EcomKassa.</p>';
+  }
+
+  function fillTplStoreSelect(selected) {
+    const el = $("#tpl_store");
+    if (!el) return;
+    const stores = storesList();
+    const cur = selected != null ? String(selected) : String(getSelectedStoreId() || "");
+    if (!stores.length) {
+      el.innerHTML = '<option value="' + escHtml(cur || "990") + '">' + escHtml(cur || "990") + "</option>";
+      return;
+    }
+    el.innerHTML = stores
+      .map((s) => {
+        const id = String(s.store_id);
+        const sel = id === cur ? " selected" : "";
+        return '<option value="' + escHtml(id) + '"' + sel + ">" + escHtml(s.store_name || id) + " (" + id + ")</option>";
+      })
+      .join("");
+  }
+
+  function resetTplForm() {
+    $("#tpl_id").value = "";
+    $("#tpl_name").value = "";
+    $("#tpl_product").value = "";
+    $("#tpl_price").value = "";
+    $("#tpl_count").value = "1";
+    $("#tpl_vat").value = "none";
+    $("#tpl_method").value = "full_prepayment";
+    $("#tpl_object").value = "service";
+    $("#tpl_operation").value = "sell";
+    $("#tpl_agent").value = "non_agent";
+    $("#tpl_req_email").checked = true;
+    $("#tpl_req_phone").checked = false;
+    const err = $("#tpl_form_error");
+    if (err) { err.classList.add("hidden"); err.textContent = ""; }
+    fillTplStoreSelect();
+    fillTplProviders([]);
+  }
+
+  function openTplModal(templateId) {
+    const modal = $("#tplModal");
+    if (!modal) return;
+    resetTplForm();
+    $("#tpl_modal_title").textContent = templateId ? "Редактировать шаблон" : "Новый шаблон";
+    if (templateId) {
+      api("/templates/" + encodeURIComponent(templateId))
+        .then((tpl) => {
+          $("#tpl_id").value = tpl.templateId || templateId;
+          $("#tpl_name").value = tpl.name || "";
+          $("#tpl_product").value = tpl.product || "";
+          $("#tpl_price").value = tpl.price != null ? tpl.price : "";
+          $("#tpl_count").value = tpl.count != null ? tpl.count : 1;
+          if (tpl.vat) $("#tpl_vat").value = tpl.vat;
+          if (tpl.paymentMethod) $("#tpl_method").value = tpl.paymentMethod;
+          if (tpl.paymentObject) $("#tpl_object").value = tpl.paymentObject;
+          if (tpl.operationType) $("#tpl_operation").value = tpl.operationType;
+          if (tpl.agentType) $("#tpl_agent").value = tpl.agentType;
+          $("#tpl_req_email").checked = !!tpl.requireClientEmail;
+          $("#tpl_req_phone").checked = !!tpl.requireClientPhone;
+          const qp = tpl.qrPay || {};
+          fillTplStoreSelect(qp.storeId);
+          fillTplProviders(qp.allowedProviders || []);
+        })
+        .catch((e) => showAlert(e.message || String(e)));
+    } else {
+      fillTplStoreSelect();
+      fillTplProviders([]);
+    }
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+  }
+
+  function closeTplModal() {
+    const modal = $("#tplModal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("modal-open");
+  }
+
+  function collectTplBody() {
+    const name = ($("#tpl_name").value || "").trim();
+    const product = ($("#tpl_product").value || "").trim();
+    const price = parseFloat($("#tpl_price").value);
+    const count = parseFloat($("#tpl_count").value) || 1;
+    if (!name) throw new Error("Укажите наименование шаблона");
+    if (!product) throw new Error("Укажите наименование товара/услуги");
+    if (!(price >= 0) || isNaN(price)) throw new Error("Укажите корректную цену");
+    const storeId = parseInt($("#tpl_store").value, 10);
+    if (!storeId) throw new Error("Выберите магазин");
+    const allowedProviders = $$(".tpl-prov")
+      .filter((el) => el.checked)
+      .map((el) => el.value);
+    if (!allowedProviders.length) {
+      throw new Error("Выберите хотя бы один способ оплаты (QR Pay)");
+    }
+    return {
+      name,
+      product,
+      price,
+      count,
+      vat: $("#tpl_vat").value || "none",
+      paymentMethod: $("#tpl_method").value || "full_prepayment",
+      paymentObject: $("#tpl_object").value || "service",
+      operationType: $("#tpl_operation").value || "sell",
+      agentType: $("#tpl_agent").value || "non_agent",
+      requireClientEmail: !!$("#tpl_req_email").checked,
+      requireClientPhone: !!$("#tpl_req_phone").checked,
+      qrPay: {
+        allowedProviders,
+        storeId,
+      },
+    };
+  }
+
+  async function saveTpl() {
+    const errEl = $("#tpl_form_error");
+    if (errEl) { errEl.classList.add("hidden"); errEl.textContent = ""; }
+    try {
+      const body = collectTplBody();
+      const id = ($("#tpl_id").value || "").trim();
+      if (id) {
+        await api("/templates/" + encodeURIComponent(id), {
+          method: "PUT",
+          body: JSON.stringify(body),
+        });
+        showAlert("Шаблон обновлён", "success");
+      } else {
+        await api("/templates", {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        showAlert("Шаблон создан", "success");
+      }
+      closeTplModal();
+      loadTemplates();
+    } catch (e) {
+      const msg = e.message || String(e);
+      if (errEl) {
+        errEl.textContent = msg;
+        errEl.classList.remove("hidden");
+      } else {
+        showAlert(msg);
+      }
+    }
+  }
+
+  function bindTemplatesUI() {
+    if ($("#t_refresh")) $("#t_refresh").onclick = () => loadTemplates();
+    if ($("#t_create")) $("#t_create").onclick = () => openTplModal(null);
+    if ($("#tpl_save")) $("#tpl_save").onclick = () => saveTpl();
+    $$("[data-close-tpl]").forEach((el) => {
+      el.onclick = () => closeTplModal();
+    });
+  }
+
+  bindTemplatesUI();
 
   bindOrdersUI();
 

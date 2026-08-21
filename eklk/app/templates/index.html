@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ app_name }} — Чек</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260818j" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260821a" />
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <div class="login-logo-wrap">
-        <img src="/static/img/logo.png?v=20260818j" alt="EcomKassa" class="login-logo" />
+        <img src="/static/img/logo.png?v=20260821a" alt="EcomKassa" class="login-logo" />
       </div>
       <p class="subtitle">Личный кабинет · логин с учётом регистра букв (как в EcomKassa)</p>
       <div id="loginError" class="alert alert-error hidden"></div>
@@ -29,12 +29,13 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <img src="/static/img/logo.png?v=20260818j" alt="EcomKassa" class="header-logo" />
+          <img src="/static/img/logo.png?v=20260821a" alt="EcomKassa" class="header-logo" />
         </div>
         <nav class="nav">
-          <!-- URL: /create /payment /orders /settings (см. app.js route) -->
+          <!-- URL: /create /payment /templates /orders /settings (см. app.js route) -->
           <button type="button" class="active" data-tab="create">Чек</button>
           <button type="button" data-tab="payment">Ссылка на оплату</button>
+          <button type="button" data-tab="templates">Многоразовые ссылки</button>
           <button type="button" data-tab="orders">Список чеков</button>
           <button type="button" data-tab="settings">Настройки</button>
         </nav>
@@ -405,6 +406,144 @@
           </aside>
         </div>
       </section>
+
+      <!-- REUSABLE QR PAY TEMPLATES -->
+      <section id="tab-templates" class="tab-panel hidden">
+        <div class="check-layout">
+          <div>
+            <div class="card">
+              <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                <span>Многоразовые ссылки (шаблоны)</span>
+                <div style="display:flex;gap:8px">
+                  <button type="button" class="btn btn-sm btn-secondary" id="t_refresh">Обновить</button>
+                  <button type="button" class="btn btn-sm" id="t_create">+ Создать шаблон</button>
+                </div>
+              </div>
+              <p class="hint" style="margin-bottom:12px">
+                Шаблон задаёт товар, сумму и разрешённые способы оплаты.
+                По шаблону формируется постоянная ссылка
+                <code>https://app.ecomkassa.ru/public/qrpay/{id}</code>
+                и QR-код — их можно отправлять покупателям многократно.
+              </p>
+              <div id="t_list" class="templates-list">
+                <p class="hint">Загрузка…</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Модалка создания / редактирования шаблона -->
+      <div id="tplModal" class="modal hidden" aria-hidden="true">
+        <div class="modal-backdrop" data-close-tpl></div>
+        <div class="modal-dialog" role="dialog" aria-labelledby="tpl_modal_title" style="max-width:640px">
+          <div class="modal-header">
+            <h3 id="tpl_modal_title">Новый шаблон</h3>
+            <button type="button" class="modal-close" data-close-tpl aria-label="Закрыть">&times;</button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="tpl_id" value="" />
+            <div class="row">
+              <div>
+                <label>Наименование шаблона <span class="req">*</span></label>
+                <input id="tpl_name" placeholder="Например: Консультация 1200" maxlength="128" />
+              </div>
+              <div>
+                <label>Товар / услуга <span class="req">*</span></label>
+                <input id="tpl_product" placeholder="Название в чеке" maxlength="128" />
+              </div>
+            </div>
+            <div class="row row-3">
+              <div>
+                <label>Цена, руб <span class="req">*</span></label>
+                <input id="tpl_price" type="number" min="0" step="0.01" placeholder="120" />
+              </div>
+              <div>
+                <label>Количество</label>
+                <input id="tpl_count" type="number" min="0.001" step="0.001" value="1" />
+              </div>
+              <div>
+                <label>НДС</label>
+                <select id="tpl_vat">
+                  <option value="none" selected>Без НДС</option>
+                  <option value="vat0">НДС 0%</option>
+                  <option value="vat5">НДС 5%</option>
+                  <option value="vat7">НДС 7%</option>
+                  <option value="vat10">НДС 10%</option>
+                  <option value="vat22">НДС 22%</option>
+                  <option value="vat20">НДС 20%</option>
+                </select>
+              </div>
+            </div>
+            <div class="row row-3">
+              <div>
+                <label>Признак расчёта</label>
+                <select id="tpl_method">
+                  <option value="full_prepayment" selected>Предоплата 100%</option>
+                  <option value="full_payment">Полный расчёт</option>
+                  <option value="prepayment">Предоплата</option>
+                  <option value="advance">Аванс</option>
+                  <option value="partial_payment">Частичный расчёт</option>
+                </select>
+              </div>
+              <div>
+                <label>Предмет расчёта</label>
+                <select id="tpl_object">
+                  <option value="service" selected>Услуга</option>
+                  <option value="commodity">Товар</option>
+                  <option value="job">Работа</option>
+                  <option value="payment">Платёж</option>
+                  <option value="another">Иной</option>
+                </select>
+              </div>
+              <div>
+                <label>Тип операции</label>
+                <select id="tpl_operation">
+                  <option value="sell" selected>Приход</option>
+                  <option value="sell_refund">Возврат прихода</option>
+                </select>
+              </div>
+            </div>
+            <div class="row">
+              <div>
+                <label>Тип агента</label>
+                <select id="tpl_agent">
+                  <option value="non_agent" selected>Без агента</option>
+                  <option value="another">Другой тип агента</option>
+                  <option value="commission_agent">Комиссионер</option>
+                  <option value="attorney">Поверенный</option>
+                  <option value="paying_agent">Платёжный агент</option>
+                  <option value="paying_subagent">Платёжный субагент</option>
+                  <option value="bank_paying_agent">Банковский платёжный агент</option>
+                  <option value="bank_paying_subagent">Банковский платёжный субагент</option>
+                </select>
+              </div>
+              <div>
+                <label>Магазин (storeId) <span class="req">*</span></label>
+                <select id="tpl_store"></select>
+              </div>
+            </div>
+            <div class="row">
+              <div class="checkbox-row">
+                <input type="checkbox" id="tpl_req_email" checked />
+                <label for="tpl_req_email">Требовать email покупателя</label>
+              </div>
+              <div class="checkbox-row">
+                <input type="checkbox" id="tpl_req_phone" />
+                <label for="tpl_req_phone">Требовать телефон покупателя</label>
+              </div>
+            </div>
+            <div class="section-title" style="margin-top:12px;font-size:0.9rem">Способы оплаты (QR Pay)</div>
+            <p class="hint" style="margin-bottom:8px">Выберите провайдеров, через которые покупатель сможет оплатить по многоразовой ссылке.</p>
+            <div id="tpl_providers" class="tpl-providers"></div>
+            <div id="tpl_form_error" class="alert alert-error hidden mt-2"></div>
+          </div>
+          <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border, #e5e7eb)">
+            <button type="button" class="btn btn-secondary" data-close-tpl>Отмена</button>
+            <button type="button" class="btn" id="tpl_save">Сохранить</button>
+          </div>
+        </div>
+      </div>
 
       <!-- tab-status удалён: статус смотрим в «Список чеков» / деталке -->
 
