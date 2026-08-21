@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -35,8 +36,19 @@ def _firm_id(user: dict) -> str | None:
     return firm.get("firmId") or firm.get("firm_id")
 
 
+_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+def _is_uuid(value: str | None) -> bool:
+    if not value or not isinstance(value, str):
+        return False
+    return bool(_UUID_RE.match(value.strip()))
+
+
 def _user_id_from_jwt(token: str | None) -> str | None:
-    """Достаём userId / sub из JWT EcomKassa без проверки подписи."""
+    """Достаём userId из JWT EcomKassa — только если значение похоже на UUID."""
     if not token or not isinstance(token, str):
         return None
     try:
@@ -47,16 +59,29 @@ def _user_id_from_jwt(token: str | None) -> str | None:
         payload = json.loads(base64.urlsafe_b64decode(pad.encode("utf-8")))
         if not isinstance(payload, dict):
             return None
-        for key in ("userId", "user_id", "uid", "sub", "id"):
+        # Не берём sub/id — у EcomKassa sub часто не UUID (шифрованная строка)
+        for key in ("userId", "user_id", "uid"):
             val = payload.get(key)
             if val is None:
                 continue
             s = str(val).strip()
-            # UUID-like or non-empty string
-            if s and s not in ("0", "null"):
+            if _is_uuid(s):
                 return s
     except Exception:
         return None
+    return None
+
+
+def _user_id_from_templates(items: list) -> str | None:
+    for t in items or []:
+        if not isinstance(t, dict):
+            continue
+        qp = t.get("qrPay") or {}
+        if not isinstance(qp, dict):
+            continue
+        uid = qp.get("userId")
+        if _is_uuid(str(uid) if uid is not None else None):
+            return str(uid).strip()
     return None
 
 
@@ -66,14 +91,23 @@ async def _resolve_cashier_user_id(
     firm_id: str | None = None,
 ) -> str | None:
     """
-    userId обязателен для qrPay на стороне EcomKassa.
+    userId обязателен для qrPay и должен быть UUID.
     Источники (по приоритету):
-      1) явно переданный
-      2) из JWT токена EcomKassa
-      3) из уже существующих шаблонов (qrPay.userId)
+      1) явно переданный UUID
+      2) из уже существующих шаблонов (qrPay.userId) — самый надёжный
+      3) из JWT (только поля userId/user_id/uid, если UUID)
+      4) из firm profile, если там есть userId
     """
-    if explicit and str(explicit).strip():
+    if _is_uuid(explicit):
         return str(explicit).strip()
+
+    try:
+        items = await client.list_templates(firm_id=firm_id)
+        from_tpl = _user_id_from_templates(items)
+        if from_tpl:
+            return from_tpl
+    except EcomKassaError:
+        pass
 
     token = getattr(client, "_token", None) or await client.get_token()
     from_jwt = _user_id_from_jwt(token)
@@ -81,16 +115,15 @@ async def _resolve_cashier_user_id(
         return from_jwt
 
     try:
-        items = await client.list_templates(firm_id=firm_id)
-        for t in items or []:
-            if not isinstance(t, dict):
-                continue
-            qp = t.get("qrPay") or {}
-            uid = qp.get("userId") if isinstance(qp, dict) else None
-            if uid:
-                return str(uid)
+        firm = await client.get_firm_profile()
+        if isinstance(firm, dict):
+            for key in ("userId", "user_id", "ownerId", "owner_id"):
+                val = firm.get(key)
+                if _is_uuid(str(val) if val is not None else None):
+                    return str(val).strip()
     except EcomKassaError:
         pass
+
     return None
 
 
@@ -150,22 +183,29 @@ async def _ensure_qrpay_user_id(
     payload: dict,
     firm_id: str | None,
 ) -> dict:
-    """Гарантируем qrPay.userId — иначе EcomKassa отвечает ValidationError."""
+    """Гарантируем qrPay.userId как UUID — иначе EcomKassa: error.expected.uuid."""
     qp = payload.get("qrPay")
     if not isinstance(qp, dict):
         return payload
-    if qp.get("userId"):
+    current = qp.get("userId")
+    if _is_uuid(str(current) if current is not None else None):
+        # нормализуем регистр/пробелы
+        qp = dict(qp)
+        qp["userId"] = str(current).strip()
+        payload = dict(payload)
+        payload["qrPay"] = qp
         return payload
     uid = await _resolve_cashier_user_id(
         client, explicit=None, firm_id=firm_id
     )
-    if not uid:
+    if not uid or not _is_uuid(uid):
         raise HTTPException(
             status_code=400,
             detail={
                 "message": (
-                    "Не удалось определить userId кассира для QR Pay. "
-                    "Отредактируйте существующий шаблон с QR Pay или укажите userId вручную."
+                    "Не удалось определить UUID кассира (qrPay.userId). "
+                    "Создайте/откройте шаблон с QR Pay в ЛК EcomKassa один раз, "
+                    "либо отредактируйте существующий шаблон — userId подтянется автоматически."
                 ),
                 "code": "userId_missing",
             },
@@ -247,9 +287,10 @@ async def update_template(template_id: str, body: TemplateUpdate, user: CurrentU
             try:
                 current = await client.get_template(template_id)
                 cur_uid = (current.get("qrPay") or {}).get("userId")
-                if cur_uid and not (payload.get("qrPay") or {}).get("userId"):
-                    payload["qrPay"] = dict(payload["qrPay"])
-                    payload["qrPay"]["userId"] = str(cur_uid)
+                if _is_uuid(str(cur_uid) if cur_uid is not None else None):
+                    if not _is_uuid(str((payload.get("qrPay") or {}).get("userId") or "")):
+                        payload["qrPay"] = dict(payload["qrPay"])
+                        payload["qrPay"]["userId"] = str(cur_uid).strip()
             except EcomKassaError:
                 pass
             payload = await _ensure_qrpay_user_id(client, payload, fid)

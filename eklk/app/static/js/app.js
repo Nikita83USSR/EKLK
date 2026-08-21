@@ -2841,6 +2841,23 @@
     fillTplProviders([]);
   }
 
+  function isUuid(s) {
+    return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(String(s || "").trim());
+  }
+
+  /** Взять userId UUID из любого уже загруженного шаблона / списка API. */
+  async function findKnownCashierUserId() {
+    try {
+      const items = await api("/templates");
+      const list = Array.isArray(items) ? items : [];
+      for (const tpl of list) {
+        const uid = tpl && tpl.qrPay && tpl.qrPay.userId;
+        if (isUuid(uid)) return String(uid).trim();
+      }
+    } catch (e) { /* ignore */ }
+    return "";
+  }
+
   function openTplModal(templateId) {
     const modal = $("#tplModal");
     if (!modal) return;
@@ -2870,6 +2887,12 @@
     } else {
       fillTplStoreSelect();
       fillTplProviders([]);
+      // для создания: заранее подтянуть UUID кассира из существующих шаблонов
+      findKnownCashierUserId().then((uid) => {
+        if (uid && $("#tpl_user_id") && !$("#tpl_user_id").value) {
+          $("#tpl_user_id").value = uid;
+        }
+      });
     }
     modal.classList.remove("hidden");
     modal.setAttribute("aria-hidden", "false");
@@ -2904,10 +2927,9 @@
       allowedProviders,
       storeId,
     };
-    // userId обязателен для EcomKassa — бэкенд подставит, если пусто;
-    // при редактировании передаём сохранённый.
+    // userId только UUID — иначе EcomKassa: error.expected.uuid
     const hid = $("#tpl_user_id");
-    if (hid && hid.value) qrPay.userId = hid.value.trim();
+    if (hid && isUuid(hid.value)) qrPay.userId = hid.value.trim();
     return {
       name,
       product,
