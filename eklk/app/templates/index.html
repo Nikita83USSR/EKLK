@@ -556,6 +556,25 @@
     </div>
   </footer>
   
+
+  <!-- Модальное окно: результат создания чека -->
+  <div id="checkResultModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-check-modal></div>
+    <div class="modal-dialog modal-dialog-receipt" role="dialog" aria-labelledby="checkResultModalTitle">
+      <div class="modal-header">
+        <h3 id="checkResultModalTitle">Чек отправлен на кассу</h3>
+        <button type="button" class="modal-close" data-close-check-modal aria-label="Закрыть">×</button>
+      </div>
+      <div class="modal-body" id="check_modal_body">
+        <p class="hint">Загрузка чека…</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="check_modal_refresh">Обновить</button>
+        <button type="button" class="btn" data-close-check-modal>Закрыть</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Модальное окно: ссылка на оплату -->
   <div id="payLinkModal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-pay-modal></div>
@@ -586,7 +605,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-  <script src="/static/js/app.js?v=20260818j"></script>
+  <script src="/static/js/app.js?v=20260821a"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
   <script data-skip-moving="true">
   (function(w,d,u){

@@ -1077,6 +1077,43 @@ body[data-theme="glass"] .modal-body .pay-link-input {
   border-color: var(--input-border) !important;
 }
 
+
+/* --- Модалка результата чека --- */
+.modal-dialog.modal-dialog-receipt {
+  width: min(560px, 100%);
+  max-height: min(92vh, 780px);
+}
+.modal-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--border);
+}
+.modal-footer .btn {
+  min-width: 110px;
+}
+#check_modal_body {
+  max-height: min(70vh, 620px);
+  overflow: auto;
+}
+#check_modal_body .receipt-view {
+  margin: 0;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+#check_modal_body .r-json .result-box {
+  max-height: 200px;
+  overflow: auto;
+  font-size: 0.72rem;
+}
+body[data-theme="dark"] .modal-footer,
+body[data-theme="glass"] .modal-footer {
+  border-color: var(--border);
+}
+
 /* === Mobile / tablet / landscape phone === */
 @media (max-width: 960px) {
   .header-inner,

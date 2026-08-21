@@ -1321,6 +1321,164 @@
 
   $("#logoutBtn").onclick = () => logout(true);
 
+
+  // --- Модалка результата создания чека ---
+  let lastCheckModalCtx = null; // { uuid, externalId, orderId }
+
+  function closeCheckResultModal() {
+    const modal = $("#checkResultModal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("modal-open");
+  }
+
+  function openCheckResultModal(createData) {
+    const modal = $("#checkResultModal");
+    if (!modal) return;
+    lastCheckModalCtx = {
+      uuid: (createData && createData.uuid) || null,
+      externalId: (createData && createData.external_id) || null,
+      orderId: null,
+    };
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+    $$("[data-close-check-modal]").forEach((el) => {
+      el.onclick = () => closeCheckResultModal();
+    });
+    const refreshBtn = $("#check_modal_refresh");
+    if (refreshBtn) {
+      refreshBtn.onclick = () => loadCheckResultModal();
+    }
+    // ESC closes (share with pay modal pattern)
+    const onEsc = (e) => {
+      if (e.key === "Escape") {
+        closeCheckResultModal();
+        document.removeEventListener("keydown", onEsc);
+      }
+    };
+    document.addEventListener("keydown", onEsc);
+    loadCheckResultModal();
+  }
+
+  function buildReportFallbackHtml(report) {
+    if (!report) {
+      return `<p class="hint">Чек принят кассой. Нажмите «Обновить», чтобы загрузить состав.</p>`;
+    }
+    const payload = report.payload || {};
+    let html = `<div class="receipt-view">`;
+    html += `<div class="r-head">
+      <div class="r-title">Кассовый чек</div>
+      <div class="r-meta">${statusBadge(report.status || "")} · ${escHtml(kindLabel(report.kind) || report.kind || "—")}</div>
+      ${report.external_id ? `<div class="r-meta">Внешний ID: ${escHtml(report.external_id)}</div>` : ""}
+      ${report.uuid ? `<div class="r-meta">UUID: ${escHtml(report.uuid)}</div>` : ""}
+      ${report.timestamp ? `<div class="r-meta">${escHtml(report.timestamp)}</div>` : ""}
+    </div>`;
+    if (report.status) {
+      html += `<div class="r-section-title">Статус</div>`;
+      html += `<div class="r-line"><span>Статус ФН</span><span>${escHtml(fiscalStatusLabel(report.status))}</span></div>`;
+    }
+    if (payload.fiscal_document_number != null || payload.fn_number || payload.total != null) {
+      html += `<div class="r-section-title">Фискальные данные</div>`;
+      if (payload.total != null) html += `<div class="r-line"><span>Сумма (ФД)</span><span>${formatMoney(payload.total)}</span></div>`;
+      if (payload.fn_number) html += `<div class="r-line"><span>Номер ФН</span><span>${escHtml(payload.fn_number)}</span></div>`;
+      if (payload.fiscal_document_number != null) html += `<div class="r-line"><span>Номер ФД</span><span>${escHtml(payload.fiscal_document_number)}</span></div>`;
+      if (payload.fiscal_document_attribute != null) html += `<div class="r-line"><span>ФПД (ФП)</span><span>${escHtml(payload.fiscal_document_attribute)}</span></div>`;
+      if (payload.receipt_datetime) html += `<div class="r-line"><span>Дата/время чека</span><span>${escHtml(payload.receipt_datetime)}</span></div>`;
+    }
+    if (report.error) {
+      const errT = typeof report.error === "object"
+        ? (report.error.text || report.error.message || JSON.stringify(report.error))
+        : String(report.error);
+      html += `<div class="r-line r-error"><span>Ошибка</span><span>${escHtml(errT)}</span></div>`;
+    }
+    const links = [];
+    if (payload.ofd_receipt_url) links.push({ label: "Ссылка на чек ОФД", href: payload.ofd_receipt_url });
+    if (report.permalink) links.push({ label: "Ссылка на предчек", href: report.permalink });
+    if (links.length) {
+      html += `<div class="r-section-title">Дополнительно</div>`;
+      links.forEach((L) => {
+        html += `<div class="r-link-row"><a href="${escHtml(L.href)}" target="_blank" rel="noopener">${escHtml(L.label)} →</a></div>`;
+      });
+    }
+    html += `<p class="hint mt-2">Полный состав появится после обработки на кассе — нажмите «Обновить».</p>`;
+    html += `<details class="r-json"><summary class="hint">Служебный JSON (report)</summary>
+      <div class="result-box">${escHtml(JSON.stringify(report || {}, null, 2))}</div>
+    </details>`;
+    html += `</div>`;
+    return html;
+  }
+
+  async function loadCheckResultModal() {
+    const body = $("#check_modal_body");
+    if (!body) return;
+    const ctx = lastCheckModalCtx || {};
+    body.innerHTML = `<p class="hint">Загрузка чека…</p>`;
+    const refreshBtn = $("#check_modal_refresh");
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "Обновление…";
+    }
+    try {
+      // 1) report by uuid (метод report)
+      let report = null;
+      if (ctx.uuid) {
+        try {
+          report = await api("/ecom/checks/" + encodeURIComponent(ctx.uuid));
+        } catch (e) {
+          console.warn("check report failed", e);
+        }
+      }
+
+      // 2) найти order_id: numeric uuid или поиск по external_id
+      let orderId = ctx.orderId || null;
+      if (!orderId && ctx.uuid && /^\d+$/.test(String(ctx.uuid))) {
+        orderId = ctx.uuid;
+      }
+      if (!orderId && ctx.externalId) {
+        try {
+          const search = await api("/orders/search", {
+            method: "POST",
+            body: JSON.stringify({ external_id: ctx.externalId, limit: 10, offset: 0 }),
+          });
+          const rows = search.result || [];
+          const match =
+            rows.find((r) => String(r.external_id || "") === String(ctx.externalId)) ||
+            rows[0];
+          if (match && match.order_id != null) orderId = match.order_id;
+        } catch (e) {
+          console.warn("orders search after create failed", e);
+        }
+      }
+
+      if (orderId) {
+        lastCheckModalCtx.orderId = orderId;
+        try {
+          const detail = await api("/orders/" + encodeURIComponent(orderId));
+          const fiscal = detail.fiscal || report;
+          body.innerHTML =
+            `<div class="receipt-view">` +
+            buildReceiptHtml(detail.atol5, detail.summary, fiscal, { hideEdit: true }) +
+            `</div>`;
+          return;
+        } catch (e) {
+          console.warn("order detail after create failed", e);
+        }
+      }
+
+      // 3) fallback: только report
+      body.innerHTML = buildReportFallbackHtml(report);
+    } catch (e) {
+      body.innerHTML = `<p class="hint" style="color:#fca5a5">${escHtml(e.message || String(e))}</p>`;
+    } finally {
+      if (refreshBtn) {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = "Обновить";
+      }
+    }
+  }
+
   // --- Клиентский роутинг (папки в URL) ---
   // Разделы: /create | /payment | /orders | /settings
   // В дальнейшем: URL-параметры (например /orders?external_id=…, /create?from=123).
@@ -1654,7 +1812,23 @@
       } else {
         data = await api("/ecom/checks", { method: "POST", body: JSON.stringify(body) });
       }
-      renderResult($("#c_result"), data);
+      const payLink = (data.invoice_payload && data.invoice_payload.link) || "";
+      if (payLink) {
+        // Ссылка на оплату — прежнее поведение (модалка оплаты)
+        renderResult($("#c_result"), data);
+      } else {
+        // Обычный чек — красивая модалка с report / составом
+        const cRes = $("#c_result");
+        if (cRes) {
+          cRes.classList.add("hidden");
+          cRes.innerHTML = "";
+        }
+        if (data.uuid) {
+          openCheckResultModal(data);
+        } else {
+          renderResult($("#c_result"), data);
+        }
+      }
       const srcNote = sourceDocumentId ? " (на основе № " + sourceDocumentId + ")" : "";
       showAlert("Чек принят кассой (uuid: " + (data.uuid || "—") + ")" + srcNote, "success");
       lastExternalId = null;
@@ -2077,13 +2251,8 @@
       .replace(/"/g, "&quot;");
   }
 
-  function renderReceipt(atol5, summary, fiscal) {
-    const el = $("#o_detail");
-    const ph = $("#o_detail_placeholder");
-    if (!el) return;
-    if (ph) ph.classList.add("hidden");
-    el.classList.remove("hidden");
-
+  function buildReceiptHtml(atol5, summary, fiscal, opts) {
+    opts = opts || {};
     const receipt = (atol5 && atol5.receipt) || {};
     const company = receipt.company || {};
     const client = receipt.client || {};
@@ -2097,10 +2266,14 @@
       <div class="r-title">Кассовый чек</div>
       <div class="r-meta">№ ${escHtml(summary?.order_id ?? "—")} · ${escHtml(typeLabel(summary?.order_type))} · ${statusBadge(summary?.status || "")}</div>
       <div class="r-meta">${escHtml(formatDt(summary?.updated))}</div>
-      ${(atol5 && atol5.external_id) ? `<div class="r-meta">Внешний ID: ${escHtml(atol5.external_id)}</div>` : (summary?.external_id ? `<div class="r-meta">Внешний ID: ${escHtml(summary.external_id)}</div>` : "")}
+      ${(atol5 && atol5.external_id) ? `<div class="r-meta">Внешний ID: ${escHtml(atol5.external_id)}</div>` : (summary?.external_id ? `<div class="r-meta">Внешний ID: ${escHtml(summary.external_id)}</div>` : "")}`;
+    if (!opts.hideEdit) {
+      html += `
       <div class="r-head-actions">
         <button type="button" class="btn btn-sm btn-secondary" id="o_detail_edit" data-order-id="${oid}">Редактировать</button>
-      </div>
+      </div>`;
+    }
+    html += `
     </div>`;
 
     html += `<div class="r-section-title">Организация</div>`;
@@ -2237,7 +2410,17 @@
       </details>`;
     }
 
-    el.innerHTML = html;
+    return html;
+  }
+
+  function renderReceipt(atol5, summary, fiscal) {
+    const el = $("#o_detail");
+    const ph = $("#o_detail_placeholder");
+    if (!el) return;
+    if (ph) ph.classList.add("hidden");
+    el.classList.remove("hidden");
+    const oid = summary && summary.order_id != null ? summary.order_id : ordersSelectedId;
+    el.innerHTML = buildReceiptHtml(atol5, summary, fiscal, { hideEdit: false });
     const editBtn = $("#o_detail_edit");
     if (editBtn) {
       editBtn.onclick = () => editOrderAsNew(editBtn.dataset.orderId || oid);
