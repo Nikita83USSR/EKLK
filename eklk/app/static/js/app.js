@@ -2576,8 +2576,24 @@
     return id ? "https://app.ecomkassa.ru/public/qrpay/" + id : "";
   }
 
-  function qrImageUrl(link) {
-    return "https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=" + encodeURIComponent(link);
+  /** Человекочитаемое имя провайдера по коду (без CODE — …). */
+  function providerLabel(code) {
+    const c = String(code || "").toUpperCase();
+    if (!c) return "";
+    const types = paymentTypes || [];
+    for (const t of types) {
+      if (providerCodeFromType(t) === c) {
+        const d = (t.description || "").trim();
+        if (d) return d;
+      }
+    }
+    // fallback: убираем подчёркивания
+    return c.replace(/_/g, " ");
+  }
+
+  function providerLabelsList(codes) {
+    const arr = (codes || []).map(providerLabel).filter(Boolean);
+    return arr.length ? arr.join(", ") : "не заданы";
   }
 
   async function loadTemplates() {
@@ -2585,6 +2601,10 @@
     if (!box) return;
     box.innerHTML = '<p class="hint">Загрузка…</p>';
     try {
+      // paymentTypes нужны для подписей провайдеров
+      if (!paymentTypes || !paymentTypes.length) {
+        try { await loadPaymentTypes(); } catch (e) { /* ignore */ }
+      }
       const items = await api("/templates");
       const list = Array.isArray(items) ? items : [];
       if (!list.length) {
@@ -2593,9 +2613,85 @@
       }
       box.innerHTML = list.map(renderTemplateCard).join("");
       bindTemplateCardActions();
+      // Очередь QR — по одному, иначе при большом списке часть не успевает отрисоваться
+      queueTemplateQRs();
     } catch (e) {
       box.innerHTML = '<p class="hint" style="color:#fca5a5">' + escHtml(e.message || String(e)) + "</p>";
     }
+  }
+
+  let _tplQrQueueRunning = false;
+  function queueTemplateQRs() {
+    const canvases = $$(".tpl-qr-canvas[data-link]");
+    if (!canvases.length) return;
+    if (_tplQrQueueRunning) return;
+    _tplQrQueueRunning = true;
+    let i = 0;
+    function next() {
+      if (i >= canvases.length) {
+        _tplQrQueueRunning = false;
+        return;
+      }
+      const canvas = canvases[i++];
+      // если узел уже убран из DOM (перезагрузка списка) — пропускаем
+      if (!canvas.isConnected) {
+        next();
+        return;
+      }
+      drawOneTplQr(canvas).then(() => {
+        // небольшой yield, чтобы не блокировать UI
+        setTimeout(next, 0);
+      });
+    }
+    next();
+  }
+
+  function drawOneTplQr(canvas) {
+    return new Promise((resolve) => {
+      const link = canvas.dataset.link;
+      if (!link) return resolve();
+      const finish = () => resolve();
+      if (typeof QRCode !== "undefined" && QRCode.toCanvas) {
+        try {
+          QRCode.toCanvas(
+            canvas,
+            link,
+            {
+              width: 96,
+              margin: 1,
+              color: { dark: "#0f172a", light: "#ffffff" },
+            },
+            (err) => {
+              if (err) {
+                console.warn("QR error", err);
+                fallbackQrImg(canvas, link);
+              }
+              finish();
+            }
+          );
+        } catch (e) {
+          console.warn("QR exception", e);
+          fallbackQrImg(canvas, link);
+          finish();
+        }
+      } else {
+        fallbackQrImg(canvas, link);
+        finish();
+      }
+    });
+  }
+
+  function fallbackQrImg(canvas, link) {
+    if (!canvas || !canvas.parentNode) return;
+    const img = document.createElement("img");
+    img.width = 96;
+    img.height = 96;
+    img.alt = "QR";
+    img.loading = "lazy";
+    img.src =
+      "https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=" +
+      encodeURIComponent(link);
+    canvas.replaceWith(img);
   }
 
   function renderTemplateCard(tpl) {
@@ -2606,7 +2702,7 @@
     const count = tpl.count != null ? tpl.count : 1;
     const link = qrUrlForTemplate(tpl);
     const providers = (tpl.qrPay && tpl.qrPay.allowedProviders) || [];
-    const provLabel = providers.length ? providers.join(", ") : "не заданы";
+    const provLabel = providerLabelsList(providers);
     const storeId = (tpl.qrPay && tpl.qrPay.storeId) || "—";
     const qrCell = link
       ? '<div class="tpl-qr-cell"><canvas class="tpl-qr-canvas" data-link="' + escHtml(link) + '" width="96" height="96"></canvas></div>'
@@ -2672,36 +2768,7 @@
         }
       };
     });
-    // Локальный QR через библиотеку qrcode (как в модалке ссылки на оплату)
-    $$(".tpl-qr-canvas").forEach((canvas) => {
-      const link = canvas.dataset.link;
-      if (!link) return;
-      if (typeof QRCode !== "undefined" && QRCode.toCanvas) {
-        QRCode.toCanvas(canvas, link, {
-          width: 96,
-          margin: 1,
-          color: { dark: "#0f172a", light: "#ffffff" },
-        }, (err) => {
-          if (err) {
-            console.warn("QR error", err);
-            // fallback img
-            const img = document.createElement("img");
-            img.width = 96;
-            img.height = 96;
-            img.alt = "QR";
-            img.src = "https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=" + encodeURIComponent(link);
-            canvas.replaceWith(img);
-          }
-        });
-      } else {
-        const img = document.createElement("img");
-        img.width = 96;
-        img.height = 96;
-        img.alt = "QR";
-        img.src = "https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=" + encodeURIComponent(link);
-        canvas.replaceWith(img);
-      }
-    });
+    // QR рисуются очередью в queueTemplateQRs() после loadTemplates
   }
 
   function fillTplProviders(selected) {
@@ -2716,18 +2783,19 @@
       if (!code || seen.has(code)) return;
       seen.add(code);
       const checked = selectedSet.has(code) ? " checked" : "";
+      const label = (t.description || "").trim() || code.replace(/_/g, " ");
       rows.push(
         '<label><input type="checkbox" class="tpl-prov" value="' + escHtml(code) + '"' + checked + " /> " +
-        escHtml(code) + " — " + escHtml(t.description || "") + "</label>"
+        escHtml(label) + "</label>"
       );
     });
-    // Добавить выбранные, которых нет в paymentTypes
+    // Добавить выбранные, которых нет в paymentTypes — только человекочитаемое имя
     (selected || []).forEach((code) => {
       if (seen.has(code)) return;
       seen.add(code);
       rows.push(
         '<label><input type="checkbox" class="tpl-prov" value="' + escHtml(code) + '" checked /> ' +
-        escHtml(code) + "</label>"
+        escHtml(providerLabel(code)) + "</label>"
       );
     });
     box.innerHTML = rows.length
