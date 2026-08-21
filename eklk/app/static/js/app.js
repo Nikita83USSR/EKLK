@@ -2845,8 +2845,11 @@
     return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(String(s || "").trim());
   }
 
-  /** Взять userId UUID из любого уже загруженного шаблона / списка API. */
+  /** userId для qrPay: firmId (UUID фирмы) или из существующих шаблонов. */
   async function findKnownCashierUserId() {
+    if (firmData && isUuid(firmData.firm_id)) {
+      return String(firmData.firm_id).trim();
+    }
     try {
       const items = await api("/templates");
       const list = Array.isArray(items) ? items : [];
@@ -2927,9 +2930,13 @@
       allowedProviders,
       storeId,
     };
-    // userId только UUID — иначе EcomKassa: error.expected.uuid
+    // userId = firmId (UUID) — иначе EcomKassa: error.expected.uuid
     const hid = $("#tpl_user_id");
-    if (hid && isUuid(hid.value)) qrPay.userId = hid.value.trim();
+    if (hid && isUuid(hid.value)) {
+      qrPay.userId = hid.value.trim();
+    } else if (firmData && isUuid(firmData.firm_id)) {
+      qrPay.userId = String(firmData.firm_id).trim();
+    }
     return {
       name,
       product,

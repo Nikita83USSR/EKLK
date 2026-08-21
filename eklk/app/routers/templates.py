@@ -91,15 +91,28 @@ async def _resolve_cashier_user_id(
     firm_id: str | None = None,
 ) -> str | None:
     """
-    userId обязателен для qrPay и должен быть UUID.
+    userId в qrPay — UUID (на практике часто совпадает с firmId).
     Источники (по приоритету):
       1) явно переданный UUID
-      2) из уже существующих шаблонов (qrPay.userId) — самый надёжный
-      3) из JWT (только поля userId/user_id/uid, если UUID)
-      4) из firm profile, если там есть userId
+      2) firmId из сессии / профиля фирмы
+      3) из уже существующих шаблонов (qrPay.userId)
+      4) JWT userId (если UUID)
     """
     if _is_uuid(explicit):
         return str(explicit).strip()
+
+    if _is_uuid(firm_id):
+        return str(firm_id).strip()
+
+    try:
+        firm = await client.get_firm_profile()
+        if isinstance(firm, dict):
+            for key in ("firmId", "firm_id", "userId", "user_id", "ownerId", "owner_id"):
+                val = firm.get(key)
+                if _is_uuid(str(val) if val is not None else None):
+                    return str(val).strip()
+    except EcomKassaError:
+        pass
 
     try:
         items = await client.list_templates(firm_id=firm_id)
@@ -113,16 +126,6 @@ async def _resolve_cashier_user_id(
     from_jwt = _user_id_from_jwt(token)
     if from_jwt:
         return from_jwt
-
-    try:
-        firm = await client.get_firm_profile()
-        if isinstance(firm, dict):
-            for key in ("userId", "user_id", "ownerId", "owner_id"):
-                val = firm.get(key)
-                if _is_uuid(str(val) if val is not None else None):
-                    return str(val).strip()
-    except EcomKassaError:
-        pass
 
     return None
 
