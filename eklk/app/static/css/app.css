@@ -1394,3 +1394,20 @@ body[data-theme="dark"] .tpl-qr-cell,
 body[data-theme="glass"] .tpl-qr-cell {
   background: #fff;
 }
+
+.tpl-qr-img.tpl-qr-pending {
+  opacity: 0.35;
+  background: repeating-linear-gradient(
+    45deg,
+    #f3f4f6,
+    #f3f4f6 4px,
+    #e5e7eb 4px,
+    #e5e7eb 8px
+  );
+}
+.tpl-qr-img {
+  width: 96px;
+  height: 96px;
+  display: block;
+  object-fit: contain;
+}

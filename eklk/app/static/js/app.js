@@ -2620,78 +2620,98 @@
     }
   }
 
-  let _tplQrQueueRunning = false;
-  function queueTemplateQRs() {
-    const canvases = $$(".tpl-qr-canvas[data-link]");
-    if (!canvases.length) return;
-    if (_tplQrQueueRunning) return;
-    _tplQrQueueRunning = true;
-    let i = 0;
-    function next() {
-      if (i >= canvases.length) {
-        _tplQrQueueRunning = false;
-        return;
-      }
-      const canvas = canvases[i++];
-      // если узел уже убран из DOM (перезагрузка списка) — пропускаем
-      if (!canvas.isConnected) {
-        next();
-        return;
-      }
-      drawOneTplQr(canvas).then(() => {
-        // небольшой yield, чтобы не блокировать UI
-        setTimeout(next, 0);
-      });
-    }
-    next();
-  }
+  // Кэш data-URL QR по ссылке — повторная отрисовка мгновенная
+  const _tplQrCache = new Map();
+  let _tplQrGen = 0; // поколение списка: отменяет старую очередь при reload
 
-  function drawOneTplQr(canvas) {
-    return new Promise((resolve) => {
-      const link = canvas.dataset.link;
-      if (!link) return resolve();
-      const finish = () => resolve();
-      if (typeof QRCode !== "undefined" && QRCode.toCanvas) {
-        try {
-          QRCode.toCanvas(
-            canvas,
-            link,
-            {
-              width: 96,
-              margin: 1,
-              color: { dark: "#0f172a", light: "#ffffff" },
-            },
-            (err) => {
-              if (err) {
-                console.warn("QR error", err);
-                fallbackQrImg(canvas, link);
-              }
-              finish();
-            }
-          );
-        } catch (e) {
-          console.warn("QR exception", e);
-          fallbackQrImg(canvas, link);
-          finish();
-        }
+  function queueTemplateQRs() {
+    const gen = ++_tplQrGen;
+    const nodes = $$(".tpl-qr-img[data-link]:not([data-qr-ready])");
+    if (!nodes.length) return;
+
+    // Сначала раздаём из кэша (синхронно)
+    const pending = [];
+    nodes.forEach((img) => {
+      const link = img.dataset.link;
+      if (!link) return;
+      const cached = _tplQrCache.get(link);
+      if (cached) {
+        img.src = cached;
+        img.dataset.qrReady = "1";
+        img.classList.remove("tpl-qr-pending");
       } else {
-        fallbackQrImg(canvas, link);
-        finish();
+        pending.push(img);
       }
     });
+
+    // Остальное — строго по одному через toDataURL (надёжнее toCanvas при N>>1)
+    let i = 0;
+    function step() {
+      if (gen !== _tplQrGen) return; // список уже перерисован
+      if (i >= pending.length) return;
+      const img = pending[i++];
+      if (!img.isConnected) {
+        setTimeout(step, 0);
+        return;
+      }
+      const link = img.dataset.link;
+      makeTplQrDataUrl(link)
+        .then((dataUrl) => {
+          if (gen !== _tplQrGen) return;
+          if (dataUrl) {
+            _tplQrCache.set(link, dataUrl);
+            if (img.isConnected) {
+              img.src = dataUrl;
+              img.dataset.qrReady = "1";
+              img.classList.remove("tpl-qr-pending");
+            }
+          } else if (img.isConnected) {
+            // последний fallback — внешний сервис
+            img.src =
+              "https://api.qrserver.com/v1/create-qr-code/?size=96x96&margin=4&data=" +
+              encodeURIComponent(link);
+            img.dataset.qrReady = "1";
+            img.classList.remove("tpl-qr-pending");
+          }
+        })
+        .finally(() => {
+          // пауза 16–30ms между генерациями, UI не фризится
+          setTimeout(step, 20);
+        });
+    }
+    step();
   }
 
-  function fallbackQrImg(canvas, link) {
-    if (!canvas || !canvas.parentNode) return;
-    const img = document.createElement("img");
-    img.width = 96;
-    img.height = 96;
-    img.alt = "QR";
-    img.loading = "lazy";
-    img.src =
-      "https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=" +
-      encodeURIComponent(link);
-    canvas.replaceWith(img);
+  function makeTplQrDataUrl(link) {
+    return new Promise((resolve) => {
+      if (!link) return resolve(null);
+      if (_tplQrCache.has(link)) return resolve(_tplQrCache.get(link));
+      if (typeof QRCode === "undefined" || !QRCode.toDataURL) {
+        return resolve(null);
+      }
+      try {
+        QRCode.toDataURL(
+          link,
+          {
+            width: 96,
+            margin: 1,
+            errorCorrectionLevel: "M",
+            color: { dark: "#0f172a", light: "#ffffff" },
+          },
+          (err, url) => {
+            if (err || !url) {
+              console.warn("QR toDataURL error", err);
+              resolve(null);
+            } else {
+              resolve(url);
+            }
+          }
+        );
+      } catch (e) {
+        console.warn("QR toDataURL exception", e);
+        resolve(null);
+      }
+    });
   }
 
   function renderTemplateCard(tpl) {
@@ -2705,7 +2725,7 @@
     const provLabel = providerLabelsList(providers);
     const storeId = (tpl.qrPay && tpl.qrPay.storeId) || "—";
     const qrCell = link
-      ? '<div class="tpl-qr-cell"><canvas class="tpl-qr-canvas" data-link="' + escHtml(link) + '" width="96" height="96"></canvas></div>'
+      ? '<div class="tpl-qr-cell"><img class="tpl-qr-img tpl-qr-pending" data-link="' + escHtml(link) + '" width="96" height="96" alt="QR" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" /></div>'
       : '<div class="tpl-qr-cell tpl-qr-empty">нет QR</div>';
     return (
       '<div class="tpl-card" data-id="' + escHtml(id) + '">' +
