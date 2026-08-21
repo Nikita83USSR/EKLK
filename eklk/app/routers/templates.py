@@ -4,10 +4,15 @@ Mobile API: /api/mobile/v1/templates
 Публичная ссылка: https://app.ecomkassa.ru/public/qrpay/{templateId}
 """
 
+from __future__ import annotations
+
+import base64
+import json
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query
 
 from app.clients.ecomkassa import EcomKassaClient, EcomKassaError
-from app.core.config import settings
 from app.core.deps import CurrentUser
 from app.schemas.templates import TemplateCreate, TemplateUpdate, TemplateOut
 from app.utils.logger import log_action
@@ -28,6 +33,65 @@ def _client_for(user: dict) -> EcomKassaClient:
 def _firm_id(user: dict) -> str | None:
     firm = user.get("firm") or {}
     return firm.get("firmId") or firm.get("firm_id")
+
+
+def _user_id_from_jwt(token: str | None) -> str | None:
+    """Достаём userId / sub из JWT EcomKassa без проверки подписи."""
+    if not token or not isinstance(token, str):
+        return None
+    try:
+        parts = token.split(".")
+        if len(parts) < 2:
+            return None
+        pad = parts[1] + "=" * (-len(parts[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(pad.encode("utf-8")))
+        if not isinstance(payload, dict):
+            return None
+        for key in ("userId", "user_id", "uid", "sub", "id"):
+            val = payload.get(key)
+            if val is None:
+                continue
+            s = str(val).strip()
+            # UUID-like or non-empty string
+            if s and s not in ("0", "null"):
+                return s
+    except Exception:
+        return None
+    return None
+
+
+async def _resolve_cashier_user_id(
+    client: EcomKassaClient,
+    explicit: str | None = None,
+    firm_id: str | None = None,
+) -> str | None:
+    """
+    userId обязателен для qrPay на стороне EcomKassa.
+    Источники (по приоритету):
+      1) явно переданный
+      2) из JWT токена EcomKassa
+      3) из уже существующих шаблонов (qrPay.userId)
+    """
+    if explicit and str(explicit).strip():
+        return str(explicit).strip()
+
+    token = getattr(client, "_token", None) or await client.get_token()
+    from_jwt = _user_id_from_jwt(token)
+    if from_jwt:
+        return from_jwt
+
+    try:
+        items = await client.list_templates(firm_id=firm_id)
+        for t in items or []:
+            if not isinstance(t, dict):
+                continue
+            qp = t.get("qrPay") or {}
+            uid = qp.get("userId") if isinstance(qp, dict) else None
+            if uid:
+                return str(uid)
+    except EcomKassaError:
+        pass
+    return None
 
 
 def _enrich(tpl: dict) -> dict:
@@ -74,11 +138,43 @@ def _body_for_api(data: TemplateCreate | TemplateUpdate) -> dict:
     """Pydantic → dict без None (API принимает частичные поля, name обязателен)."""
     raw = data.model_dump(exclude_none=True)
     if "qrPay" in raw and isinstance(raw["qrPay"], dict):
-        qp = {k: v for k, v in raw["qrPay"].items() if v is not None}
+        qp = {k: v for k, v in raw["qrPay"].items() if v is not None and v != ""}
         if not qp.get("allowedProviders"):
             qp.pop("allowedProviders", None)
         raw["qrPay"] = qp
     return raw
+
+
+async def _ensure_qrpay_user_id(
+    client: EcomKassaClient,
+    payload: dict,
+    firm_id: str | None,
+) -> dict:
+    """Гарантируем qrPay.userId — иначе EcomKassa отвечает ValidationError."""
+    qp = payload.get("qrPay")
+    if not isinstance(qp, dict):
+        return payload
+    if qp.get("userId"):
+        return payload
+    uid = await _resolve_cashier_user_id(
+        client, explicit=None, firm_id=firm_id
+    )
+    if not uid:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": (
+                    "Не удалось определить userId кассира для QR Pay. "
+                    "Отредактируйте существующий шаблон с QR Pay или укажите userId вручную."
+                ),
+                "code": "userId_missing",
+            },
+        )
+    qp = dict(qp)
+    qp["userId"] = uid
+    payload = dict(payload)
+    payload["qrPay"] = qp
+    return payload
 
 
 @router.get("", response_model=list[TemplateOut])
@@ -120,6 +216,8 @@ async def create_template(body: TemplateCreate, user: CurrentUser):
     try:
         payload = _body_for_api(body)
         fid = _firm_id(user)
+        if payload.get("qrPay"):
+            payload = await _ensure_qrpay_user_id(client, payload, fid)
         result = await client.create_template(payload, firm_id=fid)
         log_action(
             "template_created",
@@ -127,6 +225,8 @@ async def create_template(body: TemplateCreate, user: CurrentUser):
             user_id=user["username"],
         )
         return _to_out(result)
+    except HTTPException:
+        raise
     except EcomKassaError as e:
         log_action("template_create_error", str(e), level="error", user_id=user["username"])
         raise HTTPException(
@@ -141,6 +241,18 @@ async def update_template(template_id: str, body: TemplateUpdate, user: CurrentU
     client = _client_for(user)
     try:
         payload = _body_for_api(body)
+        fid = _firm_id(user)
+        if payload.get("qrPay"):
+            # При редактировании сначала пробуем userId из текущего шаблона
+            try:
+                current = await client.get_template(template_id)
+                cur_uid = (current.get("qrPay") or {}).get("userId")
+                if cur_uid and not (payload.get("qrPay") or {}).get("userId"):
+                    payload["qrPay"] = dict(payload["qrPay"])
+                    payload["qrPay"]["userId"] = str(cur_uid)
+            except EcomKassaError:
+                pass
+            payload = await _ensure_qrpay_user_id(client, payload, fid)
         result = await client.update_template(template_id, payload)
         log_action(
             "template_updated",
@@ -148,6 +260,8 @@ async def update_template(template_id: str, body: TemplateUpdate, user: CurrentU
             user_id=user["username"],
         )
         return _to_out(result)
+    except HTTPException:
+        raise
     except EcomKassaError as e:
         log_action("template_update_error", str(e), level="error", user_id=user["username"])
         raise HTTPException(

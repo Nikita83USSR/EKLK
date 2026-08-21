@@ -14,7 +14,7 @@ class QrPayIn(BaseModel):
     storeId: int = Field(..., description="ID точки продаж (магазина)")
     userId: Optional[str] = Field(
         default=None,
-        description="UUID пользователя-кассира (необязательно)",
+        description="UUID пользователя-кассира (подставляется на бэке, если пусто)",
     )
 
 

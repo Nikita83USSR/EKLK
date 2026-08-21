@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ app_name }} — Чек</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260821a" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260821b" />
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <div class="login-logo-wrap">
-        <img src="/static/img/logo.png?v=20260821a" alt="EcomKassa" class="login-logo" />
+        <img src="/static/img/logo.png?v=20260821b" alt="EcomKassa" class="login-logo" />
       </div>
       <p class="subtitle">Личный кабинет · логин с учётом регистра букв (как в EcomKassa)</p>
       <div id="loginError" class="alert alert-error hidden"></div>
@@ -29,7 +29,7 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <img src="/static/img/logo.png?v=20260821a" alt="EcomKassa" class="header-logo" />
+          <img src="/static/img/logo.png?v=20260821b" alt="EcomKassa" class="header-logo" />
         </div>
         <nav class="nav">
           <!-- URL: /create /payment /templates /orders /settings (см. app.js route) -->
@@ -436,13 +436,14 @@
       <!-- Модалка создания / редактирования шаблона -->
       <div id="tplModal" class="modal hidden" aria-hidden="true">
         <div class="modal-backdrop" data-close-tpl></div>
-        <div class="modal-dialog" role="dialog" aria-labelledby="tpl_modal_title" style="max-width:640px">
+        <div class="modal-dialog modal-dialog-wide" role="dialog" aria-labelledby="tpl_modal_title">
           <div class="modal-header">
             <h3 id="tpl_modal_title">Новый шаблон</h3>
             <button type="button" class="modal-close" data-close-tpl aria-label="Закрыть">&times;</button>
           </div>
           <div class="modal-body">
             <input type="hidden" id="tpl_id" value="" />
+            <input type="hidden" id="tpl_user_id" value="" />
             <div class="row">
               <div>
                 <label>Наименование шаблона <span class="req">*</span></label>
@@ -744,7 +745,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-  <script src="/static/js/app.js?v=20260821a"></script>
+  <script src="/static/js/app.js?v=20260821b"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
   <script data-skip-moving="true">
   (function(w,d,u){

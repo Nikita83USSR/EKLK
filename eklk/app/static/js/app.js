@@ -2608,36 +2608,37 @@
     const providers = (tpl.qrPay && tpl.qrPay.allowedProviders) || [];
     const provLabel = providers.length ? providers.join(", ") : "не заданы";
     const storeId = (tpl.qrPay && tpl.qrPay.storeId) || "—";
+    const qrCell = link
+      ? '<div class="tpl-qr-cell"><canvas class="tpl-qr-canvas" data-link="' + escHtml(link) + '" width="96" height="96"></canvas></div>'
+      : '<div class="tpl-qr-cell tpl-qr-empty">нет QR</div>';
     return (
       '<div class="tpl-card" data-id="' + escHtml(id) + '">' +
-        '<div class="tpl-card-head">' +
-          '<div>' +
-            '<div class="tpl-card-title">' + name + '</div>' +
-            '<div class="tpl-card-meta">' + product + ' · ' + price + ' ₽ × ' + count +
-              ' · НДС: ' + escHtml(tpl.vat || "none") +
-              ' · ' + escHtml(tpl.paymentMethod || "") +
-              ' / ' + escHtml(tpl.paymentObject || "") +
+        qrCell +
+        '<div class="tpl-card-body">' +
+          '<div class="tpl-card-head">' +
+            '<div>' +
+              '<div class="tpl-card-title">' + name + '</div>' +
+              '<div class="tpl-card-meta">' + product + ' · <b>' + price + ' ₽</b> × ' + count +
+                ' · ' + escHtml(tpl.vat || "none") +
+                ' · ' + escHtml(tpl.paymentMethod || "") +
+              '</div>' +
+              '<div class="tpl-card-meta">Магазин: ' + escHtml(String(storeId)) +
+                (providers.length ? ' · ' + escHtml(provLabel) : '') +
+              '</div>' +
             '</div>' +
-            '<div class="tpl-card-meta">Магазин: ' + escHtml(String(storeId)) +
-              ' · Провайдеры: ' + escHtml(provLabel) +
+            '<div class="tpl-card-actions">' +
+              '<button type="button" class="btn btn-sm btn-secondary tpl-edit" data-id="' + escHtml(id) + '">Изменить</button>' +
+              '<button type="button" class="btn btn-sm btn-secondary tpl-del" data-id="' + escHtml(id) + '">Удалить</button>' +
             '</div>' +
           '</div>' +
-          '<div class="tpl-card-actions">' +
-            '<button type="button" class="btn btn-sm btn-secondary tpl-edit" data-id="' + escHtml(id) + '">Изменить</button>' +
-            '<button type="button" class="btn btn-sm btn-secondary tpl-del" data-id="' + escHtml(id) + '">Удалить</button>' +
-          '</div>' +
+          (link
+            ? '<div class="tpl-link-row">' +
+                '<input type="text" readonly value="' + escHtml(link) + '" class="tpl-link-input" />' +
+                '<button type="button" class="btn btn-sm tpl-copy" data-link="' + escHtml(link) + '">Копировать</button>' +
+                '<a class="btn btn-sm btn-secondary" href="' + escHtml(link) + '" target="_blank" rel="noopener">Открыть</a>' +
+              '</div>'
+            : '<p class="hint" style="margin:6px 0 0">Ссылка появится после настройки QR Pay.</p>') +
         '</div>' +
-        (link
-          ? '<div class="tpl-link-row">' +
-              '<input type="text" readonly value="' + escHtml(link) + '" class="tpl-link-input" />' +
-              '<button type="button" class="btn btn-sm tpl-copy" data-link="' + escHtml(link) + '">Копировать</button>' +
-              '<a class="btn btn-sm btn-secondary" href="' + escHtml(link) + '" target="_blank" rel="noopener">Открыть</a>' +
-            '</div>' +
-            '<div class="tpl-qr">' +
-              '<img src="' + qrImageUrl(link) + '" alt="QR" width="120" height="120" />' +
-              '<div class="hint">Отсканируйте QR или отправьте ссылку покупателю. Ссылка многоразовая.</div>' +
-            '</div>'
-          : '<p class="hint mt-2">Ссылка появится после настройки QR Pay (провайдеры + магазин).</p>') +
       '</div>'
     );
   }
@@ -2670,6 +2671,36 @@
           showAlert(e.message || String(e));
         }
       };
+    });
+    // Локальный QR через библиотеку qrcode (как в модалке ссылки на оплату)
+    $$(".tpl-qr-canvas").forEach((canvas) => {
+      const link = canvas.dataset.link;
+      if (!link) return;
+      if (typeof QRCode !== "undefined" && QRCode.toCanvas) {
+        QRCode.toCanvas(canvas, link, {
+          width: 96,
+          margin: 1,
+          color: { dark: "#0f172a", light: "#ffffff" },
+        }, (err) => {
+          if (err) {
+            console.warn("QR error", err);
+            // fallback img
+            const img = document.createElement("img");
+            img.width = 96;
+            img.height = 96;
+            img.alt = "QR";
+            img.src = "https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=" + encodeURIComponent(link);
+            canvas.replaceWith(img);
+          }
+        });
+      } else {
+        const img = document.createElement("img");
+        img.width = 96;
+        img.height = 96;
+        img.alt = "QR";
+        img.src = "https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=" + encodeURIComponent(link);
+        canvas.replaceWith(img);
+      }
     });
   }
 
@@ -2724,6 +2755,7 @@
 
   function resetTplForm() {
     $("#tpl_id").value = "";
+    if ($("#tpl_user_id")) $("#tpl_user_id").value = "";
     $("#tpl_name").value = "";
     $("#tpl_product").value = "";
     $("#tpl_price").value = "";
@@ -2762,6 +2794,7 @@
           $("#tpl_req_email").checked = !!tpl.requireClientEmail;
           $("#tpl_req_phone").checked = !!tpl.requireClientPhone;
           const qp = tpl.qrPay || {};
+          if ($("#tpl_user_id") && qp.userId) $("#tpl_user_id").value = qp.userId;
           fillTplStoreSelect(qp.storeId);
           fillTplProviders(qp.allowedProviders || []);
         })
@@ -2799,6 +2832,14 @@
     if (!allowedProviders.length) {
       throw new Error("Выберите хотя бы один способ оплаты (QR Pay)");
     }
+    const qrPay = {
+      allowedProviders,
+      storeId,
+    };
+    // userId обязателен для EcomKassa — бэкенд подставит, если пусто;
+    // при редактировании передаём сохранённый.
+    const hid = $("#tpl_user_id");
+    if (hid && hid.value) qrPay.userId = hid.value.trim();
     return {
       name,
       product,
@@ -2811,10 +2852,8 @@
       agentType: $("#tpl_agent").value || "non_agent",
       requireClientEmail: !!$("#tpl_req_email").checked,
       requireClientPhone: !!$("#tpl_req_phone").checked,
-      qrPay: {
-        allowedProviders,
-        storeId,
-      },
+      requireClientData: true,
+      qrPay,
     };
   }
 
