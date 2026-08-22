@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, ROUND_UP
 from typing import Any, Optional
 
 import httpx
@@ -121,9 +121,17 @@ def build_agent_payload(agent: dict) -> tuple[dict, dict | None]:
 
 
 def to_rubles(amount: Decimal | float | int | str) -> float:
-    """Normalize to 2 decimal places as float (API expects rubles)."""
+    """Normalize to 2 decimal places as float (API expects rubles). HALF_UP."""
     d = Decimal(str(amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     return float(d)
+
+
+def to_rubles_ceil(amount: Decimal | float | int | str) -> float:
+    """Округление ВВЕРХ до копейки (дробь копейки → +1 коп)."""
+    d = Decimal(str(amount))
+    if d <= 0:
+        return 0.0
+    return float(d.quantize(Decimal("0.01"), rounding=ROUND_UP))
 
 
 class EcomKassaClient:
@@ -422,7 +430,10 @@ class EcomKassaClient:
         for it in items:
             price = to_rubles(it["price"])
             qty = float(it.get("quantity", 1))
-            sum_val = to_rubles(it.get("sum", price * qty))
+            if it.get("sum") is not None:
+                sum_val = to_rubles_ceil(it["sum"])
+            else:
+                sum_val = to_rubles_ceil(Decimal(str(price)) * Decimal(str(qty)))
             vat_type = it.get("vat_type") or it.get("vat", {}).get("type") or "none"
             prepared = {
                 "name": it["name"],
@@ -544,7 +555,7 @@ class EcomKassaClient:
                 "name": it["name"],
                 "price": price,
                 "quantity": qty,
-                "sum": to_rubles(it.get("sum", price * qty)),
+                "sum": to_rubles_ceil(it["sum"]) if it.get("sum") is not None else to_rubles_ceil(Decimal(str(price)) * Decimal(str(qty))),
                 "measure": it.get("measure", 0),
                 "payment_method": it.get("payment_method", "full_payment"),
                 "payment_object": it.get("payment_object", 1),

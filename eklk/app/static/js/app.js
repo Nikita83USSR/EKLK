@@ -149,6 +149,42 @@
     return (Math.round((Number(n) || 0) * 100) / 100).toFixed(2);
   }
 
+  /** Округление вверх до копейки (1 коп = 0.01 ₽). Дробь копейки → +1 коп. */
+  function ceilMoney(n) {
+    const x = Number(n) || 0;
+    if (!isFinite(x) || x <= 0) return 0;
+    return Math.ceil(x * 100 - 1e-9) / 100;
+  }
+
+  /**
+   * Ограничение знаков после запятой при вводе (запятая → точка).
+   * maxDec=2 цена/сумма, maxDec=3 количество.
+   */
+  function restrictDecimalInput(el, maxDec) {
+    if (!el || el.dataset.decBound === "1") return;
+    el.dataset.decBound = "1";
+    el.addEventListener("input", () => {
+      let v = String(el.value).replace(",", ".");
+      // только цифры и одна точка
+      v = v.replace(/[^\d.]/g, "");
+      const firstDot = v.indexOf(".");
+      if (firstDot !== -1) {
+        v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, "");
+        const parts = v.split(".");
+        if (parts[1] && parts[1].length > maxDec) {
+          v = parts[0] + "." + parts[1].slice(0, maxDec);
+        }
+      }
+      if (el.value !== v) el.value = v;
+    });
+    el.addEventListener("keydown", (e) => {
+      // блок лишних знаков уже на input; e — для scientific notation / e
+      if (e.key === "e" || e.key === "E" || e.key === "+" || e.key === "-") {
+        e.preventDefault();
+      }
+    });
+  }
+
   function storesList() {
     return (firmData && firmData.stores) || [];
   }
@@ -274,12 +310,18 @@
 
   /** Quantity: Atol/FFD — не более 3 знаков после запятой (тысячные). */
   /**
-   * Quantity: min 0.01, точность до тысячных (FFD).
-   * Целые без дробной части — нормальны (1, 2…).
+   * Quantity: min 0.01, не мельче тысячной (max 3 знака после запятой).
    */
   function normalizeQty(raw) {
     if (raw === "" || raw == null) return null;
-    const n = parseFloat(String(raw).replace(",", "."));
+    const s = String(raw).replace(",", ".").trim();
+    if (!/^\d+(\.\d{1,3})?$/.test(s) && !/^\d+\.$/.test(s)) {
+      // отсекаем 1.0001 и мусор; промежуточное "1." на blur отвергаем
+      const n0 = parseFloat(s);
+      if (!isFinite(n0)) return null;
+      if (Math.abs(n0 - Math.round(n0 * 1000) / 1000) > 1e-9) return null;
+    }
+    const n = parseFloat(s);
     if (!isFinite(n) || n < 0.01) return null;
     const rounded = Math.round(n * 1000) / 1000;
     if (Math.abs(n - rounded) > 1e-9) return null;
@@ -293,12 +335,24 @@
     return String(r);
   }
 
-  /** Price: minimum 0.01 ₽ (1 копейка). */
+  /**
+   * Price / money: min 0.01 ₽, строго 2 знака (копейки, без дробей копейки).
+   * 1.001 → invalid (не нормализуем «тихо» при blur в normalize — для ввода режем на input).
+   */
   function normalizePrice(raw) {
     if (raw === "" || raw == null) return null;
-    const n = parseFloat(String(raw).replace(",", "."));
+    const s = String(raw).replace(",", ".").trim();
+    const n = parseFloat(s);
     if (!isFinite(n) || n < 0.01) return null;
-    return Math.round(n * 100) / 100;
+    // не больше 2 знаков после запятой
+    const rounded = Math.round(n * 100) / 100;
+    if (Math.abs(n - rounded) > 1e-9) return null;
+    return rounded;
+  }
+
+  function formatPrice(n) {
+    if (n == null || !isFinite(n)) return "";
+    return (Math.round(n * 100) / 100).toFixed(2);
   }
 
   /** Normalize phone in UI the same way as backend: +7XXXXXXXXXX */
@@ -313,7 +367,10 @@
 
   function paymentsSum(containerSel) {
     return $$(containerSel + " .pay-row").reduce((s, row) => {
-      return s + (parseFloat(row.querySelector(".pay-sum").value) || 0);
+      const raw = row.querySelector(".pay-sum").value;
+      const n = normalizePrice(raw);
+      // оплата тоже только до копейки; дробь копейки — вверх
+      return s + (n != null ? n : ceilMoney(parseFloat(String(raw).replace(",", ".")) || 0));
     }, 0);
   }
 
@@ -782,8 +839,8 @@
   function itemRowHtml() {
     return `<tr class="item-row">
       <td><input class="it-name" placeholder="Товар или услуга" value="Товар" /></td>
-      <td><input class="it-price" type="number" step="0.01" min="0.01" value="1.00" /></td>
-      <td><input class="it-qty" type="number" step="0.01" min="0.01" value="1" /></td>
+      <td><input class="it-price" type="number" step="0.01" min="0.01" inputmode="decimal" value="1.00" /></td>
+      <td><input class="it-qty" type="number" step="0.001" min="0.01" inputmode="decimal" value="1" /></td>
       <td><select class="it-measure">${MEASURE_OPTS}</select></td>
       <td><select class="it-vat">${VAT_OPTS}</select></td>
       <td><select class="it-object">${OBJECT_OPTS}</select></td>
@@ -802,7 +859,7 @@
       </div>
       <div>
         <label>Сумма, руб</label>
-        <input class="pay-sum" type="number" step="0.01" min="0" value="0.00" />
+        <input class="pay-sum" type="number" step="0.01" min="0" inputmode="decimal" value="0.00" />
       </div>
       <div>
         <label>&nbsp;</label>
@@ -833,14 +890,28 @@
           if (tbodyId === "p_items") syncPayAgentBoxFromItems();
         }
       };
-      // количество: только тысячные; на blur нормализуем или подсвечиваем ошибку
+      // количество: max 3 знака (тысячные); цена/сумма: max 2 (копейки)
       if (el.classList.contains("it-qty")) {
+        restrictDecimalInput(el, 3);
         el.addEventListener("blur", () => {
           const n = normalizeQty(el.value);
           if (n == null) {
-            markField(el, false, "Мин. 0.001, шаг 0.001");
+            markField(el, false, "Мин. 0.01, не мельче тысячной");
           } else {
             el.value = formatQty(n);
+            markField(el, true);
+            onChange && onChange();
+          }
+        });
+      }
+      if (el.classList.contains("it-price")) {
+        restrictDecimalInput(el, 2);
+        el.addEventListener("blur", () => {
+          const n = normalizePrice(el.value);
+          if (n == null) {
+            markField(el, false, "Мин. 0.01 ₽, только копейки (2 знака)");
+          } else {
+            el.value = formatPrice(n);
             markField(el, true);
             onChange && onChange();
           }
@@ -875,14 +946,17 @@
 
   function collectItems(tbodyId) {
     return $$(`#${tbodyId} .item-row`).map((row) => {
-      const price = parseFloat(row.querySelector(".it-price").value) || 0;
+      const priceRaw = normalizePrice(row.querySelector(".it-price").value);
+      const price = priceRaw != null ? priceRaw : 0;
       const quantity = normalizeQty(row.querySelector(".it-qty").value) || 1;
       const agentCb = row.querySelector(".it-agent");
+      // цена × кол-во: любая дробь копейки → округление ВВЕРХ до 1 коп.
+      const sum = ceilMoney(price * quantity);
       return {
         name: (row.querySelector(".it-name").value || "").trim() || "Товар",
         price,
         quantity,
-        sum: Math.round(price * quantity * 100) / 100,
+        sum,
         vat_type: row.querySelector(".it-vat").value,
         measure: parseInt((row.querySelector(".it-measure") || {}).value, 10) || 0,
         payment_object: parseInt(row.querySelector(".it-object").value, 10) || 1,
@@ -1146,6 +1220,18 @@
       };
     });
     $$("#c_payments .pay-sum, #c_payments .pay-type").forEach((el) => {
+      if (el.classList.contains("pay-sum")) {
+        restrictDecimalInput(el, 2);
+        el.addEventListener("blur", () => {
+          const n = normalizePrice(el.value);
+          if (n != null) el.value = formatPrice(n);
+          else if (el.value !== "" && el.value !== "0") {
+            const c = ceilMoney(parseFloat(String(el.value).replace(",", ".")) || 0);
+            if (c >= 0.01) el.value = formatPrice(c);
+          }
+          updateCreateSummary();
+        });
+      }
       el.oninput = el.onchange = updateCreateSummary;
     });
   }
@@ -1814,10 +1900,14 @@
 
     const items = collectItems("c_items");
     const total = items.reduce((s, i) => s + i.sum, 0);
-    let payments = $$("#c_payments .pay-row").map((row) => ({
-      type: parseInt(row.querySelector(".pay-type").value, 10),
-      sum: parseFloat(row.querySelector(".pay-sum").value) || 0,
-    })).filter((p) => p.sum > 0);
+    let payments = $$("#c_payments .pay-row").map((row) => {
+      const raw = row.querySelector(".pay-sum").value;
+      const n = normalizePrice(raw);
+      return {
+        type: parseInt(row.querySelector(".pay-type").value, 10),
+        sum: n != null ? n : ceilMoney(parseFloat(String(raw).replace(",", ".")) || 0),
+      };
+    }).filter((p) => p.sum > 0);
     if (!payments.length) {
       payments = [{ type: 1, sum: total }];
     }

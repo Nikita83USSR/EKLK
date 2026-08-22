@@ -28,6 +28,19 @@ class CheckItemIn(BaseModel):
             )
         return rounded
 
+    @field_validator("price")
+    @classmethod
+    def price_kopecks(cls, v: float) -> float:
+        """Цена только до копейки (2 знака), без дробей копейки."""
+        if v is None or v < 0:
+            raise ValueError("Цена должна быть ≥ 0")
+        rounded = round(v * 100) / 100
+        if abs(v - rounded) > 1e-9:
+            raise ValueError(
+                "Цена: только копейки (2 знака после запятой), сейчас " + str(v)
+            )
+        return rounded
+
 
 class ClientIn(BaseModel):
     name: Optional[str] = None
