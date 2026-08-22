@@ -2349,6 +2349,28 @@
     return map[t] || t || "—";
   }
 
+  /**
+   * Тип в списке: orderType часто VCHR и для коррекции;
+   * признак — is_correction (API: isCorrection).
+   */
+  function orderTypeLabel(row) {
+    if (!row) return "—";
+    const raw = row.raw || {};
+    const op = String(
+      raw.operation || raw.operationType || raw.receiptOperation || raw.atolOperation || ""
+    ).toLowerCase();
+    if (op.includes("correction")) {
+      return typeLabel(op);
+    }
+    if (row.is_correction === true || raw.isCorrection === true) {
+      if (row.is_sale === false || raw.isSale === false) {
+        return "Чек коррекции (возврат)";
+      }
+      return "Чек коррекции";
+    }
+    return typeLabel(row.order_type);
+  }
+
   function formatMoney(n) {
     if (n == null || n === "") return "—";
     return money(n) + " ₽";
@@ -2438,7 +2460,7 @@
             return `<tr class="${active}" data-order-id="${id}">
               <td><code>${id ?? "—"}</code></td>
               <td>${formatDt(r.updated)}</td>
-              <td>${typeLabel(r.order_type)}</td>
+              <td>${escHtml(orderTypeLabel(r))}</td>
               <td>${statusBadge(r.status)}</td>
               <td>${formatMoney(r.total)}</td>
               <td>${r.store_name || r.store_id || "—"}</td>
@@ -2644,9 +2666,10 @@
     const fiscalPayload = (fiscal && fiscal.payload) || {};
     const oid = summary && summary.order_id != null ? summary.order_id : ordersSelectedId;
 
+    const isCorr = !!(summary && (summary.is_correction || (summary.raw && summary.raw.isCorrection)));
     let html = `<div class="r-head">
-      <div class="r-title">Кассовый чек</div>
-      <div class="r-meta">№ ${escHtml(summary?.order_id ?? "—")} · ${escHtml(typeLabel(summary?.order_type))} · ${statusBadge(summary?.status || "")}</div>
+      <div class="r-title">${isCorr ? "Чек коррекции" : "Кассовый чек"}</div>
+      <div class="r-meta">№ ${escHtml(summary?.order_id ?? "—")} · ${escHtml(orderTypeLabel(summary || {}))} · ${statusBadge(summary?.status || "")}</div>
       <div class="r-meta">${escHtml(formatDt(summary?.updated))}</div>
       ${(atol5 && atol5.external_id) ? `<div class="r-meta">Внешний ID: ${escHtml(atol5.external_id)}</div>` : (summary?.external_id ? `<div class="r-meta">Внешний ID: ${escHtml(summary.external_id)}</div>` : "")}`;
     if (!opts.hideEdit) {
