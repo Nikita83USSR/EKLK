@@ -96,6 +96,7 @@ async def create_check(body: CreateCheckRequest, user: CurrentUser):
             else None
         )
         sno = body.sno or (company or {}).get("sno") or (user.get("firm") or {}).get("taxVariant") or "osn"
+        corr = body.correction_info.model_dump(exclude_none=True) if body.correction_info else None
         result = await client.create_sell(
             external_id=external_id,
             items=items,
@@ -108,6 +109,8 @@ async def create_check(body: CreateCheckRequest, user: CurrentUser):
             callback_url=body.callback_url,
             agent=agent,
             additional_user_props=add_props,
+            operation=getattr(body, "operation", None) or "sell",
+            correction_info=corr,
         )
         log_action(
             "check_created",

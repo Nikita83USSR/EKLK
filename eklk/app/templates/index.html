@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ app_name }} — Чек</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260821f" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260822a" />
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <div class="login-logo-wrap">
-        <img src="/static/img/logo.png?v=20260821f" alt="EcomKassa" class="login-logo" />
+        <img src="/static/img/logo.png?v=20260822a" alt="EcomKassa" class="login-logo" />
       </div>
       <p class="subtitle">Личный кабинет · логин с учётом регистра букв (как в EcomKassa)</p>
       <div id="loginError" class="alert alert-error hidden"></div>
@@ -29,7 +29,7 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <img src="/static/img/logo.png?v=20260821f" alt="EcomKassa" class="header-logo" />
+          <img src="/static/img/logo.png?v=20260822a" alt="EcomKassa" class="header-logo" />
         </div>
         <nav class="nav">
           <!-- URL: /create /payment /templates /orders /settings (см. app.js route) -->
@@ -68,6 +68,10 @@
                     <option value="sell_refund">Возврат прихода</option>
                     <option value="buy">Расход</option>
                     <option value="buy_refund">Возврат расхода</option>
+                    <option value="sell_correction">Коррекция прихода</option>
+                    <option value="buy_correction">Коррекция расхода</option>
+                    <option value="sell_refund_correction">Коррекция возврата прихода</option>
+                    <option value="buy_refund_correction">Коррекция возврата расхода</option>
                   </select>
                 </div>
                 <div>
@@ -83,13 +87,38 @@
               </div>
             </div>
 
+            <!-- Correction info (Atol v5 / ФФД 1.2) — visible only for *_correction operations -->
+            <div class="card hidden" id="c_correction_card">
+              <div class="section-title">Основание коррекции</div>
+              <p class="hint" style="margin-bottom:12px">Реквизиты <code>correction_info</code> (теги 1173, 1178, 1179) по протоколу Atol Online v5.</p>
+              <div class="row">
+                <div>
+                  <label>Тип коррекции</label>
+                  <select id="c_corr_type">
+                    <option value="self">Самостоятельно</option>
+                    <option value="instruction">По предписанию</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Дата корректируемого расчёта</label>
+                  <input id="c_corr_date" type="date" />
+                </div>
+                <div id="c_corr_number_wrap" class="hidden">
+                  <label>Номер предписания</label>
+                  <input id="c_corr_number" type="text" placeholder="Номер документа ФНС" maxlength="32" />
+                </div>
+              </div>
+            </div>
+
             <!-- Buyer -->
             <div class="card">
               <div class="section-title">Данные о покупателе</div>
               <p class="hint" style="margin-bottom:12px">По требованию ФНС нужен <b>email или телефон</b> — иначе чек нельзя доставить покупателю.</p>
               <div class="row">
                 <div>
-                  <label>Email</label>
+                  <label>Email
+                    <button type="button" class="btn-link-subtle" id="c_email_default" title="Подставить email из профиля">подставить по умолчанию</button>
+                  </label>
                   <input id="c_email" type="email" placeholder="name@example.com" />
                 </div>
                 <div>
@@ -293,7 +322,12 @@
               <div class="section-title">Данные о покупателе</div>
               <p class="hint" style="margin-bottom:12px">Обязателен <b>email или телефон</b> (требование ФНС).</p>
               <div class="row">
-                <div><label>Email</label><input id="p_email" type="email" placeholder="name@example.com" /></div>
+                <div>
+                  <label>Email
+                    <button type="button" class="btn-link-subtle" id="p_email_default" title="Подставить email из профиля">подставить по умолчанию</button>
+                  </label>
+                  <input id="p_email" type="email" placeholder="name@example.com" />
+                </div>
                 <div><label>Телефон</label><input id="p_phone" placeholder="+79001234567" /></div>
                 <div>
                   <label>&nbsp;</label>
@@ -400,6 +434,7 @@
               <div class="section-title">Счёт на оплату</div>
               <div class="kv"><span class="k">Оплата</span><span class="v">Безнал (онлайн)</span></div>
               <div class="kv"><span class="k">Позиций</span><span class="v" id="p_sum_items">0</span></div>
+              <div class="kv"><span class="k">Платёжка</span><span class="v" id="p_sum_provider">—</span></div>
               <div class="total-line"><span>К оплате</span><span id="p_sum_total">0.00 ₽</span></div>
               <div class="warn-box" id="p_sum_warn">✓ Ошибок нет</div>
             </div>
@@ -574,6 +609,17 @@
                     </select>
                   </div>
                   <div>
+                    <label>Статус</label>
+                    <select id="o_status">
+                      <option value="">Все</option>
+                      <option value="done">Завершён</option>
+                      <option value="wait">Ожидает</option>
+                      <option value="paid">Фискализация</option>
+                      <option value="fail">Ошибка</option>
+                      <option value="canceled">Отменён</option>
+                    </select>
+                  </div>
+                  <div>
                     <label>С (UTC)</label>
                     <input id="o_since" type="datetime-local" />
                   </div>
@@ -739,13 +785,17 @@
             <button type="button" class="btn btn-secondary btn-sm" id="pay_qr_share">Поделиться QR</button>
           </div>
         </div>
+        <div class="pay-action-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <button type="button" class="btn btn-sm" id="pay_go_link" title="Открыть ссылку на оплату">Перейти в платёж</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="pay_repeat" title="Создать ещё одну ссылку с теми же параметрами">Повторить платёж</button>
+        </div>
         <p class="hint pay-modal-meta" id="pay_modal_meta"></p>
       </div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-  <script src="/static/js/app.js?v=20260821f"></script>
+  <script src="/static/js/app.js?v=20260822a"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
   <script data-skip-moving="true">
   (function(w,d,u){

@@ -18,8 +18,8 @@ class CheckItemIn(BaseModel):
     @classmethod
     def quantity_thousandths(cls, v: float) -> float:
         """Atol/FFD: quantity precision — тысячные (0.001), не мельче."""
-        if v is None or v <= 0:
-            raise ValueError("Количество должно быть > 0")
+        if v is None or v < 0.01:
+            raise ValueError("Количество должно быть ≥ 0.01")
         rounded = round(v * 1000) / 1000
         if abs(v - rounded) > 1e-9:
             raise ValueError(
@@ -154,8 +154,20 @@ class AdditionalUserPropsIn(BaseModel):
     value: str = Field(..., min_length=1, max_length=256)
 
 
+class CorrectionInfoIn(BaseModel):
+    """Atol v5 correction_info (теги 1173, 1178, 1179)."""
+    type: str = Field(..., description="self | instruction")
+    base_date: str = Field(..., description="Дата корректируемого расчёта (dd.mm.yyyy или YYYY-MM-DD)")
+    base_number: Optional[str] = Field(default=None, description="Номер предписания (для instruction)")
+    base_name: Optional[str] = None
+
+
 class CreateCheckRequest(BaseModel):
     external_id: Optional[str] = None
+    operation: str = Field(
+        default="sell",
+        description="sell|sell_refund|buy|buy_refund|sell_correction|buy_correction|sell_refund_correction|buy_refund_correction",
+    )
     items: List[CheckItemIn] = Field(..., min_length=1)
     payments: List[PaymentIn] = Field(..., min_length=1)
     client: ClientIn
@@ -165,6 +177,7 @@ class CreateCheckRequest(BaseModel):
     callback_url: Optional[str] = None
     agent: Optional[AgentInfoIn] = None
     additional_user_props: Optional[AdditionalUserPropsIn] = None
+    correction_info: Optional[CorrectionInfoIn] = None
     group_code: Optional[str] = Field(
         default=None,
         description="ID магазина (storeId / group_code). Если не указан — из сессии",

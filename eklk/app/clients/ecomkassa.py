@@ -384,11 +384,22 @@ class EcomKassaClient:
         timestamp: str | None = None,
         agent: dict | None = None,
         additional_user_props: dict | None = None,
+        operation: str = "sell",
+        correction_info: dict | None = None,
     ) -> dict:
         """
-        Create SALE check or INVOICE (payment link).
+        Create check / invoice / correction.
+        operation maps to fiscal path (sell, buy, *_correction, ...).
         If payments[].type is a provider id (101+), kind becomes INVOICE.
         """
+        allowed_ops = {
+            "sell", "buy", "sell_refund", "buy_refund",
+            "sell_correction", "buy_correction",
+            "sell_refund_correction", "buy_refund_correction",
+        }
+        op = (operation or "sell").strip()
+        if op not in allowed_ops:
+            raise EcomKassaError(f"Неподдерживаемая операция: {op}")
         ts = timestamp or datetime.now().strftime("%d.%m.%Y %H:%M:%S")
 
         # Normalize client phone
@@ -461,6 +472,21 @@ class EcomKassaClient:
             "receipt": receipt,
         }
 
+        if op.endswith("_correction") or "correction" in op:
+            if not correction_info or not correction_info.get("type") or not correction_info.get("base_date"):
+                raise EcomKassaError(
+                    "Для чека коррекции нужны correction_info.type и correction_info.base_date"
+                )
+            ci: dict[str, Any] = {
+                "type": correction_info["type"],
+                "base_date": correction_info["base_date"],
+            }
+            if correction_info.get("base_number"):
+                ci["base_number"] = str(correction_info["base_number"])[:32]
+            if correction_info.get("base_name"):
+                ci["base_name"] = str(correction_info["base_name"])[:256]
+            body["correction_info"] = ci
+
         service: dict[str, Any] = {}
         if callback_url:
             service["callback_url"] = callback_url
@@ -471,12 +497,12 @@ class EcomKassaClient:
 
         log_action(
             "ecom_sell",
-            f"Creating sell external_id={external_id} total={total} payments={prepared_payments}",
+            f"Creating {op} external_id={external_id} total={total} payments={prepared_payments}",
         )
-        result = await self._request("POST", f"{self.group_code}/sell", json_body=body)
+        result = await self._request("POST", f"{self.group_code}/{op}", json_body=body)
         log_action(
             "ecom_sell",
-            f"Created uuid={result.get('uuid')} kind={result.get('kind')} status={result.get('status')}",
+            f"Created uuid={result.get('uuid')} kind={result.get('kind')} status={result.get('status')} op={op}",
             uuid=result.get("uuid"),
         )
         return result

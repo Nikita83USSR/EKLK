@@ -273,20 +273,32 @@
   }
 
   /** Quantity: Atol/FFD — не более 3 знаков после запятой (тысячные). */
+  /**
+   * Quantity: min 0.01, точность до тысячных (FFD).
+   * Целые без дробной части — нормальны (1, 2…).
+   */
   function normalizeQty(raw) {
     if (raw === "" || raw == null) return null;
     const n = parseFloat(String(raw).replace(",", "."));
-    if (!isFinite(n) || n <= 0) return null;
+    if (!isFinite(n) || n < 0.01) return null;
     const rounded = Math.round(n * 1000) / 1000;
-    // отклоняем значения с точностью тоньше 0.001
     if (Math.abs(n - rounded) > 1e-9) return null;
     return rounded;
   }
 
   function formatQty(n) {
     if (n == null || !isFinite(n)) return "";
-    // до 3 знаков, без лишних нулей справа кроме .000 стиля для целых оставляем 1.000
-    return (Math.round(n * 1000) / 1000).toFixed(3);
+    const r = Math.round(n * 1000) / 1000;
+    if (Math.abs(r - Math.round(r)) < 1e-9) return String(Math.round(r));
+    return String(r);
+  }
+
+  /** Price: minimum 0.01 ₽ (1 копейка). */
+  function normalizePrice(raw) {
+    if (raw === "" || raw == null) return null;
+    const n = parseFloat(String(raw).replace(",", "."));
+    if (!isFinite(n) || n < 0.01) return null;
+    return Math.round(n * 100) / 100;
   }
 
   /** Normalize phone in UI the same way as backend: +7XXXXXXXXXX */
@@ -391,20 +403,27 @@
       }
       if (qty == null) {
         issues.push(
-          `Позиция ${n}: количество — минимум 0.001, точность не мельче тысячной (пример: 1.000 или 1.001)`
+          `Позиция ${n}: количество — минимум 0.01, точность не мельче тысячной`
         );
-        markField(row.querySelector(".it-qty"), false, "Точность: тысячные (0.001)");
+        markField(row.querySelector(".it-qty"), false, "Мин. 0.01");
       } else {
         markField(row.querySelector(".it-qty"), true);
+      }
+      if (price > 0 && price < 0.01) {
+        issues.push(`Позиция ${n}: цена — минимум 0.01 ₽ (1 копейка)`);
+        markField(row.querySelector(".it-price"), false, "Мин. 0.01");
       }
     });
     // payments sum vs items
     const total = itemsSum("c_items");
     const payTotal = paymentsSum("#c_payments");
     if (Math.abs(total - payTotal) > 0.009) {
-      issues.push(
-        `Сумма оплат (${money(payTotal)} ₽) не равна сумме позиций (${money(total)} ₽)`
-      );
+      const diff = Math.round((payTotal - total) * 100) / 100;
+      if (diff < 0) {
+        issues.push(`Не хватает ${money(Math.abs(diff))} ₽`);
+      } else {
+        issues.push(`Переплата ${money(diff)} ₽`);
+      }
     }
     // advance/prepayment often requires payment type 2 when settling advance — soft hint only for pure advance items
     const allAdvance = $$("#c_items .item-row").every((row) => {
@@ -763,8 +782,8 @@
   function itemRowHtml() {
     return `<tr class="item-row">
       <td><input class="it-name" placeholder="Товар или услуга" value="Товар" /></td>
-      <td><input class="it-price" type="number" step="0.01" min="0" value="0.00" /></td>
-      <td><input class="it-qty" type="number" step="0.001" min="0.001" value="1.000" /></td>
+      <td><input class="it-price" type="number" step="0.01" min="0.01" value="1.00" /></td>
+      <td><input class="it-qty" type="number" step="0.01" min="0.01" value="1" /></td>
       <td><select class="it-measure">${MEASURE_OPTS}</select></td>
       <td><select class="it-vat">${VAT_OPTS}</select></td>
       <td><select class="it-object">${OBJECT_OPTS}</select></td>
@@ -1009,6 +1028,11 @@
     const total = itemsSum("p_items");
     if ($("#p_sum_items")) $("#p_sum_items").textContent = String($$("#p_items .item-row").length);
     $("#p_sum_total").textContent = money(total) + " ₽";
+    const provEl = $("#p_sum_provider");
+    if (provEl) {
+      const lbl = typeof selectedProviderLabel === "function" ? selectedProviderLabel() : "";
+      provEl.textContent = lbl || "—";
+    }
     const warn = $("#p_sum_warn");
     if (!warn) return;
     const issues = [];
@@ -1043,6 +1067,9 @@
       }
       const me2 = await api("/auth/me").catch(() => null);
       if (me2 && $("#userName")) $("#userName").textContent = me2.username || me2.email || "";
+      if (me2) {
+        try { sessionStorage.setItem("eklk_me", JSON.stringify(me2)); } catch (e) { /* ignore */ }
+      }
       await loadPaymentTypes();
       ensureItem("c_items", updateCreateSummary);
       ensureItem("p_items", updatePaySummary);
@@ -1077,6 +1104,7 @@
 
   async function loadPaymentTypes() {
     const sel = $("#p_type");
+    const lastType = localStorage.getItem("eklk_last_pay_type") || "";
     try {
       const data = await api("/ecom/payment-types");
       paymentTypes = data.items || [];
@@ -1085,10 +1113,27 @@
         sel.innerHTML = providers.length
           ? providers.map((t) => `<option value="${t.id}">${t.id} — ${t.description}</option>`).join("")
           : `<option value="103">103 — Сбербанк</option>`;
+        if (lastType && [...sel.options].some((o) => o.value === lastType)) {
+          sel.value = lastType;
+        }
+        sel.onchange = () => {
+          if (sel.value) localStorage.setItem("eklk_last_pay_type", sel.value);
+          updatePaySummary();
+        };
       }
     } catch (e) {
-      if (sel) sel.innerHTML = `<option value="103">103 — Сбербанк</option>`;
+      if (sel) {
+        sel.innerHTML = `<option value="103">103 — Сбербанк</option>`;
+        if (lastType === "103") sel.value = "103";
+      }
     }
+  }
+
+  function selectedProviderLabel() {
+    const sel = $("#p_type");
+    if (!sel || !sel.value) return "";
+    const opt = sel.options[sel.selectedIndex];
+    return opt ? opt.textContent : sel.value;
   }
 
   function bindPays() {
@@ -1140,10 +1185,12 @@
     const meta = $("#pay_modal_meta");
     if (meta) {
       const parts = [];
-      if (data && data.uuid) parts.push("uuid: " + data.uuid);
+      const provUi = selectedProviderLabel();
+      if (provUi) parts.push("платёжка: " + provUi);
       if (data && data.invoice_payload && data.invoice_payload.provider) {
         parts.push("провайдер: " + data.invoice_payload.provider);
       }
+      if (data && data.uuid) parts.push("uuid: " + data.uuid);
       meta.textContent = parts.join(" · ");
     }
     modal.classList.remove("hidden");
@@ -1177,6 +1224,20 @@
         }
       };
       input.onclick = () => { input.select(); };
+    }
+    const goBtn = $("#pay_go_link");
+    if (goBtn) {
+      goBtn.onclick = () => {
+        if (link) window.open(link, "_blank", "noopener");
+      };
+    }
+    const repeatBtn = $("#pay_repeat");
+    if (repeatBtn) {
+      repeatBtn.onclick = () => {
+        closePayLinkModal();
+        const createBtn = $("#p_create");
+        if (createBtn) createBtn.click();
+      };
     }
     const maxBtn = $("#pay_share_max");
     if (maxBtn) {
@@ -1505,8 +1566,12 @@
     $$(".tab-panel").forEach((p) => p.classList.add("hidden"));
     const panel = $("#tab-" + tab);
     if (panel) panel.classList.remove("hidden");
-    if (tab === "orders" && typeof loadOrders === "function") {
-      try { loadOrders(); } catch (e) { console.warn(e); }
+    if (tab === "orders") {
+      // Не запоминаем последний выбранный чек при входе в список
+      clearOrderSelection();
+      if (typeof loadOrders === "function") {
+        try { loadOrders(); } catch (e) { console.warn(e); }
+      }
     }
     if (tab === "templates" && typeof loadTemplates === "function") {
       try { loadTemplates(); } catch (e) { console.warn(e); }
@@ -1519,10 +1584,18 @@
     }
   }
 
+  // Клик по логотипу → главная (создать чек)
+  const logoEl = document.querySelector(".header .logo");
+  if (logoEl) {
+    logoEl.addEventListener("click", () => showTab("create", true));
+    logoEl.setAttribute("role", "link");
+    logoEl.setAttribute("title", "На главную");
+  }
+
   $$(".nav button[data-tab]").forEach((btn) => {
     btn.onclick = () => {
       const tab = btn.dataset.tab;
-      if (!APP_TABS.includes(tab)) return; // status и прочее игнорируем
+      if (!APP_TABS.includes(tab)) return;
       showTab(tab, true);
     };
   });
@@ -1641,6 +1714,69 @@
     if (el) el.oninput = el.onchange = updateCreateSummary;
   });
 
+  function isCorrectionOp(op) {
+    return String(op || "").includes("correction");
+  }
+
+  function syncCorrectionFields() {
+    const op = ($("#c_operation") && $("#c_operation").value) || "sell";
+    const card = $("#c_correction_card");
+    if (card) card.classList.toggle("hidden", !isCorrectionOp(op));
+    const ctype = ($("#c_corr_type") && $("#c_corr_type").value) || "self";
+    const numWrap = $("#c_corr_number_wrap");
+    if (numWrap) numWrap.classList.toggle("hidden", ctype !== "instruction");
+  }
+
+  if ($("#c_operation")) {
+    $("#c_operation").addEventListener("change", () => {
+      syncCorrectionFields();
+      updateCreateSummary();
+    });
+  }
+  if ($("#c_corr_type")) {
+    $("#c_corr_type").addEventListener("change", syncCorrectionFields);
+  }
+  syncCorrectionFields();
+
+  function defaultProfileEmail() {
+    // Логин EcomKassa часто email; иначе username из UI
+    const u = ($("#userName") && $("#userName").textContent) || "";
+    if (u && u.includes("@")) return u.trim();
+    try {
+      const me = JSON.parse(sessionStorage.getItem("eklk_me") || "null");
+      if (me && me.email && String(me.email).includes("@")) return me.email;
+      if (me && me.username && String(me.username).includes("@")) return me.username;
+    } catch (e) { /* ignore */ }
+    return "";
+  }
+
+  if ($("#c_email_default")) {
+    $("#c_email_default").onclick = () => {
+      const em = defaultProfileEmail();
+      if (!em) {
+        showAlert("В профиле нет email (логин не похож на почту)");
+        return;
+      }
+      if ($("#c_email")) {
+        $("#c_email").value = em;
+        updateCreateSummary();
+      }
+    };
+  }
+  if ($("#p_email_default")) {
+    $("#p_email_default").onclick = () => {
+      const em = defaultProfileEmail();
+      if (!em) {
+        showAlert("В профиле нет email (логин не похож на почту)");
+        return;
+      }
+      if ($("#p_email")) {
+        $("#p_email").value = em;
+        updatePaySummary();
+      }
+    };
+  }
+
   $("#c_reset").onclick = () => {
     $("#c_result").classList.add("hidden");
     $("#c_email").value = "";
@@ -1697,9 +1833,9 @@
       const n = normalizeQty(qEl.value);
       if (n == null) {
         issues.push(
-          `Позиция ${idx + 1}: количество — минимум 0.001, точность не мельче тысячной (не 1.0001)`
+          `Позиция ${idx + 1}: количество — минимум 0.01, точность не мельче тысячной`
         );
-        markField(qEl, false, "Точность: тысячные");
+        markField(qEl, false, "Мин. 0.01");
       } else {
         qEl.value = formatQty(n);
       }
@@ -1707,9 +1843,12 @@
     if (total <= 0) issues.push("Сумма товаров должна быть больше 0");
     const payTotal = payments.reduce((s, p) => s + p.sum, 0);
     if (Math.abs(payTotal - total) > 0.009) {
-      issues.push(
-        "Сумма оплат (" + money(payTotal) + ") не равна сумме товаров (" + money(total) + ")"
-      );
+      const diff = Math.round((payTotal - total) * 100) / 100;
+      if (diff < 0) {
+        issues.push("Не хватает " + money(Math.abs(diff)) + " ₽");
+      } else {
+        issues.push("Переплата " + money(diff) + " ₽");
+      }
     }
     let phoneNorm = undefined;
     if (phoneRaw) {
@@ -1730,8 +1869,10 @@
       // New attempt gets new id; double-click blocked by busy flag.
       // Always new external_id (never reuse source)
       const external_id = nextExternalId(sourceDocumentId ? "EKLK-FROM-" + sourceDocumentId : "EKLK");
+      const opVal = ($("#c_operation") && $("#c_operation").value) || "sell";
       const body = {
         external_id,
+        operation: opVal,
         source_document_id: sourceDocumentId ? String(sourceDocumentId) : undefined,
         items,
         payments,
@@ -1744,6 +1885,32 @@
         sno: $("#c_sno").value,
         group_code: String(($("#c_store") && $("#c_store").value) || getSelectedStoreId() || ""),
       };
+      if (isCorrectionOp(opVal)) {
+        const ctype = ($("#c_corr_type") && $("#c_corr_type").value) || "self";
+        const cdate = ($("#c_corr_date") && $("#c_corr_date").value) || "";
+        if (!cdate) {
+          showAlert("Укажите дату корректируемого расчёта");
+          setLoading(btn, false, "Создать чек");
+          return;
+        }
+        // Atol expects dd.mm.yyyy in some builds; ISO date is accepted by gateway as YYYY-MM-DD
+        const parts = cdate.split("-");
+        const baseDate =
+          parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : cdate;
+        body.correction_info = {
+          type: ctype,
+          base_date: baseDate,
+        };
+        if (ctype === "instruction") {
+          const num = ($("#c_corr_number") && $("#c_corr_number").value.trim()) || "";
+          if (!num) {
+            showAlert("Укажите номер предписания");
+            setLoading(btn, false, "Создать чек");
+            return;
+          }
+          body.correction_info.base_number = num;
+        }
+      }
 
       // Additional user props (name + value)
       if ($("#c_addProp") && $("#c_addProp").checked) {
@@ -1813,6 +1980,7 @@
       if (op === "sell_refund") {
         data = await api("/ecom/refunds", { method: "POST", body: JSON.stringify(body) });
       } else {
+        // sell / buy / buy_refund / *_correction → /ecom/checks (operation в body)
         data = await api("/ecom/checks", { method: "POST", body: JSON.stringify(body) });
       }
       const payLink = (data.invoice_payload && data.invoice_payload.link) || "";
@@ -1877,7 +2045,7 @@
       const qEl = row.querySelector(".it-qty");
       const n = normalizeQty(qEl && qEl.value);
       if (n == null) {
-        return showAlert("Позиция " + (i + 1) + ": количество — минимум 0.001, шаг 0.001");
+        return showAlert("Позиция " + (i + 1) + ": количество — минимум 0.01");
       }
       qEl.value = formatQty(n);
       items[i].quantity = n;
@@ -1886,10 +2054,14 @@
 
     setLoading(btn, true, "Создать ссылку", "Создание ссылки…");
     try {
+      const payTypeId = parseInt($("#p_type").value, 10);
+      if ($("#p_type") && $("#p_type").value) {
+        localStorage.setItem("eklk_last_pay_type", String($("#p_type").value));
+      }
       const body = {
         external_id: nextExternalId("PAY"),
         items,
-        payments: [{ type: parseInt($("#p_type").value, 10), sum: total }],
+        payments: [{ type: payTypeId, sum: total }],
         client: {
           email: emailP || undefined,
           phone: phoneNorm,
@@ -1970,6 +2142,24 @@
   let ordersOffset = 0;
   let ordersLimit = 25;
   let ordersSelectedId = null;
+  let ordersSortKey = null; // id | date | type | status | total | store
+  let ordersSortDir = "desc";
+  let ordersRawRows = [];
+
+  function clearOrderSelection() {
+    ordersSelectedId = null;
+    const el = $("#o_detail");
+    const ph = $("#o_detail_placeholder");
+    if (el) {
+      el.classList.add("hidden");
+      el.innerHTML = "";
+    }
+    if (ph) {
+      ph.classList.remove("hidden");
+      ph.textContent = "Выберите чек в списке слева";
+    }
+    $$(".orders-table tr.active").forEach((tr) => tr.classList.remove("active"));
+  }
 
   function toIsoLocal(val) {
     if (!val) return undefined;
@@ -2067,10 +2257,124 @@
     }
   }
 
+  function statusFilterMatch(st, filter) {
+    if (!filter) return true;
+    const key = String(st || "").toLowerCase().trim();
+    const groups = {
+      done: ["done", "completed", "complete", "ready", "printed", "success", "ok"],
+      wait: ["wait", "waiting", "pending", "process", "processing", "in_progress", "created", "new", "draft"],
+      paid: ["paid", "payment"],
+      fail: ["fail", "failed", "error"],
+      canceled: ["canceled", "cancelled", "expired", "timeout"],
+    };
+    const list = groups[filter] || [filter];
+    return list.includes(key);
+  }
+
+  function sortOrdersRows(rows) {
+    if (!ordersSortKey) return rows;
+    const dir = ordersSortDir === "asc" ? 1 : -1;
+    const key = ordersSortKey;
+    return [...rows].sort((a, b) => {
+      let va;
+      let vb;
+      if (key === "id") {
+        va = Number(a.order_id) || 0;
+        vb = Number(b.order_id) || 0;
+      } else if (key === "date") {
+        va = a.updated ? new Date(a.updated).getTime() : 0;
+        vb = b.updated ? new Date(b.updated).getTime() : 0;
+      } else if (key === "type") {
+        va = String(a.order_type || "");
+        vb = String(b.order_type || "");
+      } else if (key === "status") {
+        va = String(a.status || "").toLowerCase();
+        vb = String(b.status || "").toLowerCase();
+      } else if (key === "total") {
+        va = Number(a.total) || 0;
+        vb = Number(b.total) || 0;
+      } else if (key === "store") {
+        va = String(a.store_name || a.store_id || "");
+        vb = String(b.store_name || b.store_id || "");
+      } else {
+        return 0;
+      }
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+  }
+
+  function renderOrdersTable(rows) {
+    const list = $("#o_list");
+    if (!list) return;
+    if (!rows.length) {
+      list.innerHTML = `<p class="hint">Чеков не найдено</p>`;
+      return;
+    }
+    const sorted = sortOrdersRows(rows);
+    const th = (key, label) => {
+      let cls = "sortable";
+      if (ordersSortKey === key) cls += ordersSortDir === "asc" ? " sort-asc" : " sort-desc";
+      return `<th class="${cls}" data-sort="${key}">${label}</th>`;
+    };
+    list.innerHTML = `<table class="orders-table">
+      <thead><tr>
+        ${th("id", "ID")}${th("date", "Дата")}${th("type", "Тип")}${th("status", "Статус")}${th("total", "Сумма")}${th("store", "Магазин")}<th></th>
+      </tr></thead>
+      <tbody>
+        ${sorted
+          .map((r) => {
+            const id = r.order_id;
+            const active = String(id) === String(ordersSelectedId) ? "active" : "";
+            return `<tr class="${active}" data-order-id="${id}">
+              <td><code>${id ?? "—"}</code></td>
+              <td>${formatDt(r.updated)}</td>
+              <td>${typeLabel(r.order_type)}</td>
+              <td>${statusBadge(r.status)}</td>
+              <td>${formatMoney(r.total)}</td>
+              <td>${r.store_name || r.store_id || "—"}</td>
+              <td><button type="button" class="btn btn-sm btn-secondary o-edit-btn" data-order-id="${id}" title="Действия с документом">Действие</button></td>
+            </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>`;
+    list.querySelectorAll("th[data-sort]").forEach((thEl) => {
+      thEl.onclick = (ev) => {
+        ev.preventDefault();
+        const k = thEl.dataset.sort;
+        if (ordersSortKey === k) {
+          ordersSortDir = ordersSortDir === "asc" ? "desc" : "asc";
+        } else {
+          ordersSortKey = k;
+          ordersSortDir = k === "date" || k === "id" ? "desc" : "asc";
+        }
+        renderOrdersTable(ordersRawRows);
+      };
+    });
+    list.querySelectorAll("tr[data-order-id]").forEach((tr) => {
+      tr.onclick = (ev) => {
+        if (ev.target && ev.target.closest && ev.target.closest(".o-edit-btn")) return;
+        openOrderDetail(tr.dataset.orderId);
+      };
+    });
+    list.querySelectorAll(".o-edit-btn").forEach((btn) => {
+      btn.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        editOrderAsNew(btn.dataset.orderId);
+      };
+    });
+  }
+
   async function loadOrders() {
     const list = $("#o_list");
     if (!list) return;
     list.innerHTML = `<p class="hint">Загрузка…</p>`;
+    // Новый поиск / обновление — сбрасываем сортировку
+    ordersSortKey = null;
+    ordersSortDir = "desc";
     ordersLimit = parseInt(($("#o_limit") && $("#o_limit").value) || "25", 10);
     const body = {
       offset: ordersOffset,
@@ -2087,46 +2391,13 @@
 
     try {
       const data = await api("/orders/search", { method: "POST", body: JSON.stringify(body) });
-      const rows = data.result || [];
-      if (!rows.length) {
-        list.innerHTML = `<p class="hint">Чеков не найдено</p>`;
-      } else {
-        list.innerHTML = `<table class="orders-table">
-          <thead><tr>
-            <th>ID</th><th>Дата</th><th>Тип</th><th>Статус</th><th>Сумма</th><th>Магазин</th><th></th>
-          </tr></thead>
-          <tbody>
-            ${rows
-              .map((r) => {
-                const id = r.order_id;
-                const active = String(id) === String(ordersSelectedId) ? "active" : "";
-                return `<tr class="${active}" data-order-id="${id}">
-                  <td><code>${id ?? "—"}</code></td>
-                  <td>${formatDt(r.updated)}</td>
-                  <td>${typeLabel(r.order_type)}</td>
-                  <td>${statusBadge(r.status)}</td>
-                  <td>${formatMoney(r.total)}</td>
-                  <td>${r.store_name || r.store_id || "—"}</td>
-                  <td><button type="button" class="btn btn-sm btn-secondary o-edit-btn" data-order-id="${id}" title="Создать новый документ на основе этого чека">Редактировать</button></td>
-                </tr>`;
-              })
-              .join("")}
-          </tbody>
-        </table>`;
-        list.querySelectorAll("tr[data-order-id]").forEach((tr) => {
-          tr.onclick = (ev) => {
-            if (ev.target && ev.target.closest && ev.target.closest(".o-edit-btn")) return;
-            openOrderDetail(tr.dataset.orderId);
-          };
-        });
-        list.querySelectorAll(".o-edit-btn").forEach((btn) => {
-          btn.onclick = (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            editOrderAsNew(btn.dataset.orderId);
-          };
-        });
+      let rows = data.result || [];
+      const statusFilter = ($("#o_status") && $("#o_status").value) || "";
+      if (statusFilter) {
+        rows = rows.filter((r) => statusFilterMatch(r.status, statusFilter));
       }
+      ordersRawRows = rows;
+      renderOrdersTable(rows);
       const info = $("#o_page_info");
       if (info) {
         info.textContent = `показано ${rows.length} · смещение ${ordersOffset}`;
@@ -2273,7 +2544,7 @@
     if (!opts.hideEdit) {
       html += `
       <div class="r-head-actions">
-        <button type="button" class="btn btn-sm btn-secondary" id="o_detail_edit" data-order-id="${oid}">Редактировать</button>
+        <button type="button" class="btn btn-sm btn-secondary" id="o_detail_edit" data-order-id="${oid}">Действие</button>
       </div>`;
     }
     html += `
@@ -2458,6 +2729,7 @@
       $("#o_reset").onclick = () => {
         if ($("#o_ext")) $("#o_ext").value = "";
         if ($("#o_types")) $("#o_types").value = "";
+        if ($("#o_status")) $("#o_status").value = "";
         if ($("#o_since")) $("#o_since").value = "";
         if ($("#o_until")) $("#o_until").value = "";
         if ($("#o_limit")) $("#o_limit").value = "25";
