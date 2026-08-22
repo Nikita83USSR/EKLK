@@ -464,7 +464,7 @@ class EcomKassaClient:
             {"type": int(p["type"]), "sum": to_rubles(p["sum"])} for p in payments
         ]
 
-        receipt: dict[str, Any] = {
+        payload: dict[str, Any] = {
             "client": client,
             "company": company,
             "items": prepared_items,
@@ -472,31 +472,44 @@ class EcomKassaClient:
             "total": to_rubles(total),
         }
         if additional_user_props and additional_user_props.get("name") and additional_user_props.get("value"):
-            receipt["additional_user_props"] = {
+            payload["additional_user_props"] = {
                 "name": str(additional_user_props["name"])[:64],
                 "value": str(additional_user_props["value"])[:256],
             }
 
+        # Atol Online v5 operations (path = operation):
+        #   sell | buy | sell_refund | buy_refund
+        #   sell_correction | buy_correction
+        #   sell_refund_correction | buy_refund_correction
+        # Для коррекции тело — ключ "correction" + correction_info внутри;
+        # для обычных чеков — ключ "receipt".
+        is_correction = op in (
+            "sell_correction",
+            "buy_correction",
+            "sell_refund_correction",
+            "buy_refund_correction",
+        )
         body: dict[str, Any] = {
             "external_id": external_id,
             "timestamp": ts,
-            "receipt": receipt,
         }
-
-        if op.endswith("_correction") or "correction" in op:
+        if is_correction:
             if not correction_info or not correction_info.get("type") or not correction_info.get("base_date"):
                 raise EcomKassaError(
                     "Для чека коррекции нужны correction_info.type и correction_info.base_date"
                 )
             ci: dict[str, Any] = {
-                "type": correction_info["type"],
-                "base_date": correction_info["base_date"],
+                "type": correction_info["type"],  # self | instruction
+                "base_date": correction_info["base_date"],  # dd.mm.yyyy
             }
             if correction_info.get("base_number"):
                 ci["base_number"] = str(correction_info["base_number"])[:32]
             if correction_info.get("base_name"):
                 ci["base_name"] = str(correction_info["base_name"])[:256]
-            body["correction_info"] = ci
+            payload["correction_info"] = ci
+            body["correction"] = payload
+        else:
+            body["receipt"] = payload
 
         service: dict[str, Any] = {}
         if callback_url:
@@ -510,6 +523,7 @@ class EcomKassaClient:
             "ecom_sell",
             f"Creating {op} external_id={external_id} total={total} payments={prepared_payments}",
         )
+        # POST /fiscalorder/v5/{group_code}/{operation}
         result = await self._request("POST", f"{self.group_code}/{op}", json_body=body)
         log_action(
             "ecom_sell",
