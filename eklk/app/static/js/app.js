@@ -1608,9 +1608,15 @@
         try {
           const detail = await api("/orders/" + encodeURIComponent(orderId));
           const fiscal = detail.fiscal || report;
+          // Тот же markup, что справа в «Списке чеков»
           body.innerHTML =
             `<div class="receipt-view">` +
-            buildReceiptHtml(detail.atol5, detail.summary, fiscal, { hideEdit: true }) +
+            buildReceiptHtml(detail.atol5, detail.summary || {
+              order_id: orderId,
+              external_id: ctx.externalId,
+              status: (report && report.status) || (detail.summary && detail.summary.status),
+              total: detail.summary && detail.summary.total,
+            }, fiscal, { hideEdit: true }) +
             `</div>`;
           return;
         } catch (e) {
@@ -1618,8 +1624,12 @@
         }
       }
 
-      // 3) fallback: только report
-      body.innerHTML = buildReportFallbackHtml(report);
+      // 3) fallback: report в том же receipt-view
+      body.innerHTML = buildReportFallbackHtml(report || {
+        uuid: ctx.uuid,
+        external_id: ctx.externalId,
+        status: "wait",
+      });
     } catch (e) {
       body.innerHTML = `<p class="hint" style="color:#fca5a5">${escHtml(e.message || String(e))}</p>`;
     } finally {
