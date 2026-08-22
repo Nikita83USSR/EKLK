@@ -2749,6 +2749,56 @@
         loadOrders();
       };
     }
+    bindOrdersScrollZones();
+  }
+
+  /**
+   * Скролл: наведение на список → страница; наведение на превью → скролл чека.
+   * Клик по области фиксирует «зону» (fallback, если hover нестабилен).
+   */
+  function bindOrdersScrollZones() {
+    const detail = document.querySelector(".orders-detail-pane");
+    const list = document.querySelector(".orders-list-pane");
+    if (!detail || detail.dataset.scrollBound === "1") return;
+    detail.dataset.scrollBound = "1";
+
+    let zone = "page"; // page | detail
+
+    const setZone = (z) => {
+      zone = z;
+      detail.classList.toggle("is-scroll-target", z === "detail");
+    };
+
+    detail.addEventListener("mouseenter", () => setZone("detail"));
+    detail.addEventListener("mouseleave", () => setZone("page"));
+    detail.addEventListener("click", () => setZone("detail"));
+    if (list) {
+      list.addEventListener("mouseenter", () => setZone("page"));
+      list.addEventListener("click", () => setZone("page"));
+    }
+
+    detail.addEventListener(
+      "wheel",
+      (e) => {
+        const scroller =
+          detail.querySelector(".receipt-view:not(.hidden)") ||
+          detail.querySelector(".receipt-view") ||
+          detail;
+        if (!scroller) return;
+        // Только когда зона detail (hover или клик)
+        if (zone !== "detail" && !detail.matches(":hover")) return;
+        const canScroll = scroller.scrollHeight > scroller.clientHeight + 2;
+        if (!canScroll) return;
+        const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+        const next = scroller.scrollTop + e.deltaY;
+        // Перехватываем колесо, пока есть куда крутить внутри чека
+        if ((e.deltaY < 0 && scroller.scrollTop > 0) || (e.deltaY > 0 && scroller.scrollTop < maxScroll - 0.5)) {
+          e.preventDefault();
+          scroller.scrollTop = Math.max(0, Math.min(maxScroll, next));
+        }
+      },
+      { passive: false }
+    );
   }
 
 

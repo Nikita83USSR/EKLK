@@ -216,35 +216,25 @@ input.invalid, select.invalid {
 .logo:hover { opacity: 0.85; }
 .header-logo { display: block; }
 
-/* Orders list — раздельный скролл списка и превью */
+/* Orders list — список на всю высоту контента (без укорачивания и без скроллбара списка).
+   Превью sticky справа: скролл чека при наведении / фокусе (см. app.js). */
 .orders-layout {
   display: grid;
   grid-template-columns: 1fr 380px;
   gap: 20px;
-  align-items: stretch;
-  /* высота области под хедером: список и деталка скроллятся независимо */
-  max-height: calc(100vh - 140px);
-  max-height: calc(100dvh - 140px);
+  align-items: start;
 }
 @media (max-width: 960px) {
   .orders-layout {
     grid-template-columns: 1fr;
-    max-height: none;
   }
 }
 .orders-list-pane {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
+  min-width: 0;
 }
-.orders-filters { margin-bottom: 14px; flex-shrink: 0; }
+.orders-filters { margin-bottom: 14px; }
 .orders-table-wrap {
-  overflow-x: auto;
-  overflow-y: auto;
-  flex: 1 1 auto;
-  min-height: 120px;
-  -webkit-overflow-scrolling: touch;
+  overflow-x: auto; /* только горизонталь при узком экране */
 }
 .orders-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
 .orders-table th {
@@ -279,36 +269,49 @@ input.invalid, select.invalid {
   justify-content: space-between;
   margin-top: 12px;
   gap: 8px;
-  flex-shrink: 0;
 }
+/* Деталка: прилипает к верху, длинный чек крутится внутри при hover/focus */
 .orders-detail-pane {
   position: sticky;
   top: 70px;
-  max-height: calc(100vh - 140px);
-  max-height: calc(100dvh - 140px);
-  overflow: hidden;
+  align-self: start;
+  max-height: calc(100vh - 90px);
+  max-height: calc(100dvh - 90px);
   display: flex;
   flex-direction: column;
   min-height: 0;
+  z-index: 5;
 }
 .orders-detail-pane > .card {
-  flex: 1 1 auto;
-  min-height: 0;
+  max-height: inherit;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  min-height: 0;
   margin-bottom: 0;
+  overflow: hidden;
 }
 .orders-detail-pane .receipt-view {
   flex: 1 1 auto;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   min-height: 0;
+  overscroll-behavior: contain;
+}
+.orders-detail-pane.is-scroll-target {
+  outline: 1px solid var(--accent, #22c55e);
+  outline-offset: 2px;
+  border-radius: 12px;
 }
 @media (max-width: 960px) {
   .orders-detail-pane {
     position: static;
     max-height: none;
+  }
+  .orders-detail-pane > .card {
+    max-height: none;
+  }
+  .orders-detail-pane .receipt-view {
+    max-height: 70vh;
   }
 }
 .receipt-view {
