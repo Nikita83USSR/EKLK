@@ -90,6 +90,10 @@
     sell_refund: "Возврат прихода",
     buy: "Расход",
     buy_refund: "Возврат расхода",
+    sell_correction: "Коррекция прихода",
+    buy_correction: "Коррекция расхода",
+    sell_refund_correction: "Коррекция возврата прихода",
+    buy_refund_correction: "Коррекция возврата расхода",
   };
   const SNO_LABELS = {
     osn: "ОСН",
