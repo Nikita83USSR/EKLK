@@ -270,55 +270,24 @@ input.invalid, select.invalid {
   margin-top: 12px;
   gap: 8px;
 }
-/* Деталка: прилипает к верху, длинный чек крутится внутри при hover/focus */
+/* Деталка: высота = весь чек, без внутреннего скролла (скроллится страница) */
 .orders-detail-pane {
   position: sticky;
   top: 70px;
   align-self: start;
-  max-height: calc(100vh - 90px);
-  max-height: calc(100dvh - 90px);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
   z-index: 5;
 }
 .orders-detail-pane > .card {
-  max-height: inherit;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
   margin-bottom: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 .orders-detail-pane .receipt-view {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  min-height: 0;
-  overscroll-behavior: contain;
-  /* скролл есть, полосы нет */
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.orders-detail-pane .receipt-view::-webkit-scrollbar {
-  width: 0 !important;
-  height: 0 !important;
-  display: none !important;
-}
-.orders-detail-pane.is-scroll-target {
-  box-shadow: 0 0 0 1px var(--accent, #22c55e);
-  border-radius: 12px;
+  overflow: visible;
+  max-height: none;
 }
 @media (max-width: 960px) {
   .orders-detail-pane {
     position: static;
-    max-height: none;
-  }
-  .orders-detail-pane > .card {
-    max-height: none;
-  }
-  .orders-detail-pane .receipt-view {
-    max-height: 70vh;
   }
 }
 .receipt-view {
