@@ -2888,8 +2888,59 @@
    * Клик по области фиксирует «зону» (fallback, если hover нестабилен).
    */
   function bindOrdersScrollZones() {
-    // Превью на всю высоту чека — без внутреннего скролла и перехвата wheel.
-    // Скроллится страница (список + блок состава).
+    const layout = document.querySelector(".orders-layout");
+    const detail = document.querySelector(".orders-detail-pane");
+    const list = document.querySelector(".orders-list-pane");
+    if (!layout || !detail || detail.dataset.scrollBound === "1") return;
+    detail.dataset.scrollBound = "1";
+
+    let zone = "page"; // "page" | "detail"
+    const receipt = () => detail.querySelector(".receipt-view");
+
+    function setZone(z) {
+      zone = z;
+      detail.classList.toggle("is-scroll-active", z === "detail");
+    }
+
+    detail.addEventListener("mouseenter", () => setZone("detail"));
+    detail.addEventListener("mouseleave", () => setZone("page"));
+    detail.addEventListener(
+      "click",
+      () => setZone("detail"),
+      true
+    );
+    if (list) {
+      list.addEventListener("mouseenter", () => setZone("page"));
+      list.addEventListener(
+        "click",
+        () => setZone("page"),
+        true
+      );
+    }
+
+    // Колёсико: над активным превью — скроллим блок чека; иначе — страница (список)
+    layout.addEventListener(
+      "wheel",
+      (e) => {
+        const overDetail =
+          zone === "detail" ||
+          (e.target && detail.contains(e.target));
+        if (!overDetail) return; // пусть страница скроллит список
+        const el = receipt();
+        if (!el) return;
+        const canUp = el.scrollTop > 0;
+        const canDown = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+        if ((e.deltaY < 0 && canUp) || (e.deltaY > 0 && canDown)) {
+          e.preventDefault();
+          el.scrollTop += e.deltaY;
+        }
+        // у края превью — не отдаём скролл странице, чтобы не уезжал список
+        else if (el.scrollHeight > el.clientHeight + 2) {
+          e.preventDefault();
+        }
+      },
+      { passive: false }
+    );
   }
 
 
