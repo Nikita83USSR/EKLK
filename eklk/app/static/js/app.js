@@ -1674,15 +1674,14 @@
       }
     }
     if (tab === "templates" && typeof loadTemplates === "function") {
-      try { loadTemplates(); }
+      try { loadTemplates(); } catch (e) { console.warn(e); }
+    }
     // CORE: hooks for section modules (do not expand core logic here)
     if (tab === "catalog" && window.EKLK_CATALOG && typeof window.EKLK_CATALOG.onShow === "function") {
-      window.EKLK_CATALOG.onShow();
+      try { window.EKLK_CATALOG.onShow(); } catch (e) { console.warn(e); }
     }
     if (tab === "reports" && window.EKLK_REPORTS && typeof window.EKLK_REPORTS.onShow === "function") {
-      window.EKLK_REPORTS.onShow();
-    }
- catch (e) { console.warn(e); }
+      try { window.EKLK_REPORTS.onShow(); } catch (e) { console.warn(e); }
     }
     if (push) {
       const path = tabToPath(tab);
