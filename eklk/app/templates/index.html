@@ -33,7 +33,8 @@
         </div>
         <nav class="nav">
           <!-- URL: /create /payment /templates /orders /settings (см. app.js route) -->
-          <button type="button" class="active" data-tab="create">Чек</button>
+          <button type="button" class="active" data-tab="home">На главную</button>
+          <button type="button" data-tab="create">Чек</button>
           <button type="button" data-tab="payment">Ссылка на оплату</button>
           <button type="button" data-tab="templates">Многоразовые ссылки</button>
           <button type="button" data-tab="orders">Список чеков</button>
@@ -49,10 +50,101 @@
     </header>
 
     <main class="container">
-      <div id="globalAlert" class="alert hidden"></div>
+      
+        <!-- ===== HOME DASHBOARD ===== -->
+        <div id="tab-home" class="tab-panel">
+          <div class="dash">
+            <div class="dash-head">
+              <div>
+                <h2 class="dash-title">Платежи и чеки</h2>
+                <p class="hint" id="dash_firm">—</p>
+              </div>
+              <div class="dash-filters">
+                <label>Точка продаж
+                  <select id="dash_store" class="input">
+                    <option value="">Все точки продаж</option>
+                  </select>
+                </label>
+                <label>Период
+                  <select id="dash_period" class="input">
+                    <option value="daily" selected>День</option>
+                  </select>
+                </label>
+                <label>Дата
+                  <input type="date" id="dash_date" class="input" />
+                </label>
+                <button type="button" class="btn" id="dash_refresh">Обновить</button>
+              </div>
+            </div>
+
+            <div class="dash-grid">
+              <div class="dash-card dash-metrics">
+                <div class="section-title">Динамика продаж</div>
+                <div class="dash-split">
+                  <div class="dash-metric">
+                    <div class="dash-metric-label">По счетам</div>
+                    <div class="dash-metric-value" id="dash_invoices">—</div>
+                  </div>
+                  <div class="dash-metric">
+                    <div class="dash-metric-label">По чекам</div>
+                    <div class="dash-metric-value" id="dash_checks">—</div>
+                  </div>
+                </div>
+                <div class="dash-gauge-wrap">
+                  <canvas id="dash_gauge" width="280" height="160"></canvas>
+                  <div class="dash-gauge-center">
+                    <div class="dash-gauge-label">Прибыль <span id="dash_profit_pct" class="dash-delta">—</span></div>
+                    <div class="dash-gauge-value" id="dash_profit">—</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="dash-side">
+                <div class="dash-card">
+                  <div class="dash-stat-row">
+                    <div>
+                      <div class="dash-metric-label">Всего продаж</div>
+                      <div class="dash-metric-value" id="dash_sales_count">—</div>
+                    </div>
+                    <div id="dash_sales_pct" class="dash-delta">—</div>
+                  </div>
+                </div>
+                <div class="dash-card">
+                  <div class="dash-stat-row">
+                    <div>
+                      <div class="dash-metric-label">Средний чек</div>
+                      <div class="dash-metric-value" id="dash_avg_check">—</div>
+                    </div>
+                    <div id="dash_avg_pct" class="dash-delta">—</div>
+                  </div>
+                </div>
+                <div class="dash-card">
+                  <div class="dash-stat-row">
+                    <div>
+                      <div class="dash-metric-label">Общая сумма чеков</div>
+                      <div class="dash-metric-value" id="dash_total">—</div>
+                    </div>
+                    <div id="dash_total_pct" class="dash-delta">—</div>
+                  </div>
+                </div>
+                <div class="dash-card">
+                  <div class="dash-metric-label">Наличные (CASH)</div>
+                  <div class="dash-metric-value" id="dash_cash">—</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="dash-card" style="margin-top:16px">
+              <div class="section-title">По типам оплаты</div>
+              <div id="dash_pay_types" class="dash-pay-types hint">Загрузка…</div>
+            </div>
+          </div>
+        </div>
+
+<div id="globalAlert" class="alert hidden"></div>
 
       <!-- ========== CREATE CHECK (по макету EcomKassa) ========== -->
-      <section id="tab-create" class="tab-panel">
+      <section id="tab-create" class="tab-panel hidden">
         <div class="check-layout">
           <div>
             <!-- Header fields -->
@@ -773,7 +865,7 @@
       </div>
 
       <!-- REPORTS (module: sections/reports.js) -->
-      <section id="tab-reports" class="tab-panel hidden">
+      <div id="tab-reports" class="tab-panel hidden">
         <div class="check-layout reports-layout">
           <div>
             <div class="card">
@@ -1020,11 +1112,12 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-  <script src="/static/js/app.js?v=20260824g"></script>
-  <script src="/static/js/sections/catalog.js?v=20260824g"></script>
-  <script src="/static/js/sections/reports.js?v=20260824g"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="/static/js/app.js?v=20260824h"></script>
+  <script src="/static/js/sections/dashboard.js?v=20260824h"></script>
+  <script src="/static/js/sections/catalog.js?v=20260824h"></script>
+  <script src="/static/js/sections/reports.js?v=20260824h"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
   <script data-skip-moving="true">
   (function(w,d,u){

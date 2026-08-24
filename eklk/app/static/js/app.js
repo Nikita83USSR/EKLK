@@ -1644,22 +1644,22 @@
   // Разделы: /create | /payment | /orders | /settings
   // В дальнейшем: URL-параметры (например /orders?external_id=…, /create?from=123).
   // Вкладка «Статус» (/status) удалена — статус чека в списке/деталки.
-  const APP_TABS = ["create", "payment", "templates", "orders", "catalog", "reports", "settings"]; // CORE: catalog/reports — sections/*.js
+  const APP_TABS = ["home", "create", "payment", "templates", "orders", "catalog", "reports", "settings"]; // CORE: home/catalog/reports — sections/*.js
 
   function pathToTab(pathname) {
     const p = String(pathname || "/").replace(/\/+$/, "") || "/";
-    if (p === "/" || p === "/create") return "create";
+    if (p === "/" || p === "/home") return "home";
     const seg = p.split("/").filter(Boolean)[0];
-    return APP_TABS.includes(seg) ? seg : "create";
+    return APP_TABS.includes(seg) ? seg : "home";
   }
 
   function tabToPath(tab) {
-    return "/" + (APP_TABS.includes(tab) ? tab : "create");
+    return "/" + (APP_TABS.includes(tab) ? tab : "home");
   }
 
   /** Показать раздел ЛК. push=true → history.pushState */
   function showTab(tab, push) {
-    if (!APP_TABS.includes(tab)) tab = "create";
+    if (!APP_TABS.includes(tab)) tab = "home";
     $$(".nav button[data-tab]").forEach((b) => {
       b.classList.toggle("active", b.dataset.tab === tab);
     });
@@ -1683,6 +1683,9 @@
     if (tab === "reports" && window.EKLK_REPORTS && typeof window.EKLK_REPORTS.onShow === "function") {
       try { window.EKLK_REPORTS.onShow(); } catch (e) { console.warn(e); }
     }
+    if (tab === "home" && window.EKLK_HOME && typeof window.EKLK_HOME.onShow === "function") {
+      try { window.EKLK_HOME.onShow(); } catch (e) { console.warn(e); }
+    }
     if (push) {
       const path = tabToPath(tab);
       if (location.pathname !== path) {
@@ -1691,12 +1694,13 @@
     }
   }
 
-  // Клик по логотипу → главная (создать чек)
+  // Клик по логотипу → дашборд
   const logoEl = document.querySelector(".header .logo");
   if (logoEl) {
-    logoEl.addEventListener("click", () => showTab("create", true));
+    logoEl.addEventListener("click", () => showTab("home", true));
     logoEl.setAttribute("role", "link");
     logoEl.setAttribute("title", "На главную");
+    logoEl.style.cursor = "pointer";
   }
 
   $$(".nav button[data-tab]").forEach((btn) => {

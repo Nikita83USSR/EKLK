@@ -1635,3 +1635,94 @@ body[data-theme="glass"] .tpl-qr-cell {
   .reports-charts { grid-template-columns: 1fr; }
   .rpt-chart-wide { grid-column: auto; }
 }
+
+/* ===== Dashboard (home) — horizontal layout ===== */
+.dash { max-width: 1200px; }
+.dash-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.dash-title { font-size: 1.35rem; font-weight: 700; margin: 0 0 4px; }
+.dash-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+.dash-filters label { min-width: 140px; margin: 0; }
+.dash-filters .btn { margin-bottom: 1px; }
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+@media (max-width: 900px) {
+  .dash-grid { grid-template-columns: 1fr; }
+}
+.dash-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+}
+.dash-side { display: flex; flex-direction: column; gap: 12px; }
+.dash-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.dash-metric-label { font-size: 0.8rem; color: var(--muted); font-weight: 500; margin-bottom: 4px; }
+.dash-metric-value { font-size: 1.45rem; font-weight: 700; letter-spacing: -0.02em; }
+.dash-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dash-delta {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dash-delta.up { color: #16a34a; }
+.dash-delta.down { color: #dc2626; }
+.dash-delta.flat { color: var(--muted); }
+.dash-gauge-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 170px;
+  margin-top: 8px;
+}
+.dash-gauge-center {
+  position: absolute;
+  bottom: 12px;
+  left: 0; right: 0;
+  text-align: center;
+  pointer-events: none;
+}
+.dash-gauge-label { font-size: 0.8rem; color: var(--muted); }
+.dash-gauge-value { font-size: 1.6rem; font-weight: 700; margin-top: 2px; }
+.dash-pay-types {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px 16px;
+}
+.dash-pay-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface2);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+.header .logo { cursor: pointer; user-select: none; }
