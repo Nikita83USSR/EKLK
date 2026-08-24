@@ -651,7 +651,7 @@ class EcomKassaClient:
 
     # ── Catalog ──────────────────────────────────────────────────────────
     # Список: mobile API (Token, как ядро).
-    # CRUD: catalog.ecomkassa.ru /api/v1/items/:taxId — тот же Token из getToken;
+    # CRUD: catalog.ecomkassa.ru /api/v2/items/:taxId — тот же Token из getToken;
     #       сервер объявляет Basic, поэтому при 401 повторяем с Basic(login, password)
     #       тех же учётных данных ядра (не отдельный логин).
 
@@ -696,7 +696,7 @@ class EcomKassaClient:
         import base64
 
         token = await self.get_token()
-        url = f"{self.CATALOG_BASE.rstrip('/')}/api/v1/{path.lstrip('/')}"
+        url = f"{self.CATALOG_BASE.rstrip('/')}/api/v2/{path.lstrip('/')}"
         headers_token = {
             "Content-Type": "application/json; charset=utf-8",
             "Accept": "application/json",
