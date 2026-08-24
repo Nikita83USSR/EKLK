@@ -651,7 +651,7 @@ class EcomKassaClient:
 
     # ── Catalog ──────────────────────────────────────────────────────────
     # Список: mobile API (Token, как ядро).
-    # CRUD: catalog.ecomkassa.ru /api/v2/items/:taxId — тот же Token из getToken;
+    # CRUD: catalog.ecomkassa.ru /api/v1/items/:taxId?token=... — Token в query + header;
     #       сервер объявляет Basic, поэтому при 401 повторяем с Basic(login, password)
     #       тех же учётных данных ядра (не отдельный логин).
 
@@ -689,33 +689,23 @@ class EcomKassaClient:
         json_body: dict | None = None,
     ) -> dict:
         """
-        Запрос к catalog.ecomkassa.ru.
-        1) Token из getToken (тот же, что mobile/fiscal ядра)
-        2) если 401 — Basic с login/password сессии (те же credentials, не отдельная учётка)
+        Запрос к catalog.ecomkassa.ru /api/v1/...
+        Токен передаём query-параметром ?token= (и дублируем в заголовке Token).
         """
-        import base64
-
         token = await self.get_token()
-        url = f"{self.CATALOG_BASE.rstrip('/')}/api/v2/{path.lstrip('/')}"
-        headers_token = {
+        # path may already contain ?query
+        base = f"{self.CATALOG_BASE.rstrip('/')}/api/v1/{path.lstrip('/')}"
+        sep = "&" if "?" in base else "?"
+        url = f"{base}{sep}token={token}"
+        headers = {
             "Content-Type": "application/json; charset=utf-8",
             "Accept": "application/json",
             "Token": token,
         }
-        log_action("ecom_catalog", f"{method} {url} (Token)", level="debug")
-        resp = await self._client.request(method, url, json=json_body, headers=headers_token)
-
-        if resp.status_code in (401, 403):
-            # Тот же login/password, что для getToken — схема Basic требует сервер
-            cred = base64.b64encode(f"{self.login}:{self.password}".encode("utf-8")).decode("ascii")
-            headers_basic = {
-                "Content-Type": "application/json; charset=utf-8",
-                "Accept": "application/json",
-                "Authorization": f"Basic {cred}",
-                "Token": token,  # на всякий случай оба
-            }
-            log_action("ecom_catalog", f"{method} {url} (Basic+Token fallback)", level="debug")
-            resp = await self._client.request(method, url, json=json_body, headers=headers_basic)
+        # не логируем полный token
+        log_path = base.split("?")[0]
+        log_action("ecom_catalog", f"{method} {log_path}?token=***", level="debug")
+        resp = await self._client.request(method, url, json=json_body, headers=headers)
 
         if resp.status_code == 204:
             return {"errorCode": 0}
@@ -733,10 +723,13 @@ class EcomKassaClient:
 
         if resp.status_code >= 400:
             err = data.get("error") if isinstance(data, dict) else str(data)
+            # 401 с пустым телом
+            if resp.status_code in (401, 403) and not err:
+                err = f"Каталог HTTP {resp.status_code} (Unauthorized)"
             raise EcomKassaError(
                 err or f"Каталог HTTP {resp.status_code}",
                 code=resp.status_code,
-                raw=data,
+                raw=data if data else resp.text[:300],
             )
         if isinstance(data, dict) and data.get("errorCode") not in (0, None, "0"):
             raise EcomKassaError(
