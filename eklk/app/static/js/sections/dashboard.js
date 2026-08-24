@@ -177,6 +177,14 @@
     $("#dash_refresh")?.addEventListener("click", load);
     $("#dash_date")?.addEventListener("change", load);
     $("#dash_store")?.addEventListener("change", load);
+    $("#dash_goto_reports")?.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      if (window.EKLK && typeof window.EKLK.showTab === "function") {
+        window.EKLK.showTab("reports", true);
+      } else {
+        location.href = "/reports";
+      }
+    });
   }
 
   window.EKLK_HOME = {

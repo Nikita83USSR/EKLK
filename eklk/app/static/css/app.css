@@ -1726,3 +1726,10 @@ body[data-theme="glass"] .tpl-qr-cell {
   font-size: 0.9rem;
 }
 .header .logo { cursor: pointer; user-select: none; }
+
+.dash-reports-link a {
+  color: var(--primary, #3b82f6);
+  font-weight: 600;
+  text-decoration: none;
+}
+.dash-reports-link a:hover { text-decoration: underline; }
