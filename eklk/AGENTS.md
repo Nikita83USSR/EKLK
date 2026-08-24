@@ -40,6 +40,10 @@
 | `app/templates/index.html` | UI |
 | `app/static/js/app.js` | **ЯДРО (CORE)** — монолитный vanilla JS (~3500 строк, IIFE). Стабильное. Не трогать без нужды. |
 | `app/static/css/app.css` | стили |
+| `app/routers/catalog.py` | Каталог товаров (прокси + CommerceML) |
+| `app/routers/reports.py` | Отчёты mobile API + агрегация для бухгалтера |
+| `app/static/js/sections/catalog.js` | UI Каталог (модуль) |
+| `app/static/js/sections/reports.js` | UI Отчёты (модуль) |
 
 Сессия сервера: `SESSIONS[login] = { password, group_code, selected_store_id, firm }`.  
 После рестарта uvicorn JWT ещё жив, а session нет → 401 «Сессия истекла».
@@ -252,3 +256,21 @@ source .venv/bin/activate
 - Confirm: «Будет создан новый документ…».
 - Валидация `payment_method` × `payment_object` через `OBJECT_BY_METHOD` (блок 1105 до API).
 - Fiscal `payments.type`: 0–4 (Atol v5).
+
+
+---
+
+## 12. Каталог и Отчёты (модули, не ядро)
+
+Реализованы **отдельными скриптами** (`app/static/js/sections/`). Ядро `app.js` — только `APP_TABS` + `window.EKLK` + хуки `onShow`.
+
+### Каталог
+- API: mobile `catalog/items` (list) + catalog service `ecomkassa-catalog.mircloud.ru` (CRUD по INN).
+- UI: список, поиск, CRUD, bulk delete, «Удалить все» (confirm «удалить»), импорт CommerceML 2.
+- Данные не кэшируем локально — только API.
+
+### Отчёты
+- API: `/api/mobile/v1/reports/{daily|weekly|monthly|quarterly|annual}`.
+- Агрегация: `cash_drawer` = сумма `amount` только для `paymentType=CASH` (знак уже в API).
+- PRE_PAID / POST_PAID / COUNTER_OFFER / CREDIT_CARD — в сводке отдельно, в ящик не входят.
+- XLS — на клиенте (SheetJS). История отчётов — `SESSIONS[login].report_history` (до 30, до рестарта).

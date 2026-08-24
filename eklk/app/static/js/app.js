@@ -1644,7 +1644,7 @@
   // Разделы: /create | /payment | /orders | /settings
   // В дальнейшем: URL-параметры (например /orders?external_id=…, /create?from=123).
   // Вкладка «Статус» (/status) удалена — статус чека в списке/деталки.
-  const APP_TABS = ["create", "payment", "templates", "orders", "settings"];
+  const APP_TABS = ["create", "payment", "templates", "orders", "catalog", "reports", "settings"]; // CORE: catalog/reports — sections/*.js
 
   function pathToTab(pathname) {
     const p = String(pathname || "/").replace(/\/+$/, "") || "/";
@@ -1674,7 +1674,15 @@
       }
     }
     if (tab === "templates" && typeof loadTemplates === "function") {
-      try { loadTemplates(); } catch (e) { console.warn(e); }
+      try { loadTemplates(); }
+    // CORE: hooks for section modules (do not expand core logic here)
+    if (tab === "catalog" && window.EKLK_CATALOG && typeof window.EKLK_CATALOG.onShow === "function") {
+      window.EKLK_CATALOG.onShow();
+    }
+    if (tab === "reports" && window.EKLK_REPORTS && typeof window.EKLK_REPORTS.onShow === "function") {
+      window.EKLK_REPORTS.onShow();
+    }
+ catch (e) { console.warn(e); }
     }
     if (push) {
       const path = tabToPath(tab);
@@ -3490,4 +3498,15 @@
   }
 
   if (token) afterLogin().catch(() => logout(true));
+
+  // CORE: minimal public API for section modules (catalog, reports, …)
+  window.EKLK = {
+    get token() { return token; },
+    api,
+    showAlert,
+    showTab,
+    get firmData() { return firmData; },
+    get groupCode() { return groupCode; },
+    API,
+  };
 })();

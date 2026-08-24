@@ -646,3 +646,169 @@ class EcomKassaClient:
         """DELETE /api/mobile/v1/templates/:templateId"""
         data = await self._mobile_request("DELETE", f"templates/{template_id}")
         return data if isinstance(data, dict) else {"errorCode": 0}
+
+
+    # ── Catalog (mobile list + catalog service CRUD) ─────────────────────
+
+    CATALOG_BASE = "http://ecomkassa-catalog.mircloud.ru"
+
+    async def list_catalog_items(
+        self,
+        *,
+        sku: str | None = None,
+        name: str | None = None,
+        page: int = 1,
+        size: int = 50,
+    ) -> dict:
+        """GET /api/mobile/v1/catalog/items"""
+        q = []
+        if sku:
+            q.append(f"sku={sku}")
+        if name:
+            from urllib.parse import quote
+            q.append(f"name={quote(name)}")
+        if page:
+            q.append(f"page={page}")
+        if size:
+            q.append(f"size={size}")
+        path = "catalog/items" + (("?" + "&".join(q)) if q else "")
+        data = await self._mobile_request("GET", path)
+        if isinstance(data, dict) and "payload" in data:
+            return data["payload"] if isinstance(data["payload"], dict) else {"items": data["payload"]}
+        return data if isinstance(data, dict) else {"items": []}
+
+    async def _catalog_request(
+        self,
+        method: str,
+        path: str,
+        json_body: dict | None = None,
+        retry_auth: bool = True,
+    ) -> dict:
+        """
+        Catalog service: http://ecomkassa-catalog.mircloud.ru/api/v1/...
+        Try Token (same as mobile) first; fallback Basic(login, password).
+        """
+        token = await self.get_token()
+        url = f"{self.CATALOG_BASE.rstrip('/')}/api/v1/{path.lstrip('/')}"
+        headers = {
+            "Content-Type": "application/json; charset=utf-8",
+            "Token": token,
+            "Accept": "application/json",
+        }
+        log_action("ecom_catalog", f"{method} {url}", level="debug")
+        resp = await self._client.request(method, url, json=json_body, headers=headers)
+
+        if resp.status_code in (401, 403) and retry_auth:
+            # Basic fallback
+            import base64
+            cred = base64.b64encode(f"{self.login}:{self.password}".encode()).decode()
+            headers2 = {
+                "Content-Type": "application/json; charset=utf-8",
+                "Authorization": f"Basic {cred}",
+                "Accept": "application/json",
+            }
+            resp = await self._client.request(method, url, json=json_body, headers=headers2)
+
+        if resp.status_code == 204:
+            return {"errorCode": 0}
+
+        try:
+            data = resp.json() if resp.content else {"errorCode": 0}
+        except Exception:
+            if resp.status_code < 400:
+                return {"errorCode": 0}
+            raise EcomKassaError(f"Catalog invalid response: {resp.text[:300]}", code=resp.status_code)
+
+        if resp.status_code >= 400:
+            err = data.get("error") if isinstance(data, dict) else str(data)
+            raise EcomKassaError(err or f"HTTP {resp.status_code}", code=resp.status_code, raw=data)
+
+        if isinstance(data, dict) and data.get("errorCode") not in (0, None, "0"):
+            raise EcomKassaError(
+                data.get("error") or "Catalog API error",
+                code=data.get("errorCode"),
+                raw=data,
+            )
+        return data if isinstance(data, dict) else {"errorCode": 0}
+
+    async def catalog_list_items(
+        self,
+        tax_id: str,
+        *,
+        page: int = 1,
+        size: int = 50,
+        sku: str | None = None,
+        name: str | None = None,
+    ) -> dict:
+        """GET catalog service /api/v1/items/:taxId"""
+        q = [f"page={page}", f"size={size}"]
+        if sku:
+            from urllib.parse import quote
+            q.append(f"sku={quote(sku)}")
+        if name:
+            from urllib.parse import quote
+            q.append(f"name={quote(name)}")
+        path = f"items/{tax_id}?" + "&".join(q)
+        data = await self._catalog_request("GET", path)
+        if isinstance(data, dict) and "payload" in data:
+            return data["payload"] if isinstance(data["payload"], dict) else {"items": data.get("payload") or []}
+        return data if isinstance(data, dict) else {"items": []}
+
+    async def catalog_get_item(self, tax_id: str, item_id: int | str) -> dict:
+        data = await self._catalog_request("GET", f"items/{tax_id}/{item_id}")
+        if isinstance(data, dict) and "payload" in data:
+            return data["payload"]
+        return data if isinstance(data, dict) else {}
+
+    async def catalog_create_item(self, tax_id: str, body: dict) -> dict:
+        data = await self._catalog_request("POST", f"items/{tax_id}", json_body=body)
+        if isinstance(data, dict) and "payload" in data:
+            return data["payload"]
+        return data if isinstance(data, dict) else {}
+
+    async def catalog_update_item(self, tax_id: str, item_id: int | str, body: dict) -> dict:
+        data = await self._catalog_request("PUT", f"items/{tax_id}/{item_id}", json_body=body)
+        if isinstance(data, dict) and "payload" in data:
+            return data["payload"]
+        return data if isinstance(data, dict) else {}
+
+    async def catalog_delete_item(self, tax_id: str, item_id: int | str) -> dict:
+        return await self._catalog_request("DELETE", f"items/{tax_id}/{item_id}")
+
+    # ── Reports (mobile) ─────────────────────────────────────────────────
+
+    async def report_daily(self, date: str, order_types: list[str] | None = None) -> dict:
+        """GET /api/mobile/v1/reports/daily/:date"""
+        path = f"reports/daily/{date}"
+        if order_types:
+            path += "?orderTypes=" + ",".join(order_types)
+        data = await self._mobile_request("GET", path)
+        return data if isinstance(data, dict) else {}
+
+    async def report_weekly(self, date: str, order_types: list[str] | None = None) -> dict:
+        path = f"reports/weekly/{date}"
+        if order_types:
+            path += "?orderTypes=" + ",".join(order_types)
+        data = await self._mobile_request("GET", path)
+        return data if isinstance(data, dict) else {}
+
+    async def report_monthly(self, year: int, month: int, order_types: list[str] | None = None) -> dict:
+        path = f"reports/monthly/{year}/{month}"
+        if order_types:
+            path += "?orderTypes=" + ",".join(order_types)
+        data = await self._mobile_request("GET", path)
+        return data if isinstance(data, dict) else {}
+
+    async def report_quarterly(self, year: int, quarter: int, order_types: list[str] | None = None) -> dict:
+        path = f"reports/quarterly/{year}/{quarter}"
+        if order_types:
+            path += "?orderTypes=" + ",".join(order_types)
+        data = await self._mobile_request("GET", path)
+        return data if isinstance(data, dict) else {}
+
+    async def report_annual(self, year: int, order_types: list[str] | None = None) -> dict:
+        path = f"reports/annual/{year}"
+        if order_types:
+            path += "?orderTypes=" + ",".join(order_types)
+        data = await self._mobile_request("GET", path)
+        return data if isinstance(data, dict) else {}

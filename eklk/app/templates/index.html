@@ -37,6 +37,8 @@
           <button type="button" data-tab="payment">Ссылка на оплату</button>
           <button type="button" data-tab="templates">Многоразовые ссылки</button>
           <button type="button" data-tab="orders">Список чеков</button>
+          <button type="button" data-tab="catalog">Каталог</button>
+          <button type="button" data-tab="reports">Отчёты</button>
           <button type="button" data-tab="settings">Настройки</button>
         </nav>
         <div class="user-info">
@@ -665,6 +667,210 @@
         </div>
       </section>
 
+
+      <!-- CATALOG (module: sections/catalog.js) -->
+      <section id="tab-catalog" class="tab-panel hidden">
+        <div class="check-layout">
+          <div>
+            <div class="card">
+              <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                <span>Каталог товаров</span>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button type="button" class="btn btn-sm btn-secondary" id="cat_refresh">Обновить</button>
+                  <button type="button" class="btn btn-sm" id="cat_create">+ Товар</button>
+                  <label class="btn btn-sm btn-secondary" style="cursor:pointer;margin:0">
+                    Импорт CommerceML
+                    <input type="file" id="cat_import" accept=".xml,text/xml,application/xml" hidden />
+                  </label>
+                </div>
+              </div>
+              <p class="hint" style="margin-bottom:12px">
+                Данные только из API EcomKassa. Поиск, массовое удаление, импорт CommerceML&nbsp;2
+                (неподдерживаемые поля игнорируются; модификации → клоны товара).
+              </p>
+              <div class="orders-filters" style="margin-bottom:12px">
+                <input type="text" id="cat_q_name" placeholder="Название…" class="input" style="max-width:180px" />
+                <input type="text" id="cat_q_sku" placeholder="Артикул (SKU)…" class="input" style="max-width:140px" />
+                <button type="button" class="btn btn-sm" id="cat_search">Найти</button>
+                <button type="button" class="btn btn-sm btn-secondary" id="cat_bulk_delete" disabled>Удалить выбранные</button>
+                <button type="button" class="btn btn-sm btn-danger" id="cat_delete_all">Удалить все…</button>
+              </div>
+              <div class="orders-table-wrap">
+                <table class="orders-table" id="cat_table">
+                  <thead>
+                    <tr>
+                      <th style="width:36px"><input type="checkbox" id="cat_check_all" title="Выбрать все на странице" /></th>
+                      <th>Наименование</th>
+                      <th>SKU</th>
+                      <th>Цена</th>
+                      <th>НДС</th>
+                      <th>Предмет</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="cat_tbody">
+                    <tr><td colspan="7" class="hint">Загрузка…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="orders-pager">
+                <button type="button" class="btn btn-secondary btn-sm" id="cat_prev" disabled>← Назад</button>
+                <span id="cat_page_info" class="hint">—</span>
+                <button type="button" class="btn btn-secondary btn-sm" id="cat_next" disabled>Вперёд →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Catalog item modal -->
+      <div id="catModal" class="modal hidden" aria-hidden="true">
+        <div class="modal-backdrop" data-close-cat></div>
+        <div class="modal-dialog" role="dialog">
+          <div class="modal-header">
+            <h3 id="cat_modal_title">Новый товар</h3>
+            <button type="button" class="modal-close" data-close-cat aria-label="Закрыть">&times;</button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="cat_item_id" value="" />
+            <div class="form-grid">
+              <label>Наименование <span class="req">*</span>
+                <input type="text" id="cat_name" class="input" required />
+              </label>
+              <label>Артикул (SKU) <span class="req">*</span>
+                <input type="text" id="cat_sku" class="input" required />
+              </label>
+              <label>Цена, ₽
+                <input type="number" id="cat_price" class="input" step="0.01" min="0" value="0" />
+              </label>
+              <label>НДС
+                <select id="cat_vat" class="input">
+                  <option value="VAT_NONE">Без НДС</option>
+                  <option value="VAT_0PCT">НДС 0%</option>
+                  <option value="VAT_10PCT">НДС 10%</option>
+                  <option value="VAT_110PCT">НДС 10/110</option>
+                  <option value="VAT_20PCT">НДС 20%</option>
+                  <option value="VAT_120PCT">НДС 20/120</option>
+                </select>
+              </label>
+              <label>Предмет расчёта
+                <select id="cat_po" class="input">
+                  <option value="COMMODITY">Товар</option>
+                  <option value="SERVICE">Услуга</option>
+                  <option value="JOB">Работа</option>
+                  <option value="EXCISE">Подакцизный товар</option>
+                  <option value="PAYMENT">Платёж / аванс</option>
+                  <option value="ANOTHER">Иное</option>
+                </select>
+              </label>
+            </div>
+            <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+              <button type="button" class="btn btn-secondary" data-close-cat>Отмена</button>
+              <button type="button" class="btn" id="cat_save">Сохранить</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- REPORTS (module: sections/reports.js) -->
+      <section id="tab-reports" class="tab-panel hidden">
+        <div class="check-layout reports-layout">
+          <div>
+            <div class="card">
+              <div class="section-title">Отчёты по расчётам</div>
+              <p class="hint" style="margin-bottom:12px">
+                Для сверки баланса кассы. Суммы из API уже со знаком.
+                <strong>Денежный ящик</strong> = только наличные (CASH).
+                Зачёт аванса (PRE_PAID), кредит и встречное предоставление в ящик не входят.
+              </p>
+              <div class="form-grid reports-filters">
+                <label>Тип отчёта
+                  <select id="rpt_type" class="input">
+                    <option value="daily">Дневной</option>
+                    <option value="weekly">Недельный</option>
+                    <option value="monthly" selected>Месячный</option>
+                    <option value="quarterly">Квартальный</option>
+                    <option value="annual">Годовой</option>
+                  </select>
+                </label>
+                <label id="rpt_date_wrap">Дата
+                  <input type="date" id="rpt_date" class="input" />
+                </label>
+                <label id="rpt_year_wrap" class="hidden">Год
+                  <input type="number" id="rpt_year" class="input" min="2020" max="2100" />
+                </label>
+                <label id="rpt_month_wrap" class="hidden">Месяц
+                  <select id="rpt_month" class="input">
+                    <option value="1">Январь</option><option value="2">Февраль</option>
+                    <option value="3">Март</option><option value="4">Апрель</option>
+                    <option value="5">Май</option><option value="6">Июнь</option>
+                    <option value="7">Июль</option><option value="8">Август</option>
+                    <option value="9">Сентябрь</option><option value="10">Октябрь</option>
+                    <option value="11">Ноябрь</option><option value="12">Декабрь</option>
+                  </select>
+                </label>
+                <label id="rpt_quarter_wrap" class="hidden">Квартал
+                  <select id="rpt_quarter" class="input">
+                    <option value="1">I</option><option value="2">II</option>
+                    <option value="3">III</option><option value="4">IV</option>
+                  </select>
+                </label>
+                <label>Типы документов
+                  <select id="rpt_order_types" class="input">
+                    <option value="">Все</option>
+                    <option value="VCHR">Чеки (VCHR)</option>
+                    <option value="INVC">Счета (INVC)</option>
+                    <option value="CORD">Курьер (CORD)</option>
+                    <option value="VCHR,INVC">Чеки + счета</option>
+                  </select>
+                </label>
+              </div>
+              <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+                <button type="button" class="btn" id="rpt_load">Сформировать</button>
+                <button type="button" class="btn btn-secondary" id="rpt_xls" disabled>Скачать XLS</button>
+              </div>
+            </div>
+
+            <div class="card" style="margin-top:16px" id="rpt_summary_card">
+              <div class="section-title">Сводка</div>
+              <div id="rpt_summary" class="hint">Выберите период и нажмите «Сформировать».</div>
+            </div>
+
+            <div class="card" style="margin-top:16px">
+              <div class="section-title">Детализация (points)</div>
+              <div class="orders-table-wrap">
+                <table class="orders-table" id="rpt_table">
+                  <thead>
+                    <tr>
+                      <th>Период</th>
+                      <th>Кассир</th>
+                      <th>Точка</th>
+                      <th>Тип оплаты</th>
+                      <th style="text-align:right">Сумма</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rpt_tbody">
+                    <tr><td colspan="5" class="hint">Нет данных</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <aside class="orders-detail-pane">
+            <div class="card">
+              <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+                <span>История (сессия)</span>
+                <button type="button" class="btn btn-sm btn-secondary" id="rpt_hist_clear">Очистить</button>
+              </div>
+              <p class="hint" style="margin-bottom:8px">Хранится только в сессии сервера до рестарта.</p>
+              <div id="rpt_history" class="templates-list">
+                <p class="hint">Пока пусто</p>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
 <!-- SETTINGS -->
       <section id="tab-settings" class="tab-panel hidden">
         <div class="settings-layout">
@@ -795,7 +1001,10 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-  <script src="/static/js/app.js?v=20260822i"></script>
+  <script src="/static/js/app.js?v=20260824a"></script>
+  <script src="/static/js/sections/catalog.js?v=20260824a"></script>
+  <script src="/static/js/sections/reports.js?v=20260824a"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
   <script data-skip-moving="true">
   (function(w,d,u){
