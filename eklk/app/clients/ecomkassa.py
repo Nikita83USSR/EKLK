@@ -651,9 +651,7 @@ class EcomKassaClient:
 
     # ── Catalog ──────────────────────────────────────────────────────────
     # Список: mobile API (Token, как ядро).
-    # CRUD: catalog.ecomkassa.ru /api/v1/items/:taxId — без auth (как в успешном логе);
-    #       сервер объявляет Basic, поэтому при 401 повторяем с Basic(login, password)
-    #       тех же учётных данных ядра (не отдельный логин).
+    # CRUD: catalog.ecomkassa.ru /api/v1/items/:taxId — без auth (как в успешном логе).
 
     CATALOG_BASE = "https://catalog.ecomkassa.ru"
 
@@ -769,6 +767,34 @@ class EcomKassaClient:
             "taxIdentity": str(tax_id),
         }
         return out
+
+
+    async def catalog_list_items(
+        self,
+        tax_id: str,
+        *,
+        page: int = 1,
+        size: int = 50,
+        sku: str | None = None,
+        name: str | None = None,
+    ) -> dict:
+        from urllib.parse import quote
+        q = [f"page={page}", f"size={size}"]
+        if sku:
+            q.append(f"sku={quote(str(sku))}")
+        if name:
+            q.append(f"name={quote(str(name))}")
+        data = await self._catalog_request("GET", f"items/{tax_id}?" + "&".join(q))
+        if isinstance(data, dict) and "payload" in data:
+            pl = data["payload"]
+            return pl if isinstance(pl, dict) else {"items": pl or []}
+        return data if isinstance(data, dict) else {"items": []}
+
+    async def catalog_get_item(self, tax_id: str, item_id: int | str) -> dict:
+        data = await self._catalog_request("GET", f"items/{tax_id}/{item_id}")
+        if isinstance(data, dict) and "payload" in data:
+            return data["payload"]
+        return data if isinstance(data, dict) else {}
 
     async def catalog_create_item(self, tax_id: str, body: dict) -> dict:
         payload = self._catalog_body(tax_id, body, item_id=-1)
