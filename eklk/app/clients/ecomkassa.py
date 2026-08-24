@@ -651,7 +651,7 @@ class EcomKassaClient:
 
     # ── Catalog ──────────────────────────────────────────────────────────
     # Список: mobile API (Token, как ядро).
-    # CRUD: catalog.ecomkassa.ru /api/v1/items/:taxId?token=... — Token в query + header;
+    # CRUD: catalog.ecomkassa.ru /api/v1/items/:taxId — без auth (как в успешном логе);
     #       сервер объявляет Basic, поэтому при 401 повторяем с Basic(login, password)
     #       тех же учётных данных ядра (не отдельный логин).
 
@@ -690,22 +690,16 @@ class EcomKassaClient:
     ) -> dict:
         """
         Запрос к catalog.ecomkassa.ru /api/v1/...
-        Токен передаём query-параметром ?token= (и дублируем в заголовке Token).
+        По успешному логу EcomKassa: только Accept + Content-Type, без Token/Basic.
         """
-        token = await self.get_token()
-        # path may already contain ?query
         base = f"{self.CATALOG_BASE.rstrip('/')}/api/v1/{path.lstrip('/')}"
-        sep = "&" if "?" in base else "?"
-        url = f"{base}{sep}token={token}"
-        # как в успешном логе: Accept + Content-Type; Token оставляем (в логе мог быть вырезан)
+        # path may already contain query string
+        url = base
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "Token": token,
         }
-        # не логируем полный token
-        log_path = base.split("?")[0]
-        log_action("ecom_catalog", f"{method} {log_path}?token=***", level="debug")
+        log_action("ecom_catalog", f"{method} {url.split('?')[0]}", level="debug")
         resp = await self._client.request(method, url, json=json_body, headers=headers)
 
         if resp.status_code == 204:
@@ -724,7 +718,6 @@ class EcomKassaClient:
 
         if resp.status_code >= 400:
             err = data.get("error") if isinstance(data, dict) else str(data)
-            # 401 с пустым телом
             if resp.status_code in (401, 403) and not err:
                 err = f"Каталог HTTP {resp.status_code} (Unauthorized)"
             raise EcomKassaError(
@@ -739,33 +732,6 @@ class EcomKassaClient:
                 raw=data,
             )
         return data if isinstance(data, dict) else {"errorCode": 0}
-
-    async def catalog_list_items(
-        self,
-        tax_id: str,
-        *,
-        page: int = 1,
-        size: int = 50,
-        sku: str | None = None,
-        name: str | None = None,
-    ) -> dict:
-        from urllib.parse import quote
-        q = [f"page={page}", f"size={size}"]
-        if sku:
-            q.append(f"sku={quote(str(sku))}")
-        if name:
-            q.append(f"name={quote(str(name))}")
-        data = await self._catalog_request("GET", f"items/{tax_id}?" + "&".join(q))
-        if isinstance(data, dict) and "payload" in data:
-            pl = data["payload"]
-            return pl if isinstance(pl, dict) else {"items": pl or []}
-        return data if isinstance(data, dict) else {"items": []}
-
-    async def catalog_get_item(self, tax_id: str, item_id: int | str) -> dict:
-        data = await self._catalog_request("GET", f"items/{tax_id}/{item_id}")
-        if isinstance(data, dict) and "payload" in data:
-            return data["payload"]
-        return data if isinstance(data, dict) else {}
 
     @staticmethod
     def _catalog_body(tax_id: str, body: dict, *, item_id: int | None = None) -> dict:
