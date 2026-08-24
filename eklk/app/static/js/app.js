@@ -1165,11 +1165,12 @@
       });
       updateCreateSummary();
       updatePaySummary();
-      // URL-раздел: /create /payment /orders /settings (параметры — позже)
+      // После входа: / и неизвестные пути → дашборд (home), пункт меню «На главную» скрыт
       if (typeof showTab === "function") {
-        const tab = pathToTab(location.pathname);
-        if (location.pathname === "/" || location.pathname === "") {
-          history.replaceState({ tab: "create" }, "", "/create");
+        let tab = pathToTab(location.pathname);
+        if (location.pathname === "/" || location.pathname === "" || location.pathname === "/home") {
+          tab = "home";
+          history.replaceState({ tab: "home" }, "", "/home");
         }
         showTab(tab, false);
       }
