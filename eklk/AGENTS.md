@@ -262,15 +262,121 @@ source .venv/bin/activate
 
 ## 12. Каталог и Отчёты (модули, не ядро)
 
-Реализованы **отдельными скриптами** (`app/static/js/sections/`). Ядро `app.js` — только `APP_TABS` + `window.EKLK` + хуки `onShow`.
+Реализованы **отдельными скриптами**. Ядро `app.js` — только регистрация вкладок `APP_TABS`, публичный `window.EKLK` (`api`, `showAlert`) и хуки `onShow`.  
+**Не вносить CRUD/графики/импорт в `app.js`.**
 
-### Каталог
-- API: mobile `catalog/items` (list) + catalog service `ecomkassa-catalog.mircloud.ru` (CRUD по INN).
-- UI: список, поиск, CRUD, bulk delete, «Удалить все» (confirm «удалить»), импорт CommerceML 2.
-- Данные не кэшируем локально — только API.
+| Слой | Каталог | Отчёты |
+|------|---------|--------|
+| UI | `app/static/js/sections/catalog.js` → `window.EKLK_CATALOG` | `app/static/js/sections/reports.js` → `window.EKLK_REPORTS` |
+| Backend | `app/routers/catalog.py` | `app/routers/reports.py` |
+| Client | `EcomKassaClient.list_catalog_items` / `catalog_*` | `EcomKassaClient.report_*` |
+| Schemas | `app/schemas/catalog.py` | `app/schemas/reports.py` |
+| Разметка | вкладка + секция в `app/templates/index.html` | то же + canvas графиков |
+| Libs | — | Chart.js, SheetJS (CDN в `index.html`) |
 
-### Отчёты
-- API: `/api/mobile/v1/reports/{daily|weekly|monthly|quarterly|annual}`.
-- Агрегация: `cash_drawer` = сумма `amount` только для `paymentType=CASH` (знак уже в API).
-- PRE_PAID / POST_PAID / COUNTER_OFFER / CREDIT_CARD — в сводке отдельно, в ящик не входят.
-- XLS — на клиенте (SheetJS). История отчётов — `SESSIONS[login].report_history` (до 30, до рестарта).
+---
+
+### 12.1 Каталог
+
+**Назначение:** просмотр и управление номенклатурой организации (по ИНН). Данные **не храним** у себя — только API EcomKassa.
+
+#### Внешние API
+| Операция | Endpoint | Auth | Примечание |
+|----------|----------|------|------------|
+| Список / поиск | `GET https://app.ecomkassa.ru/api/mobile/v1/catalog/items` | `Token` (как ядро) | **Рабочий** путь чтения |
+| CRUD | `https://catalog.ecomkassa.ru/api/v1/items/{taxId}` | **пока без auth** (как в успешном серверном логе) | С внешней среды часто **401 Basic**; разбор auth — отдельно |
+| Создание body | `POST .../items/{taxId}` | | См. формат ниже |
+
+**Формат тела создания (из рабочего лога EcomKassa):**
+```json
+{
+  "itemId": -1,
+  "name": "...",
+  "sku": "...",
+  "price": 1.0,
+  "vatType": "vat20",
+  "paymentObject": "commodity",
+  "taxIdentity": "7724923302"
+}
+```
+- `itemId: -1` — создать новый (ID выдаёт EcomKassa).
+- `vatType` / `paymentObject` — **lowercase** (`none`, `vat20`, `commodity`, …), не `VAT_NONE` / `COMMODITY`.
+- `taxIdentity` — ИНН в теле; в path — тот же `taxId`.
+- Обновление: тот же shape, но `itemId` = реальный id; `PUT .../items/{taxId}/{itemId}`.
+- Удаление: `DELETE .../items/{taxId}/{itemId}`.
+
+Сборка body: `EcomKassaClient._catalog_body()` / `catalog_create_item` / `catalog_update_item`.
+
+#### Правила SKU
+1. Пользователь **не ввёл** артикул → генерируем (`EKLK-XXXXXXXX`).
+2. Импорт **без** артикула → генерируем (`IMP-XXXXXXXX`).
+3. Артикул **уже есть** в каталоге (pre-check по mobile list) или API ответил «SKU уже существует» → **ошибка**, не молчаливый skip.
+4. Дубль SKU **внутри файла** импорта → строка в `errors`.
+
+#### UI (catalog.js)
+- Список, поиск (name/sku), пагинация.
+- Создание / редактирование / удаление.
+- Массовое удаление (checkbox).
+- «Удалить все» — подтверждение вводом слова **`удалить`**.
+- Импорт CommerceML 2 (XML): неподдерживаемые поля игнорируются; модификации → клоны товара с суффиксом в name/sku.
+- Отчёт импорта: `total`, `created`, `updated`, `skipped`, `errors_count`, `generated_sku`, список `errors`.
+
+#### Backend routes (`/api/v1/catalog/...`)
+- `GET /items`, `POST /items`, `PUT /items/{id}`, `DELETE /items/{id}`
+- `POST /items/bulk-delete`, `DELETE /items/all?confirm=удалить`
+- `POST /import/commerceml` (multipart file)
+
+#### Ограничения / TODO
+- Запись на `catalog.ecomkassa.ru` снаружи часто **401** (`WWW-Authenticate: Basic`). Auth каталога — отдельная задача; формат body и `itemId=-1` уже совпадают с рабочим логом.
+- Чтение списка через **mobile** стабильно.
+
+---
+
+### 12.2 Отчёты
+
+**Назначение:** сводки для бухгалтера за период; сверка баланса кассы с учётом типов оплаты и знака операции.
+
+#### Внешние API
+```
+GET /api/mobile/v1/reports/daily/{date}
+GET /api/mobile/v1/reports/weekly/{date}
+GET /api/mobile/v1/reports/monthly/{year}/{month}
+GET /api/mobile/v1/reports/quarterly/{year}/{quarter}
+GET /api/mobile/v1/reports/annual/{year}
+```
+Опционально: `?orderTypes=VCHR,INVC,CORD`.  
+Auth: **`Token`** (как ядро). Ответ: `points[]` с полями `time`, `cashier`, `storeId`, `storeName`, `paymentType`, `amount`.
+
+**Знак `amount` уже в API:**
+- `+` — приход / возврат расхода  
+- `−` — возврат прихода / расход  
+
+Тип операции (sell / sell_refund) в points **не приходит** — направление выводим по знаку.
+
+#### Агрегация (`app/routers/reports.py` → `_aggregate`)
+| Показатель | Формула |
+|------------|---------|
+| **Денежный ящик** (`cash_drawer`) | сумма `amount` только `paymentType=CASH` |
+| **Общий баланс кассы** (`money_balance`) | `CASH` + `CREDIT_CARD` (нал + безнал), со знаком |
+| **Зачёт аванса** (`offset_balance`) | `PRE_PAID` отдельно, в общий баланс **не** входит |
+| **Итого нетто** (`total_signed`) | сумма всех `amount` по всем типам |
+| **Приход / возврат** | по знаку amount; матрица direction × paymentType |
+
+`POST_PAID`, `COUNTER_OFFER` — в сводке видны, «живые» деньги в момент операции не двигают.
+
+#### UI (reports.js)
+- Фильтры: тип периода, дата / год / месяц / квартал, orderTypes.
+- Сводка + таблица «направление × тип оплаты».
+- Детализация points (колонка «Направление»).
+- Графики Chart.js: типы оплаты; приход vs возврат; матрица; динамика по периодам; **балансы** (ящик / общий / зачёт).
+- Выгрузка **XLS** (SheetJS): листы «Сводка» и «Детализация».
+- История: до 30 отчётов в `SESSIONS[login].report_history` (память процесса, до рестарта).
+
+#### Backend routes (`/api/v1/reports/...`)
+- `GET /daily`, `/weekly`, `/monthly`, `/quarterly`, `/annual`
+- `GET /history`, `DELETE /history`
+
+#### Важно для доработок
+- Не путать **ящик (только нал)** и **общий баланс (нал+безнал)**.
+- Не класть `PRE_PAID` в `money_balance`.
+- Не трогать `app.js` для графиков/XLS — только `sections/reports.js` + router/client.
