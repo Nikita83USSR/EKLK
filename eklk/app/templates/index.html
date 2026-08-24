@@ -836,6 +836,28 @@
               <div id="rpt_summary" class="hint">Выберите период и нажмите «Сформировать».</div>
             </div>
 
+            <div class="card" style="margin-top:16px" id="rpt_charts_card">
+              <div class="section-title">Графики</div>
+              <div class="reports-charts">
+                <div class="rpt-chart-box">
+                  <div class="hint" style="margin-bottom:6px">По типам оплаты (влияние на итог, ₽)</div>
+                  <canvas id="rpt_chart_pay" height="220"></canvas>
+                </div>
+                <div class="rpt-chart-box">
+                  <div class="hint" style="margin-bottom:6px">Приход (+) vs возврат/расход (−)</div>
+                  <canvas id="rpt_chart_dir" height="220"></canvas>
+                </div>
+                <div class="rpt-chart-box rpt-chart-wide">
+                  <div class="hint" style="margin-bottom:6px">Тип оплаты × направление операции</div>
+                  <canvas id="rpt_chart_matrix" height="240"></canvas>
+                </div>
+                <div class="rpt-chart-box rpt-chart-wide">
+                  <div class="hint" style="margin-bottom:6px">Динамика по периодам (всего)</div>
+                  <canvas id="rpt_chart_time" height="240"></canvas>
+                </div>
+              </div>
+            </div>
+
             <div class="card" style="margin-top:16px">
               <div class="section-title">Детализация (points)</div>
               <div class="orders-table-wrap">
@@ -843,6 +865,7 @@
                   <thead>
                     <tr>
                       <th>Период</th>
+                      <th>Направление</th>
                       <th>Кассир</th>
                       <th>Точка</th>
                       <th>Тип оплаты</th>
@@ -850,7 +873,7 @@
                     </tr>
                   </thead>
                   <tbody id="rpt_tbody">
-                    <tr><td colspan="5" class="hint">Нет данных</td></tr>
+                    <tr><td colspan="6" class="hint">Нет данных</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -1001,10 +1024,11 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-  <script src="/static/js/app.js?v=20260824b"></script>
-  <script src="/static/js/sections/catalog.js?v=20260824b"></script>
-  <script src="/static/js/sections/reports.js?v=20260824b"></script>
+  <script src="/static/js/app.js?v=20260824c"></script>
+  <script src="/static/js/sections/catalog.js?v=20260824c"></script>
+  <script src="/static/js/sections/reports.js?v=20260824c"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
   <script data-skip-moving="true">
   (function(w,d,u){

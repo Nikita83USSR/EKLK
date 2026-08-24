@@ -1615,3 +1615,23 @@ body[data-theme="glass"] .tpl-qr-cell {
   display: block;
   object-fit: contain;
 }
+
+
+/* Reports charts */
+.reports-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.rpt-chart-box {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 12px;
+  min-height: 200px;
+}
+.rpt-chart-wide { grid-column: 1 / -1; }
+@media (max-width: 900px) {
+  .reports-charts { grid-template-columns: 1fr; }
+  .rpt-chart-wide { grid-column: auto; }
+}

@@ -648,7 +648,12 @@ class EcomKassaClient:
         return data if isinstance(data, dict) else {"errorCode": 0}
 
 
-    # ── Catalog (mobile list + catalog service CRUD) ─────────────────────
+
+    # ── Catalog ──────────────────────────────────────────────────────────
+    # Список: mobile API (Token, как ядро).
+    # CRUD: catalog.ecomkassa.ru /api/v1/items/:taxId — тот же Token из getToken;
+    #       сервер объявляет Basic, поэтому при 401 повторяем с Basic(login, password)
+    #       тех же учётных данных ядра (не отдельный логин).
 
     CATALOG_BASE = "https://catalog.ecomkassa.ru"
 
@@ -660,21 +665,21 @@ class EcomKassaClient:
         page: int = 1,
         size: int = 50,
     ) -> dict:
-        """GET /api/mobile/v1/catalog/items"""
+        """GET /api/mobile/v1/catalog/items — Token как у остальных mobile-методов."""
         q = []
         if sku:
-            q.append(f"sku={sku}")
+            from urllib.parse import quote
+            q.append(f"sku={quote(str(sku))}")
         if name:
             from urllib.parse import quote
-            q.append(f"name={quote(name)}")
-        if page:
-            q.append(f"page={page}")
-        if size:
-            q.append(f"size={size}")
-        path = "catalog/items" + (("?" + "&".join(q)) if q else "")
+            q.append(f"name={quote(str(name))}")
+        q.append(f"page={int(page)}")
+        q.append(f"size={int(size)}")
+        path = "catalog/items?" + "&".join(q)
         data = await self._mobile_request("GET", path)
         if isinstance(data, dict) and "payload" in data:
-            return data["payload"] if isinstance(data["payload"], dict) else {"items": data["payload"]}
+            pl = data["payload"]
+            return pl if isinstance(pl, dict) else {"items": pl or []}
         return data if isinstance(data, dict) else {"items": []}
 
     async def _catalog_request(
@@ -682,32 +687,35 @@ class EcomKassaClient:
         method: str,
         path: str,
         json_body: dict | None = None,
-        retry_auth: bool = True,
     ) -> dict:
         """
-        Catalog service: http://ecomkassa-catalog.mircloud.ru/api/v1/...
-        Try Token (same as mobile) first; fallback Basic(login, password).
+        Запрос к catalog.ecomkassa.ru.
+        1) Token из getToken (тот же, что mobile/fiscal ядра)
+        2) если 401 — Basic с login/password сессии (те же credentials, не отдельная учётка)
         """
+        import base64
+
         token = await self.get_token()
         url = f"{self.CATALOG_BASE.rstrip('/')}/api/v1/{path.lstrip('/')}"
-        headers = {
+        headers_token = {
             "Content-Type": "application/json; charset=utf-8",
-            "Token": token,
             "Accept": "application/json",
+            "Token": token,
         }
-        log_action("ecom_catalog", f"{method} {url}", level="debug")
-        resp = await self._client.request(method, url, json=json_body, headers=headers)
+        log_action("ecom_catalog", f"{method} {url} (Token)", level="debug")
+        resp = await self._client.request(method, url, json=json_body, headers=headers_token)
 
-        if resp.status_code in (401, 403) and retry_auth:
-            # Basic fallback
-            import base64
-            cred = base64.b64encode(f"{self.login}:{self.password}".encode()).decode()
-            headers2 = {
+        if resp.status_code in (401, 403):
+            # Тот же login/password, что для getToken — схема Basic требует сервер
+            cred = base64.b64encode(f"{self.login}:{self.password}".encode("utf-8")).decode("ascii")
+            headers_basic = {
                 "Content-Type": "application/json; charset=utf-8",
-                "Authorization": f"Basic {cred}",
                 "Accept": "application/json",
+                "Authorization": f"Basic {cred}",
+                "Token": token,  # на всякий случай оба
             }
-            resp = await self._client.request(method, url, json=json_body, headers=headers2)
+            log_action("ecom_catalog", f"{method} {url} (Basic+Token fallback)", level="debug")
+            resp = await self._client.request(method, url, json=json_body, headers=headers_basic)
 
         if resp.status_code == 204:
             return {"errorCode": 0}
@@ -717,12 +725,19 @@ class EcomKassaClient:
         except Exception:
             if resp.status_code < 400:
                 return {"errorCode": 0}
-            raise EcomKassaError(f"Catalog invalid response: {resp.text[:300]}", code=resp.status_code)
+            raise EcomKassaError(
+                f"Каталог: некорректный ответ HTTP {resp.status_code}",
+                code=resp.status_code,
+                raw=resp.text[:300],
+            )
 
         if resp.status_code >= 400:
             err = data.get("error") if isinstance(data, dict) else str(data)
-            raise EcomKassaError(err or f"HTTP {resp.status_code}", code=resp.status_code, raw=data)
-
+            raise EcomKassaError(
+                err or f"Каталог HTTP {resp.status_code}",
+                code=resp.status_code,
+                raw=data,
+            )
         if isinstance(data, dict) and data.get("errorCode") not in (0, None, "0"):
             raise EcomKassaError(
                 data.get("error") or "Catalog API error",
@@ -740,18 +755,16 @@ class EcomKassaClient:
         sku: str | None = None,
         name: str | None = None,
     ) -> dict:
-        """GET catalog service /api/v1/items/:taxId"""
+        from urllib.parse import quote
         q = [f"page={page}", f"size={size}"]
         if sku:
-            from urllib.parse import quote
-            q.append(f"sku={quote(sku)}")
+            q.append(f"sku={quote(str(sku))}")
         if name:
-            from urllib.parse import quote
-            q.append(f"name={quote(name)}")
-        path = f"items/{tax_id}?" + "&".join(q)
-        data = await self._catalog_request("GET", path)
+            q.append(f"name={quote(str(name))}")
+        data = await self._catalog_request("GET", f"items/{tax_id}?" + "&".join(q))
         if isinstance(data, dict) and "payload" in data:
-            return data["payload"] if isinstance(data["payload"], dict) else {"items": data.get("payload") or []}
+            pl = data["payload"]
+            return pl if isinstance(pl, dict) else {"items": pl or []}
         return data if isinstance(data, dict) else {"items": []}
 
     async def catalog_get_item(self, tax_id: str, item_id: int | str) -> dict:

@@ -193,10 +193,11 @@ async def create_item(body: CatalogItemIn, user: CurrentUser):
         return _map_item(data if isinstance(data, dict) else {})
     except EcomKassaError as e:
         msg = str(e)
-        if "401" in msg or "Unauthorized" in msg or "hostname" in msg.lower():
+        if "401" in msg or "Unauthorized" in msg or "hostname" in msg.lower() or getattr(e, "code", None) in (401, 403, "401", "403"):
             msg = (
-                "Каталог: запись недоступна (catalog.ecomkassa.ru вернул отказ авторизации). "
-                "Просмотр списка работает через mobile API. "
+                "Каталог: сервис catalog.ecomkassa.ru отклонил авторизацию (HTTP 401). "
+                "Используется тот же Token/login, что и в ядре; сервер требует Basic и, "
+                "видимо, для этой учётки запись в каталог не открыта. "
                 f"Детали: {e}"
             )
         raise HTTPException(status_code=400, detail=msg)
