@@ -1,7 +1,10 @@
 """
 Отчёты по расчётам (mobile API).
 История отчётов — только в in-memory сессии пользователя.
-Агрегация для бухгалтера: типы оплат и денежный ящик (нал).
+
+Важно: amount в points API приходит в **копейках**. Перед отображением делим на 100.
+Сумма amount за период = баланс кассы за период (как отдаёт EcomKassa), без
+самостоятельного пересчёта возвратов / ящика.
 """
 
 from __future__ import annotations
@@ -28,14 +31,8 @@ PAYMENT_LABELS = {
     "COUNTER_OFFER": "Встречное предоставление",
 }
 
-# Влияют на физический денежный ящик кассы
-CASH_DRAWER_TYPES = {"CASH"}
-# Общий баланс кассы (нал + безнал), без зачёта/кредита/встречного
-MONEY_BALANCE_TYPES = {"CASH", "CREDIT_CARD"}
-# Зачёт аванса и аналоги — отдельно
-OFFSET_TYPES = {"PRE_PAID"}
-# Не двигают «живые» деньги в момент отражения (для справки бухгалтеру)
-NON_CASH_MOVEMENT = {"PRE_PAID", "POST_PAID", "COUNTER_OFFER"}
+# API отдаёт amount в копейках
+KOPECKS_IN_RUBLE = 100.0
 
 
 def _client_for(user: dict) -> EcomKassaClient:
@@ -50,43 +47,38 @@ def _parse_order_types(raw: Optional[str]) -> list[str] | None:
     if not raw:
         return None
     parts = [p.strip().upper() for p in raw.split(",") if p.strip()]
-    # API reports accepts VCHR/INVC/CORD in query; response may use CASH_VOUCHER etc.
     allowed = {"VCHR", "INVC", "CORD", "CASH_VOUCHER", "INVOICE", "COURIER_ORDER"}
     out = [p for p in parts if p in allowed]
     return out or None
 
 
+def _kop_to_rub(value) -> float:
+    try:
+        return float(value or 0) / KOPECKS_IN_RUBLE
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _aggregate(points: list[dict]) -> tuple[dict, float, dict]:
     """
     Сводка для бухгалтера.
-    amount в API уже со знаком:
-      + продажа / возврат расхода  → «приходная» сторона
-      − возврат продажи / расход   → «расходная» сторона
-    Денежный ящик = сумма amount только по paymentType=CASH.
-    API points не отдаёт operation явно — направление берём из знака amount.
+
+    amount в API — **копейки**. Конвертируем в рубли (/100).
+    Итоговая сумма amount за период = баланс кассы за период (как есть из API).
+    Разбивка по типам оплаты / точкам / кассирам — только для удобства, без
+    отдельной логики «возвратов» и «денежного ящика».
     """
     by_type: dict[str, float] = {}
     by_store: dict[str, float] = {}
     by_cashier: dict[str, float] = {}
-    # direction: income (amount>0) | outcome (amount<0) | zero
-    by_direction: dict[str, float] = {"income": 0.0, "outcome": 0.0}
-    # matrix[direction][paymentType] = sum
-    matrix: dict[str, dict[str, float]] = {"income": {}, "outcome": {}}
-    # for charts: series by time label
     by_time: dict[str, float] = {}
     by_time_pay: dict[str, dict[str, float]] = {}
-    cash_drawer = 0.0
-    money_balance = 0.0  # нал + безнал
-    offset_balance = 0.0  # зачёт аванса PRE_PAID
     total_all = 0.0
 
     for p in points:
         if not isinstance(p, dict):
             continue
-        try:
-            amount = float(p.get("amount") or 0)
-        except (TypeError, ValueError):
-            amount = 0.0
+        amount = _kop_to_rub(p.get("amount"))
         pt = str(p.get("paymentType") or "UNKNOWN").upper()
         store = str(p.get("storeName") or p.get("storeId") or "—")
         cashier = str(p.get("cashier") or "—")
@@ -99,41 +91,12 @@ def _aggregate(points: list[dict]) -> tuple[dict, float, dict]:
         by_time_pay.setdefault(tlabel, {})
         by_time_pay[tlabel][pt] = by_time_pay[tlabel].get(pt, 0.0) + amount
         total_all += amount
-        if pt in CASH_DRAWER_TYPES:
-            cash_drawer += amount
-        if pt in MONEY_BALANCE_TYPES:
-            money_balance += amount
-        if pt in OFFSET_TYPES:
-            offset_balance += amount
 
-        if amount > 0:
-            direction = "income"
-        elif amount < 0:
-            direction = "outcome"
-        else:
-            direction = None
-        if direction:
-            by_direction[direction] = by_direction.get(direction, 0.0) + amount
-            matrix[direction][pt] = matrix[direction].get(pt, 0.0) + amount
-
-    # chart-friendly arrays
-    chart_payment = {
-        "labels": [PAYMENT_LABELS.get(k, k) for k in sorted(by_type.keys())],
-        "keys": sorted(by_type.keys()),
-        "values": [round(by_type[k], 2) for k in sorted(by_type.keys())],
-    }
-    chart_direction = {
-        "labels": ["Приход (+)", "Возврат/расход (−)"],
-        "keys": ["income", "outcome"],
-        "values": [round(by_direction.get("income", 0), 2), round(by_direction.get("outcome", 0), 2)],
-    }
-    # stacked: for each payment type — income and outcome abs for bars
     pay_keys = sorted(by_type.keys())
-    chart_matrix = {
+    chart_payment = {
         "labels": [PAYMENT_LABELS.get(k, k) for k in pay_keys],
         "keys": pay_keys,
-        "income": [round(matrix.get("income", {}).get(k, 0), 2) for k in pay_keys],
-        "outcome": [round(matrix.get("outcome", {}).get(k, 0), 2) for k in pay_keys],
+        "values": [round(by_type[k], 2) for k in pay_keys],
     }
     time_keys = sorted(by_time.keys())
     chart_time = {
@@ -145,73 +108,54 @@ def _aggregate(points: list[dict]) -> tuple[dict, float, dict]:
         },
     }
 
-    # balances by direction for money types only
-    money_income = round(sum(matrix.get("income", {}).get(k, 0) for k in MONEY_BALANCE_TYPES), 2)
-    money_outcome = round(sum(matrix.get("outcome", {}).get(k, 0) for k in MONEY_BALANCE_TYPES), 2)
-
+    balance = round(total_all, 2)
     summary = {
-        "total_signed": round(total_all, 2),
-        "cash_drawer": round(cash_drawer, 2),
-        "money_balance": round(money_balance, 2),
-        "offset_balance": round(offset_balance, 2),
-        "money_income": money_income,
-        "money_outcome": money_outcome,
-        "income_total": round(by_direction.get("income", 0), 2),
-        "outcome_total": round(by_direction.get("outcome", 0), 2),
+        "balance": balance,  # истинный баланс кассы за период (сумма amount из API, ₽)
+        "total_signed": balance,  # alias для совместимости UI
         "by_payment_type": {k: round(v, 2) for k, v in sorted(by_type.items())},
-        "by_direction": {k: round(v, 2) for k, v in by_direction.items()},
-        "by_direction_payment": {
-            d: {k: round(v, 2) for k, v in sorted(pts.items())}
-            for d, pts in matrix.items()
-        },
         "by_store": {k: round(v, 2) for k, v in sorted(by_store.items())},
         "by_cashier": {k: round(v, 2) for k, v in sorted(by_cashier.items())},
         "payment_labels": PAYMENT_LABELS,
         "charts": {
             "payment": chart_payment,
-            "direction": chart_direction,
-            "matrix": chart_matrix,
             "time": chart_time,
-            "balances": {
-                "labels": ["Денежный ящик (нал)", "Общий баланс (нал+безнал)", "Зачёт аванса"],
-                "values": [
-                    round(cash_drawer, 2),
-                    round(money_balance, 2),
-                    round(offset_balance, 2),
-                ],
-                "income": [None, money_income, None],
-                "outcome": [None, money_outcome, None],
-            },
         },
         "notes": [
-            "Суммы из API уже со знаком: + приход / возврат расхода; − возврат прихода / расход.",
-            "Тип операции в points API явно не приходит — «Приход/Возврат» выведены по знаку amount.",
-            "Денежный ящик (нал) = только paymentType=CASH (со знаком).",
-            "Общий баланс кассы = CASH + CREDIT_CARD (нал и безнал, с учётом возвратов).",
-            "PRE_PAID (зачёт аванса) — отдельно, в общий баланс кассы не входит.",
-            "POST_PAID / COUNTER_OFFER — без движения «живых» денег в момент операции.",
+            "Суммы в API приходят в копейках; в отчёте пересчитаны в рубли (÷100).",
+            "Баланс кассы за период = сумма всех amount из ответа API (без дополнительной фильтрации возвратов).",
+            "Разбивка по типам оплаты / точкам / кассирам — справочная.",
         ],
+        "unit": "RUB",
+        "source_unit": "kopecks",
     }
-    return summary, round(cash_drawer, 2), {k: round(v, 2) for k, v in by_type.items()}
+    return summary, balance, {k: round(v, 2) for k, v in by_type.items()}
 
 
 def _to_response(data: dict) -> ReportResponse:
     points_raw = data.get("points") or []
     if not isinstance(points_raw, list):
         points_raw = []
-    points = [
-        ReportPoint(
-            time=p.get("time"),
-            cashier=p.get("cashier"),
-            storeId=p.get("storeId"),
-            storeName=p.get("storeName"),
-            paymentType=p.get("paymentType"),
-            amount=p.get("amount"),
+
+    # Конвертируем amount копейки → рубли в каждой точке
+    points = []
+    points_for_agg: list[dict] = []
+    for p in points_raw:
+        if not isinstance(p, dict):
+            continue
+        rub = _kop_to_rub(p.get("amount"))
+        points_for_agg.append(p)  # aggregate сам делит на 100
+        points.append(
+            ReportPoint(
+                time=p.get("time"),
+                cashier=p.get("cashier"),
+                storeId=p.get("storeId"),
+                storeName=p.get("storeName"),
+                paymentType=p.get("paymentType"),
+                amount=round(rub, 2),
+            )
         )
-        for p in points_raw
-        if isinstance(p, dict)
-    ]
-    summary, cash_drawer, by_pt = _aggregate(points_raw)
+
+    summary, balance, by_pt = _aggregate(points_for_agg)
     return ReportResponse(
         reportType=data.get("reportType"),
         startDate=data.get("startDate"),
@@ -221,12 +165,13 @@ def _to_response(data: dict) -> ReportResponse:
         firmName=data.get("firmName"),
         points=points,
         summary=summary,
-        cash_drawer=cash_drawer,
-        money_balance=(summary or {}).get("money_balance"),
-        offset_balance=(summary or {}).get("offset_balance"),
+        cash_drawer=balance,  # для совместимости: баланс периода
+        money_balance=balance,
+        offset_balance=None,
         by_payment_type=by_pt,
         raw=data,
     )
+
 
 
 def _push_history(login: str, report_type: str, params: dict, resp: ReportResponse) -> None:
@@ -240,10 +185,9 @@ def _push_history(login: str, report_type: str, params: dict, resp: ReportRespon
         "params": params,
         "fetchedAt": datetime.now(timezone.utc).isoformat(),
         "summary": {
-            "cash_drawer": resp.cash_drawer,
-            "money_balance": (resp.summary or {}).get("money_balance"),
-            "offset_balance": (resp.summary or {}).get("offset_balance"),
+            "balance": (resp.summary or {}).get("balance"),
             "total_signed": (resp.summary or {}).get("total_signed"),
+            "cash_drawer": resp.cash_drawer,
             "points": len(resp.points),
             "startDate": resp.startDate,
             "endDate": resp.endDate,
