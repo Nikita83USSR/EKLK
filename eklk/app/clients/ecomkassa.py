@@ -697,9 +697,10 @@ class EcomKassaClient:
         base = f"{self.CATALOG_BASE.rstrip('/')}/api/v1/{path.lstrip('/')}"
         sep = "&" if "?" in base else "?"
         url = f"{base}{sep}token={token}"
+        # как в успешном логе: Accept + Content-Type; Token оставляем (в логе мог быть вырезан)
         headers = {
-            "Content-Type": "application/json; charset=utf-8",
             "Accept": "application/json",
+            "Content-Type": "application/json",
             "Token": token,
         }
         # не логируем полный token
@@ -766,14 +767,53 @@ class EcomKassaClient:
             return data["payload"]
         return data if isinstance(data, dict) else {}
 
+    @staticmethod
+    def _catalog_body(tax_id: str, body: dict, *, item_id: int | None = None) -> dict:
+        """
+        Формат как в успешном логе EcomKassa:
+        itemId=-1 при создании; vatType/paymentObject в нижнем регистре;
+        taxIdentity в теле.
+        """
+        vat = str(body.get("vatType") or "none").strip()
+        # normalize enum -> mobile lowercase
+        vat_map = {
+            "VAT_NONE": "none", "NONE": "none",
+            "VAT_0": "vat0", "VAT0": "vat0",
+            "VAT_10": "vat10", "VAT_10PCT": "vat10", "VAT10": "vat10",
+            "VAT_20": "vat20", "VAT_20PCT": "vat20", "VAT20": "vat20",
+            "VAT_10_110": "vat110", "VAT_18": "vat18", "VAT_18PCT": "vat18",
+            "VAT_110": "vat110", "VAT_120": "vat120",
+        }
+        vat_l = vat_map.get(vat.upper().replace(" ", ""), vat.lower())
+
+        po = str(body.get("paymentObject") or "commodity").strip()
+        po_map = {
+            "COMMODITY": "commodity", "SERVICE": "service", "JOB": "job",
+            "EXCISE": "excise", "PAYMENT": "payment", "ANOTHER": "another",
+        }
+        po_l = po_map.get(po.upper(), po.lower())
+
+        out = {
+            "itemId": int(item_id) if item_id is not None else -1,
+            "name": body.get("name") or "",
+            "sku": str(body.get("sku") or ""),
+            "price": float(body.get("price") or 0),
+            "vatType": vat_l,
+            "paymentObject": po_l,
+            "taxIdentity": str(tax_id),
+        }
+        return out
+
     async def catalog_create_item(self, tax_id: str, body: dict) -> dict:
-        data = await self._catalog_request("POST", f"items/{tax_id}", json_body=body)
+        payload = self._catalog_body(tax_id, body, item_id=-1)
+        data = await self._catalog_request("POST", f"items/{tax_id}", json_body=payload)
         if isinstance(data, dict) and "payload" in data:
             return data["payload"]
         return data if isinstance(data, dict) else {}
 
     async def catalog_update_item(self, tax_id: str, item_id: int | str, body: dict) -> dict:
-        data = await self._catalog_request("PUT", f"items/{tax_id}/{item_id}", json_body=body)
+        payload = self._catalog_body(tax_id, body, item_id=int(item_id))
+        data = await self._catalog_request("PUT", f"items/{tax_id}/{item_id}", json_body=payload)
         if isinstance(data, dict) and "payload" in data:
             return data["payload"]
         return data if isinstance(data, dict) else {}
