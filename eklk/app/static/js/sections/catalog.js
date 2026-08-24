@@ -23,20 +23,24 @@
   }
 
   const VAT_LABELS = {
-    VAT_NONE: "Без НДС",
-    VAT_0PCT: "0%",
-    VAT_10PCT: "10%",
-    VAT_110PCT: "10/110",
-    VAT_20PCT: "20%",
-    VAT_120PCT: "20/120",
+    VAT_NONE: "Без НДС", none: "Без НДС",
+    VAT_0PCT: "0%", vat0: "0%",
+    VAT_10PCT: "10%", vat10: "10%",
+    VAT_110PCT: "10/110", vat110: "10/110",
+    VAT_20PCT: "20%", vat20: "20%",
+    VAT_120PCT: "20/120", vat120: "20/120",
+    vat5: "5%", vat7: "7%", vat22: "22%",
   };
   const PO_LABELS = {
-    COMMODITY: "Товар",
-    SERVICE: "Услуга",
-    JOB: "Работа",
-    EXCISE: "Подакцизный",
-    PAYMENT: "Платёж",
-    ANOTHER: "Иное",
+    COMMODITY: "Товар", commodity: "Товар",
+    SERVICE: "Услуга", service: "Услуга",
+    JOB: "Работа", job: "Работа",
+    EXCISE: "Подакцизный", excise: "Подакцизный",
+    PAYMENT: "Платёж", payment: "Платёж",
+    ANOTHER: "Иное", another: "Иное",
+    identified_item_marked: "Маркир. товар",
+    identified_item_no_mark: "Товар без марки",
+    excise_item_marked: "Подакцизн. маркир.",
   };
 
   function money(n) {
@@ -119,8 +123,14 @@
     $("#cat_name").value = item ? item.name || "" : "";
     $("#cat_sku").value = item ? item.sku || "" : "";
     $("#cat_price").value = item ? item.price ?? 0 : 0;
-    $("#cat_vat").value = item ? item.vatType || "VAT_NONE" : "VAT_NONE";
-    $("#cat_po").value = item ? item.paymentObject || "COMMODITY" : "COMMODITY";
+    const vatRaw = item ? (item.vatType || "VAT_NONE") : "VAT_NONE";
+    const poRaw = item ? (item.paymentObject || "COMMODITY") : "COMMODITY";
+    const vatSel = $("#cat_vat");
+    const poSel = $("#cat_po");
+    const vatMap = {none:"VAT_NONE",vat0:"VAT_0PCT",vat10:"VAT_10PCT",vat110:"VAT_110PCT",vat20:"VAT_20PCT",vat120:"VAT_120PCT"};
+    const poMap = {commodity:"COMMODITY",service:"SERVICE",job:"JOB",excise:"EXCISE",payment:"PAYMENT",another:"ANOTHER"};
+    if (vatSel) vatSel.value = vatMap[String(vatRaw).toLowerCase()] || (String(vatRaw).toUpperCase().startsWith("VAT_") ? String(vatRaw).toUpperCase() : "VAT_NONE");
+    if (poSel) poSel.value = poMap[String(poRaw).toLowerCase()] || (["COMMODITY","SERVICE","JOB","EXCISE","PAYMENT","ANOTHER"].includes(String(poRaw).toUpperCase()) ? String(poRaw).toUpperCase() : "COMMODITY");
     modal.classList.remove("hidden");
     modal.setAttribute("aria-hidden", "false");
   }

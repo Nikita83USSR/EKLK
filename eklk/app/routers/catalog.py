@@ -84,21 +84,40 @@ def _map_item(raw: dict) -> CatalogItemOut:
         price=raw.get("price"),
         vatType=raw.get("vatType"),
         paymentObject=raw.get("paymentObject"),
-        taxId=raw.get("taxId"),
+        taxId=raw.get("taxId") or raw.get("taxIdentity"),
         raw=raw,
     )
 
 
 def _norm_vat(v: str | None) -> str:
+    """Normalize to catalog-service enum; mobile API often uses none/vat20."""
     if not v:
         return "VAT_NONE"
-    key = str(v).strip().lower().replace(" ", "")
+    key = str(v).strip().lower().replace(" ", "").replace("%", "")
     if key in _VAT_MAP:
         return _VAT_MAP[key]
     up = str(v).strip().upper()
     if up.startswith("VAT_"):
         return up
     return "VAT_NONE"
+
+
+def _vat_for_mobile(v: str | None) -> str:
+    """Mobile list uses none/vat10/vat20…"""
+    n = _norm_vat(v)
+    return {
+        "VAT_NONE": "none",
+        "VAT_0PCT": "vat0",
+        "VAT_10PCT": "vat10",
+        "VAT_110PCT": "vat110",
+        "VAT_20PCT": "vat20",
+        "VAT_120PCT": "vat120",
+    }.get(n, "none")
+
+
+def _po_for_mobile(v: str | None) -> str:
+    n = _norm_po(v)
+    return n.lower()
 
 
 def _norm_po(v: str | None) -> str:
@@ -127,17 +146,18 @@ async def list_items(
     tax_id = _tax_id(user)
     try:
         payload = None
-        if source in ("auto", "catalog"):
+        # mobile list — рабочий путь; catalog.ecomkassa.ru CRUD часто 401 без отдельного доступа
+        if source in ("auto", "mobile"):
             try:
-                payload = await client.catalog_list_items(
-                    tax_id, page=page, size=size, sku=sku, name=name
-                )
+                payload = await client.list_catalog_items(sku=sku, name=name, page=page, size=size)
             except EcomKassaError:
-                if source == "catalog":
+                if source == "mobile":
                     raise
                 payload = None
-        if payload is None:
-            payload = await client.list_catalog_items(sku=sku, name=name, page=page, size=size)
+        if payload is None and source in ("auto", "catalog"):
+            payload = await client.catalog_list_items(
+                tax_id, page=page, size=size, sku=sku, name=name
+            )
         items_raw = payload.get("items") or []
         if not isinstance(items_raw, list):
             items_raw = []
@@ -172,7 +192,14 @@ async def create_item(body: CatalogItemIn, user: CurrentUser):
         log_action("catalog_create", f"sku={body.sku}", user_id=user["username"])
         return _map_item(data if isinstance(data, dict) else {})
     except EcomKassaError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        msg = str(e)
+        if "401" in msg or "Unauthorized" in msg or "hostname" in msg.lower():
+            msg = (
+                "Каталог: запись недоступна (catalog.ecomkassa.ru вернул отказ авторизации). "
+                "Просмотр списка работает через mobile API. "
+                f"Детали: {e}"
+            )
+        raise HTTPException(status_code=400, detail=msg)
     finally:
         await client.close()
 
@@ -246,7 +273,7 @@ async def delete_all(user: CurrentUser, confirm: str = Query(...)):
     try:
         page = 1
         while True:
-            payload = await client.catalog_list_items(tax_id, page=page, size=100)
+            payload = await client.list_catalog_items(page=page, size=100)
             items = payload.get("items") or []
             if not items:
                 break

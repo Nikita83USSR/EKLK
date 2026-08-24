@@ -650,7 +650,7 @@ class EcomKassaClient:
 
     # ── Catalog (mobile list + catalog service CRUD) ─────────────────────
 
-    CATALOG_BASE = "http://ecomkassa-catalog.mircloud.ru"
+    CATALOG_BASE = "https://catalog.ecomkassa.ru"
 
     async def list_catalog_items(
         self,
