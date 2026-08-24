@@ -76,21 +76,27 @@ def _period_label(data: dict) -> str:
 def _aggregate(points: list[dict], *, period_label: str = "") -> dict:
     """
     amount в API — копейки → рубли.
-    balance / income = сумма всех amount (доход за период).
-    cash_balance = только CASH.
-    by_payment_type — баланс по типам оплаты.
-    Точки упорядочиваются по магазину (storeName, storeId).
+
+    EcomKassa уже учла приходы/возвраты в amount.
+    - total_checks (общая сумма чеков) = сумма всех amount.
+    - income (доход за период) = сумма amount, где зачёт аванса (PRE_PAID) = 0
+      (вычитаем/не учитываем зачёт предоплаты).
+    - cash_balance = только CASH.
     """
+    # типы, которые не дают «живого» дохода при зачёте
+    ZERO_INCOME_TYPES = {"PRE_PAID"}
+
     by_type: dict[str, float] = {}
     by_store: dict[str, float] = {}
     by_cashier: dict[str, float] = {}
     by_time: dict[str, float] = {}
     by_time_pay: dict[str, dict[str, float]] = {}
-    stores_map: dict[str, dict] = {}  # key -> {storeId, storeName}
-    total_all = 0.0
+    stores_map: dict[str, dict] = {}
+    total_checks = 0.0
+    income = 0.0
     cash_balance = 0.0
+    prepaid_total = 0.0
 
-    # sort by store for stable report
     def store_key(p: dict):
         return (
             str(p.get("storeName") or ""),
@@ -114,16 +120,19 @@ def _aggregate(points: list[dict], *, period_label: str = "") -> dict:
         by_time[tlabel] = by_time.get(tlabel, 0.0) + amount
         by_time_pay.setdefault(tlabel, {})
         by_time_pay[tlabel][pt] = by_time_pay[tlabel].get(pt, 0.0) + amount
-        total_all += amount
+
+        total_checks += amount
+        if pt in ZERO_INCOME_TYPES:
+            prepaid_total += amount
+            # зачёт аванса в доход не входит (0)
+        else:
+            income += amount
         if pt == "CASH":
             cash_balance += amount
 
         sk = f"{store_id}:{store_name}"
         if sk not in stores_map:
-            stores_map[sk] = {
-                "storeId": store_id,
-                "storeName": store_name,
-            }
+            stores_map[sk] = {"storeId": store_id, "storeName": store_name}
 
     pay_keys = sorted(by_type.keys())
     chart_payment = {
@@ -141,13 +150,14 @@ def _aggregate(points: list[dict], *, period_label: str = "") -> dict:
         },
     }
 
-    income = round(total_all, 2)
     summary = {
         "period_label": period_label,
-        "income": income,  # доход за выбранный период
-        "balance": income,  # alias
-        "total_signed": income,
-        "cash_balance": round(cash_balance, 2),  # баланс наличных
+        "total_checks": round(total_checks, 2),  # общая сумма чеков
+        "income": round(income, 2),  # доход за период (без PRE_PAID)
+        "prepaid_total": round(prepaid_total, 2),  # зачёт аванса (справочно)
+        "balance": round(income, 2),
+        "total_signed": round(total_checks, 2),
+        "cash_balance": round(cash_balance, 2),
         "by_payment_type": {k: round(v, 2) for k, v in sorted(by_type.items())},
         "by_store": {k: round(v, 2) for k, v in sorted(by_store.items())},
         "by_cashier": {k: round(v, 2) for k, v in sorted(by_cashier.items())},
@@ -162,7 +172,9 @@ def _aggregate(points: list[dict], *, period_label: str = "") -> dict:
         },
         "notes": [
             "Суммы в API приходят в копейках; в отчёте пересчитаны в рубли (÷100).",
-            "Доход за период = сумма всех amount из ответа API.",
+            "EcomKassa уже учитывает приходы и возвраты в amount.",
+            "Общая сумма чеков = сумма всех amount из ответа.",
+            "Доход за период = общая сумма чеков минус зачёт аванса (PRE_PAID считается 0).",
             "Баланс наличных = сумма amount с paymentType=CASH.",
             "Отчёт упорядочен по магазину (storeName / storeId).",
         ],
@@ -170,6 +182,7 @@ def _aggregate(points: list[dict], *, period_label: str = "") -> dict:
         "source_unit": "kopecks",
     }
     return summary
+
 
 
 def _to_response(
@@ -219,7 +232,6 @@ def _to_response(
         for p in ordered
     ]
 
-    income = summary.get("income", 0.0)
     return ReportResponse(
         reportType=data.get("reportType"),
         startDate=data.get("startDate"),
@@ -230,8 +242,8 @@ def _to_response(
         points=points,
         summary=summary,
         cash_drawer=summary.get("cash_balance"),
-        money_balance=income,
-        offset_balance=None,
+        money_balance=summary.get("income"),
+        offset_balance=summary.get("prepaid_total"),
         by_payment_type=summary.get("by_payment_type"),
         raw=data,
     )
@@ -248,9 +260,10 @@ def _push_history(login: str, report_type: str, params: dict, resp: ReportRespon
         "params": params,
         "fetchedAt": datetime.now(timezone.utc).isoformat(),
         "summary": {
+            "total_checks": (resp.summary or {}).get("total_checks"),
             "income": (resp.summary or {}).get("income"),
-            "balance": (resp.summary or {}).get("balance"),
             "cash_balance": (resp.summary or {}).get("cash_balance"),
+            "prepaid_total": (resp.summary or {}).get("prepaid_total"),
             "period_label": (resp.summary or {}).get("period_label"),
             "points": len(resp.points),
             "startDate": resp.startDate,

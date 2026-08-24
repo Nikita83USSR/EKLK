@@ -126,7 +126,7 @@
     const ctx4 = $("#rpt_chart_time");
     if (ctx4 && tm.labels?.length) {
       const datasets = [{
-        label: "Доход (итого)",
+        label: "Общая сумма чеков",
         data: tm.total || [],
         borderColor: "#3b82f6",
         backgroundColor: "rgba(59,130,246,0.15)",
@@ -161,8 +161,10 @@
     if (!el) return;
     const s = data.summary || {};
     const period = s.period_label || `${data.startDate || "—"} — ${data.endDate || "—"}`;
-    const income = s.income ?? s.balance ?? s.total_signed;
+    const totalChecks = s.total_checks ?? s.total_signed;
+    const income = s.income ?? s.balance;
     const cash = s.cash_balance ?? data.cash_drawer;
+    const prepaid = s.prepaid_total ?? 0;
     const byPt = s.by_payment_type || data.by_payment_type || {};
     const byStore = s.by_store || {};
 
@@ -183,10 +185,16 @@
     el.innerHTML = `
       <div class="kv"><span class="k">Тип отчёта</span><span class="v">${escapeHtml(data.reportType || "—")}</span></div>
       <div class="kv"><span class="k">Фирма</span><span class="v">${escapeHtml(data.firmName || "—")}</span></div>
-      <div class="kv"><span class="k">Доход за выбранный период (${escapeHtml(period)})</span><span class="v"><strong>${money(income)} ₽</strong></span></div>
+      <div class="kv"><span class="k">Период</span><span class="v">${escapeHtml(period)}</span></div>
+      <div class="kv"><span class="k">Общая сумма чеков</span><span class="v"><strong>${money(totalChecks)} ₽</strong></span></div>
       <div class="kv"><span class="k">Баланс наличных (CASH)</span><span class="v"><strong>${money(cash)} ₽</strong></span></div>
       <div class="section-title" style="margin-top:12px;font-size:0.9rem">Баланс по типам оплаты</div>
       ${payRows || '<p class="hint">Нет данных</p>'}
+      <div class="kv" style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border,#e5e7eb)">
+        <span class="k"><strong>Доход за выбранный период (${escapeHtml(period)})</strong></span>
+        <span class="v"><strong>${money(income)} ₽</strong></span>
+      </div>
+      <p class="hint" style="margin-top:4px">Зачёт аванса (PRE_PAID) ${money(prepaid)} ₽ в доход не входит.</p>
       <div class="section-title" style="margin-top:12px;font-size:0.9rem">По магазинам</div>
       ${storeRows || '<p class="hint">Нет данных</p>'}
       <ul class="hint" style="margin-top:12px;padding-left:18px">
@@ -229,11 +237,12 @@
       box.innerHTML = items
         .map((h) => {
           const s = h.summary || {};
-          const bal = s.income ?? s.balance ?? s.total_signed;
+          const income = s.income ?? s.balance;
+          const total = s.total_checks ?? s.total_signed;
           const period = s.period_label || "";
           return `<div class="tpl-card" style="padding:8px 10px;margin-bottom:6px">
             <div><strong>${escapeHtml(h.reportType)}</strong> · ${escapeHtml((h.fetchedAt || "").slice(0, 19))}</div>
-            <div class="hint">Доход${period ? " (" + escapeHtml(period) + ")" : ""}: ${money(bal)} ₽ · точек: ${s.points ?? "—"}</div>
+            <div class="hint">Чеки: ${money(total)} · доход${period ? " (" + escapeHtml(period) + ")" : ""}: ${money(income)} ₽ · точек: ${s.points ?? "—"}</div>
           </div>`;
         })
         .join("");
@@ -300,15 +309,19 @@
     const byStore = s.by_store || {};
     const period = s.period_label || `${lastReport.startDate} — ${lastReport.endDate}`;
     const income = s.income ?? s.balance;
+    const totalChecks = s.total_checks ?? s.total_signed;
     const summaryRows = [
       ["Тип отчёта", lastReport.reportType],
       ["Период", period],
       ["Фирма", lastReport.firmName],
-      [`Доход за выбранный период (${period}), ₽`, income],
+      ["Общая сумма чеков, ₽", totalChecks],
       ["Баланс наличных (CASH), ₽", s.cash_balance],
       [],
       ["Тип оплаты", "Сумма, ₽"],
       ...Object.keys(byPt).map((k) => [PT_LABELS[k] || k, byPt[k]]),
+      [],
+      [`Доход за выбранный период (${period}), ₽`, income],
+      ["Зачёт аванса (PRE_PAID), не в доходе, ₽", s.prepaid_total ?? 0],
       [],
       ["Магазин", "Сумма, ₽"],
       ...Object.entries(byStore).map(([k, v]) => [k, v]),
