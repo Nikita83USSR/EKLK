@@ -139,10 +139,39 @@
               <div id="dash_pay_types" class="dash-pay-types hint">Загрузка…</div>
             </div>
 
-            <p class="dash-reports-link hint" style="margin-top:16px">
-              Дополнительные отчёты можно сформировать
-              <a href="/reports" id="dash_goto_reports">в разделе «Отчёты»</a>.
-            </p>
+            <div class="dash-actions" style="margin-top:20px">
+              <div class="section-title" style="border:none;padding:0;margin-bottom:12px">Чем займёмся?</div>
+              <div class="dash-actions-grid">
+                <a href="/create" class="dash-action" data-dash-tab="create">
+                  <span class="dash-action-title">Сформировать чек</span>
+                  <span class="dash-action-desc">Продажа, возврат или коррекция — в один клик</span>
+                </a>
+                <a href="/payment" class="dash-action" data-dash-tab="payment">
+                  <span class="dash-action-title">Ссылка на оплату</span>
+                  <span class="dash-action-desc">Выставить счёт и отправить покупателю</span>
+                </a>
+                <a href="/templates" class="dash-action" data-dash-tab="templates">
+                  <span class="dash-action-title">Шаблоны</span>
+                  <span class="dash-action-desc">Сохранить частые позиции и не набивать заново</span>
+                </a>
+                <a href="/orders" class="dash-action" data-dash-tab="orders">
+                  <span class="dash-action-title">Список чеков</span>
+                  <span class="dash-action-desc">Найти, открыть и проверить статус операции</span>
+                </a>
+                <a href="/catalog" class="dash-action" data-dash-tab="catalog">
+                  <span class="dash-action-title">Каталог товаров</span>
+                  <span class="dash-action-desc">Номенклатура, поиск и импорт CommerceML</span>
+                </a>
+                <a href="/reports" class="dash-action" data-dash-tab="reports">
+                  <span class="dash-action-title">Отчёты</span>
+                  <span class="dash-action-desc">Сводки за период, балансы и выгрузка в Excel</span>
+                </a>
+                <a href="/settings" class="dash-action" data-dash-tab="settings">
+                  <span class="dash-action-title">Настройки</span>
+                  <span class="dash-action-desc">Организация, магазины и параметры кассы</span>
+                </a>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1119,10 +1148,10 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260824i"></script>
-  <script src="/static/js/sections/dashboard.js?v=20260824i"></script>
-  <script src="/static/js/sections/catalog.js?v=20260824i"></script>
-  <script src="/static/js/sections/reports.js?v=20260824i"></script>
+  <script src="/static/js/app.js?v=20260824j"></script>
+  <script src="/static/js/sections/dashboard.js?v=20260824j"></script>
+  <script src="/static/js/sections/catalog.js?v=20260824j"></script>
+  <script src="/static/js/sections/reports.js?v=20260824j"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
   <script data-skip-moving="true">
   (function(w,d,u){

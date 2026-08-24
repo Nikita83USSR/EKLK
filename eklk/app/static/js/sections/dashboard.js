@@ -177,13 +177,16 @@
     $("#dash_refresh")?.addEventListener("click", load);
     $("#dash_date")?.addEventListener("change", load);
     $("#dash_store")?.addEventListener("change", load);
-    $("#dash_goto_reports")?.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      if (window.EKLK && typeof window.EKLK.showTab === "function") {
-        window.EKLK.showTab("reports", true);
-      } else {
-        location.href = "/reports";
-      }
+    document.querySelectorAll("[data-dash-tab]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        const tab = el.getAttribute("data-dash-tab");
+        if (tab && window.EKLK && typeof window.EKLK.showTab === "function") {
+          window.EKLK.showTab(tab, true);
+        } else if (tab) {
+          location.href = "/" + tab;
+        }
+      });
     });
   }
 

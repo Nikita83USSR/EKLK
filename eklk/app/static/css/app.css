@@ -1727,9 +1727,36 @@ body[data-theme="glass"] .tpl-qr-cell {
 }
 .header .logo { cursor: pointer; user-select: none; }
 
-.dash-reports-link a {
-  color: var(--primary, #3b82f6);
-  font-weight: 600;
-  text-decoration: none;
+.dash-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
 }
-.dash-reports-link a:hover { text-decoration: underline; }
+.dash-action {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: inherit;
+  box-shadow: var(--shadow);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+.dash-action:hover {
+  border-color: #86efac;
+  box-shadow: 0 4px 14px rgba(22, 163, 74, 0.12);
+  transform: translateY(-1px);
+}
+.dash-action-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.dash-action-desc {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
