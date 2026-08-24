@@ -146,15 +146,16 @@
     const id = $("#cat_item_id").value;
     const body = {
       name: $("#cat_name").value.trim(),
-      sku: $("#cat_sku").value.trim(),
+      sku: ($("#cat_sku").value || "").trim(),
       price: parseFloat($("#cat_price").value) || 0,
       vatType: $("#cat_vat").value,
       paymentObject: $("#cat_po").value,
     };
-    if (!body.name || !body.sku) {
-      alert("Укажите наименование и SKU", "error");
+    if (!body.name) {
+      alert("Укажите наименование", "error");
       return;
     }
+    // пустой SKU — сервер сгенерирует уникальный
     try {
       if (id) {
         await api("/catalog/items/" + encodeURIComponent(id), {
@@ -288,10 +289,18 @@
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.detail || data.error || res.statusText);
+        const r = data.report || data;
+        const errList = (data.errors || []).slice(0, 8).join("\n");
         alert(
-          `Импорт: создано ${data.created}, пропущено ${data.skipped}` +
-            (data.errors?.length ? `, ошибок ${data.errors.length}` : ""),
-          "success"
+          `Импорт завершён\n` +
+            `Всего в файле: ${r.total ?? data.total ?? "—"}\n` +
+            `Создано: ${data.created ?? 0}\n` +
+            `Обновлено: ${data.updated ?? 0}\n` +
+            `Пропущено: ${data.skipped ?? 0}\n` +
+            `Ошибок: ${data.errors_count ?? (data.errors || []).length}\n` +
+            `Сгенерировано артикулов: ${data.generated_sku ?? 0}` +
+            (errList ? `\n\nПримеры ошибок:\n${errList}` : ""),
+          (data.errors_count || (data.errors || []).length) ? "error" : "success"
         );
         page = 1;
         await load();

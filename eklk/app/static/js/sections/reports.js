@@ -125,6 +125,28 @@
       });
     }
 
+    // 2b) Balances bar
+    const bal = ch.balances || {};
+    const ctxBal = $("#rpt_chart_balances");
+    if (ctxBal && bal.labels?.length) {
+      charts.balances = new Chart(ctxBal, {
+        type: "bar",
+        data: {
+          labels: bal.labels,
+          datasets: [{
+            label: "Баланс, ₽",
+            data: bal.values,
+            backgroundColor: ["#10b981", "#3b82f6", "#f59e0b"],
+          }],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: { y: { ticks: { callback: (v) => money(v) } } },
+        },
+      });
+    }
+
     // 3) Matrix stacked bar: income vs outcome per payment type
     const mx = ch.matrix || {};
     const ctx3 = $("#rpt_chart_matrix");
@@ -242,7 +264,10 @@
       <div class="kv"><span class="k">Итого нетто (все типы)</span><span class="v"><strong>${money(s.total_signed)} ₽</strong></span></div>
       <div class="kv"><span class="k">Приход (+)</span><span class="v">${money(s.income_total)} ₽</span></div>
       <div class="kv"><span class="k">Возврат / расход (−)</span><span class="v" style="color:var(--danger,#c00)">${money(s.outcome_total)} ₽</span></div>
-      <div class="kv"><span class="k">Денежный ящик (только нал CASH)</span><span class="v"><strong>${money(data.cash_drawer ?? s.cash_drawer)} ₽</strong></span></div>
+      <div class="kv"><span class="k">Денежный ящик (нал CASH)</span><span class="v"><strong>${money(data.cash_drawer ?? s.cash_drawer)} ₽</strong></span></div>
+      <div class="kv"><span class="k">Общий баланс кассы (нал + безнал)</span><span class="v"><strong>${money(data.money_balance ?? s.money_balance)} ₽</strong></span></div>
+      <div class="kv"><span class="k"> ↳ приход / возврат (нал+безнал)</span><span class="v">${money(s.money_income)} / <span style="color:var(--danger,#c00)">${money(s.money_outcome)}</span> ₽</span></div>
+      <div class="kv"><span class="k">Зачёт аванса (PRE_PAID)</span><span class="v">${money(data.offset_balance ?? s.offset_balance)} ₽</span></div>
       <div class="section-title" style="margin-top:12px;font-size:0.9rem">По типам оплаты (нетто)</div>
       ${rows || '<p class="hint">Нет разбивки</p>'}
       ${matrixHtml}
@@ -361,6 +386,8 @@
       ["Приход (+)", s.income_total],
       ["Возврат/расход (−)", s.outcome_total],
       ["Денежный ящик (CASH)", lastReport.cash_drawer ?? s.cash_drawer],
+      ["Общий баланс (нал+безнал)", lastReport.money_balance ?? s.money_balance],
+      ["Зачёт аванса (PRE_PAID)", lastReport.offset_balance ?? s.offset_balance],
       [],
       ["Тип оплаты", "Нетто", "Приход", "Возврат/расход"],
       ...Object.keys(byPt).map((k) => [

@@ -22,6 +22,8 @@ class ReportResponse(BaseModel):
     # Aggregates for accountant (computed)
     summary: Optional[dict] = None
     cash_drawer: Optional[float] = None  # physical cash (CASH only)
+    money_balance: Optional[float] = None  # CASH + CREDIT_CARD
+    offset_balance: Optional[float] = None  # PRE_PAID
     by_payment_type: Optional[dict] = None
     raw: Optional[dict] = None
 

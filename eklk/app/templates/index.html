@@ -737,8 +737,8 @@
               <label>Наименование <span class="req">*</span>
                 <input type="text" id="cat_name" class="input" required />
               </label>
-              <label>Артикул (SKU) <span class="req">*</span>
-                <input type="text" id="cat_sku" class="input" required />
+              <label>Артикул (SKU)
+                <input type="text" id="cat_sku" class="input" placeholder="Пусто = сгенерировать" />
               </label>
               <label>Цена, ₽
                 <input type="number" id="cat_price" class="input" step="0.01" min="0" value="0" />
@@ -846,6 +846,10 @@
                 <div class="rpt-chart-box">
                   <div class="hint" style="margin-bottom:6px">Приход (+) vs возврат/расход (−)</div>
                   <canvas id="rpt_chart_dir" height="220"></canvas>
+                </div>
+                <div class="rpt-chart-box rpt-chart-wide">
+                  <div class="hint" style="margin-bottom:6px">Балансы: ящик (нал) · общий (нал+безнал) · зачёт</div>
+                  <canvas id="rpt_chart_balances" height="220"></canvas>
                 </div>
                 <div class="rpt-chart-box rpt-chart-wide">
                   <div class="hint" style="margin-bottom:6px">Тип оплаты × направление операции</div>
@@ -1024,9 +1028,9 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-  <script src="/static/js/app.js?v=20260824c"></script>
-  <script src="/static/js/sections/catalog.js?v=20260824c"></script>
-  <script src="/static/js/sections/reports.js?v=20260824c"></script>
+  <script src="/static/js/app.js?v=20260824d"></script>
+  <script src="/static/js/sections/catalog.js?v=20260824d"></script>
+  <script src="/static/js/sections/reports.js?v=20260824d"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->

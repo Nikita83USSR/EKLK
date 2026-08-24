@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 class CatalogItemIn(BaseModel):
     name: str
-    sku: str
+    sku: Optional[str] = Field(default="", description="Пустой → сгенерируем уникальный")
     price: float = 0
     vatType: str = Field(default="VAT_NONE", description="VAT_NONE | VAT_10PCT | ...")
     paymentObject: str = Field(default="COMMODITY", description="COMMODITY | SERVICE | ...")
@@ -33,7 +33,12 @@ class CatalogBulkDeleteRequest(BaseModel):
 
 
 class CatalogImportResult(BaseModel):
+    total: int = 0
     created: int = 0
+    updated: int = 0
     skipped: int = 0
+    errors_count: int = 0
+    generated_sku: int = 0
     errors: List[str] = []
     items: List[CatalogItemOut] = []
+    report: Optional[dict] = None

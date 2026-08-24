@@ -30,7 +30,10 @@ PAYMENT_LABELS = {
 
 # Влияют на физический денежный ящик кассы
 CASH_DRAWER_TYPES = {"CASH"}
-
+# Общий баланс кассы (нал + безнал), без зачёта/кредита/встречного
+MONEY_BALANCE_TYPES = {"CASH", "CREDIT_CARD"}
+# Зачёт аванса и аналоги — отдельно
+OFFSET_TYPES = {"PRE_PAID"}
 # Не двигают «живые» деньги в момент отражения (для справки бухгалтеру)
 NON_CASH_MOVEMENT = {"PRE_PAID", "POST_PAID", "COUNTER_OFFER"}
 
@@ -73,6 +76,8 @@ def _aggregate(points: list[dict]) -> tuple[dict, float, dict]:
     by_time: dict[str, float] = {}
     by_time_pay: dict[str, dict[str, float]] = {}
     cash_drawer = 0.0
+    money_balance = 0.0  # нал + безнал
+    offset_balance = 0.0  # зачёт аванса PRE_PAID
     total_all = 0.0
 
     for p in points:
@@ -96,6 +101,10 @@ def _aggregate(points: list[dict]) -> tuple[dict, float, dict]:
         total_all += amount
         if pt in CASH_DRAWER_TYPES:
             cash_drawer += amount
+        if pt in MONEY_BALANCE_TYPES:
+            money_balance += amount
+        if pt in OFFSET_TYPES:
+            offset_balance += amount
 
         if amount > 0:
             direction = "income"
@@ -136,9 +145,17 @@ def _aggregate(points: list[dict]) -> tuple[dict, float, dict]:
         },
     }
 
+    # balances by direction for money types only
+    money_income = round(sum(matrix.get("income", {}).get(k, 0) for k in MONEY_BALANCE_TYPES), 2)
+    money_outcome = round(sum(matrix.get("outcome", {}).get(k, 0) for k in MONEY_BALANCE_TYPES), 2)
+
     summary = {
         "total_signed": round(total_all, 2),
         "cash_drawer": round(cash_drawer, 2),
+        "money_balance": round(money_balance, 2),
+        "offset_balance": round(offset_balance, 2),
+        "money_income": money_income,
+        "money_outcome": money_outcome,
         "income_total": round(by_direction.get("income", 0), 2),
         "outcome_total": round(by_direction.get("outcome", 0), 2),
         "by_payment_type": {k: round(v, 2) for k, v in sorted(by_type.items())},
@@ -155,14 +172,24 @@ def _aggregate(points: list[dict]) -> tuple[dict, float, dict]:
             "direction": chart_direction,
             "matrix": chart_matrix,
             "time": chart_time,
+            "balances": {
+                "labels": ["Денежный ящик (нал)", "Общий баланс (нал+безнал)", "Зачёт аванса"],
+                "values": [
+                    round(cash_drawer, 2),
+                    round(money_balance, 2),
+                    round(offset_balance, 2),
+                ],
+                "income": [None, money_income, None],
+                "outcome": [None, money_outcome, None],
+            },
         },
         "notes": [
             "Суммы из API уже со знаком: + приход / возврат расхода; − возврат прихода / расход.",
             "Тип операции в points API явно не приходит — «Приход/Возврат» выведены по знаку amount.",
             "Денежный ящик (нал) = только paymentType=CASH (со знаком).",
-            "PRE_PAID (зачёт аванса) не двигает денежный ящик — в общей сводке виден отдельно.",
-            "POST_PAID / COUNTER_OFFER — без наличного движения в момент операции.",
-            "CREDIT_CARD — безнал, в денежный ящик не входит.",
+            "Общий баланс кассы = CASH + CREDIT_CARD (нал и безнал, с учётом возвратов).",
+            "PRE_PAID (зачёт аванса) — отдельно, в общий баланс кассы не входит.",
+            "POST_PAID / COUNTER_OFFER — без движения «живых» денег в момент операции.",
         ],
     }
     return summary, round(cash_drawer, 2), {k: round(v, 2) for k, v in by_type.items()}
@@ -195,6 +222,8 @@ def _to_response(data: dict) -> ReportResponse:
         points=points,
         summary=summary,
         cash_drawer=cash_drawer,
+        money_balance=(summary or {}).get("money_balance"),
+        offset_balance=(summary or {}).get("offset_balance"),
         by_payment_type=by_pt,
         raw=data,
     )
@@ -212,6 +241,8 @@ def _push_history(login: str, report_type: str, params: dict, resp: ReportRespon
         "fetchedAt": datetime.now(timezone.utc).isoformat(),
         "summary": {
             "cash_drawer": resp.cash_drawer,
+            "money_balance": (resp.summary or {}).get("money_balance"),
+            "offset_balance": (resp.summary or {}).get("offset_balance"),
             "total_signed": (resp.summary or {}).get("total_signed"),
             "points": len(resp.points),
             "startDate": resp.startDate,

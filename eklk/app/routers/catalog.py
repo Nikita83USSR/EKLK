@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import io
+import re
+import secrets
 import xml.etree.ElementTree as ET
 from typing import Optional
 
@@ -58,6 +60,57 @@ _PO_MAP = {
     "работа": "JOB",
     "job": "JOB",
 }
+
+
+
+def _gen_sku(prefix: str = "EKLK") -> str:
+    """Случайный артикул, уникальный с высокой вероятностью."""
+    return f"{prefix}-{secrets.token_hex(4).upper()}"
+
+
+def _is_sku_exists_error(exc: Exception) -> bool:
+    """Ошибка дубликата SKU по доке EcomKassa и типичным формулировкам."""
+    msg = str(exc).lower()
+    raw = getattr(exc, "raw", None)
+    if isinstance(raw, dict):
+        msg += " " + str(raw.get("error") or "").lower()
+    needles = (
+        "уже существует",
+        "already exists",
+        "sku уже",
+        "duplicate",
+        "занят",
+        "указанным кодом sku",
+    )
+    return any(n in msg for n in needles)
+
+
+async def _collect_existing_skus(client: EcomKassaClient, tax_id: str) -> dict[str, dict]:
+    """sku(lower) -> item dict. Сначала mobile list, пагинация."""
+    found: dict[str, dict] = {}
+    page = 1
+    while page <= 50:
+        try:
+            payload = await client.list_catalog_items(page=page, size=100)
+        except EcomKassaError:
+            try:
+                payload = await client.catalog_list_items(tax_id, page=page, size=100)
+            except EcomKassaError:
+                break
+        items = payload.get("items") or []
+        if not items:
+            break
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            sku = str(it.get("sku") or "").strip()
+            if sku:
+                found[sku.lower()] = it
+        total_pages = int(payload.get("totalPages") or 1)
+        if page >= total_pages:
+            break
+        page += 1
+    return found
 
 
 def _client_for(user: dict) -> EcomKassaClient:
@@ -179,18 +232,47 @@ async def create_item(body: CatalogItemIn, user: CurrentUser):
     client = _client_for(user)
     tax_id = _tax_id(user)
     try:
-        data = await client.catalog_create_item(
-            tax_id,
-            {
-                "name": body.name,
-                "sku": body.sku,
-                "price": body.price,
-                "vatType": _norm_vat(body.vatType),
-                "paymentObject": _norm_po(body.paymentObject),
-            },
+        sku = (body.sku or "").strip()
+        generated = False
+        if not sku:
+            sku = _gen_sku()
+            generated = True
+        else:
+            existing = await _collect_existing_skus(client, tax_id)
+            if sku.lower() in existing:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Товар с артикулом (SKU) «{sku}» уже есть в каталоге. Укажите другой артикул.",
+                )
+        try:
+            data = await client.catalog_create_item(
+                tax_id,
+                {
+                    "name": body.name,
+                    "sku": sku,
+                    "price": body.price,
+                    "vatType": _norm_vat(body.vatType),
+                    "paymentObject": _norm_po(body.paymentObject),
+                },
+            )
+        except EcomKassaError as e:
+            if _is_sku_exists_error(e):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Товар с артикулом (SKU) «{sku}» уже существует в EcomKassa.",
+                ) from e
+            raise
+        log_action(
+            "catalog_create",
+            f"sku={sku} generated={generated}",
+            user_id=user["username"],
         )
-        log_action("catalog_create", f"sku={body.sku}", user_id=user["username"])
-        return _map_item(data if isinstance(data, dict) else {})
+        out = _map_item(data if isinstance(data, dict) else {})
+        if not out.sku:
+            out.sku = sku
+        return out
+    except HTTPException:
+        raise
     except EcomKassaError as e:
         msg = str(e)
         if "401" in msg or "Unauthorized" in msg or "hostname" in msg.lower() or getattr(e, "code", None) in (401, 403, "401", "403"):
@@ -203,6 +285,8 @@ async def create_item(body: CatalogItemIn, user: CurrentUser):
         raise HTTPException(status_code=400, detail=msg)
     finally:
         await client.close()
+
+
 
 
 @router.put("/items/{item_id}", response_model=CatalogItemOut)
@@ -417,15 +501,14 @@ def _parse_commerceml(content: bytes) -> list[dict]:
                     if cn or cv:
                         mods.append((cn, cv))
 
-        if not name and not sku:
+        if not name and not sku and not pid:
             return
-        if not sku:
-            sku = pid or name[:32]
+        # sku может быть пустым — на импорте сгенерируем
         if price <= 0 and pid in price_by_id:
             price = price_by_id[pid]
 
         base = {
-            "name": name or sku,
+            "name": name or sku or pid or "Товар",
             "sku": sku,
             "price": price,
             "vatType": vat,
@@ -454,8 +537,10 @@ def _parse_commerceml(content: bytes) -> list[dict]:
 @router.post("/import/commerceml", response_model=CatalogImportResult)
 async def import_commerceml(user: CurrentUser, file: UploadFile = File(...)):
     """
-    Импорт CommerceML 2 (XML). Неподдерживаемые поля игнорируются.
-    Модификации → клоны товара.
+    Импорт CommerceML 2 (XML).
+    - пустой артикул → генерируем случайный;
+    - совпадение SKU → ошибка по позиции (в отчёте);
+    - отчёт: total/created/updated/skipped/errors/generated_sku.
     """
     content = await file.read()
     if not content:
@@ -467,37 +552,84 @@ async def import_commerceml(user: CurrentUser, file: UploadFile = File(...)):
     client = _client_for(user)
     tax_id = _tax_id(user)
     created = 0
+    updated = 0
     skipped = 0
+    generated_sku = 0
     errors: list[str] = []
     out_items: list[CatalogItemOut] = []
     try:
-        for row in rows:
+        existing = await _collect_existing_skus(client, tax_id)
+        seen_in_file: set[str] = set()
+
+        for idx, row in enumerate(rows, start=1):
+            name = (row.get("name") or "").strip() or f"Товар {idx}"
+            sku = str(row.get("sku") or "").strip()
+            price = float(row.get("price") or 0)
+            vat = _norm_vat(row.get("vatType"))
+            po = _norm_po(row.get("paymentObject"))
+
+            if not sku:
+                sku = _gen_sku("IMP")
+                generated_sku += 1
+            sku_key = sku.lower()
+
+            if sku_key in seen_in_file:
+                errors.append(f"#{idx} «{name}»: дубликат артикула «{sku}» внутри файла")
+                continue
+            seen_in_file.add(sku_key)
+
+            if sku_key in existing:
+                # Совпадение с каталогом — ошибка (не молчаливый skip)
+                errors.append(
+                    f"#{idx} «{name}»: артикул «{sku}» уже есть в каталоге "
+                    f"(itemId={existing[sku_key].get('itemId')})"
+                )
+                continue
+
             try:
                 data = await client.catalog_create_item(
                     tax_id,
                     {
-                        "name": row["name"][:256],
-                        "sku": str(row["sku"])[:64],
-                        "price": float(row.get("price") or 0),
-                        "vatType": _norm_vat(row.get("vatType")),
-                        "paymentObject": _norm_po(row.get("paymentObject")),
+                        "name": name[:256],
+                        "sku": sku[:64],
+                        "price": price,
+                        "vatType": vat,
+                        "paymentObject": po,
                     },
                 )
                 created += 1
-                out_items.append(_map_item(data if isinstance(data, dict) else row))
+                mapped = _map_item(data if isinstance(data, dict) else {"sku": sku, "name": name})
+                out_items.append(mapped)
+                existing[sku_key] = data if isinstance(data, dict) else {"sku": sku}
             except EcomKassaError as e:
-                msg = str(e).lower()
-                if "уже существует" in msg or "already" in msg or "sku" in msg:
-                    skipped += 1
+                if _is_sku_exists_error(e):
+                    errors.append(f"#{idx} «{name}»: SKU «{sku}» уже существует (ответ API)")
                 else:
-                    errors.append(f"{row.get('sku')}: {e}")
+                    errors.append(f"#{idx} «{name}» sku={sku}: {e}")
+
         log_action(
             "catalog_import",
-            f"created={created} skipped={skipped} errors={len(errors)}",
+            f"total={len(rows)} created={created} errors={len(errors)} gen_sku={generated_sku}",
             user_id=user["username"],
         )
+        report = {
+            "total": len(rows),
+            "created": created,
+            "updated": updated,
+            "skipped": skipped,
+            "errors": len(errors),
+            "generated_sku": generated_sku,
+        }
         return CatalogImportResult(
-            created=created, skipped=skipped, errors=errors[:50], items=out_items[:100]
+            total=len(rows),
+            created=created,
+            updated=updated,
+            skipped=skipped,
+            errors_count=len(errors),
+            generated_sku=generated_sku,
+            errors=errors[:100],
+            items=out_items[:100],
+            report=report,
         )
     finally:
         await client.close()
