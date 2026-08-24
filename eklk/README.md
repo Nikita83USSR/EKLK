@@ -68,7 +68,7 @@ eklk/
 │   ├── schemas/                # Pydantic: auth, checks, orders
 │   ├── core/                   # config, JWT, sessions (in-memory)
 │   ├── templates/index.html    # SPA-подобная вёрстка ЛК
-│   └── static/js/app.js        # фронт (vanilla JS)
+│   └── static/js/app.js        # ЯДРО фронта (монолит, стабильное; новые разделы — отдельные scripts)
 ├── start-eklk.sh
 ├── EKLK.desktop / EKLK-install-shortcut.sh
 ├── .env.example
@@ -203,14 +203,18 @@ Base URL по умолчанию: `https://app.ecomkassa.ru`
 
 ## Фронтенд
 
-- Один `index.html` + `app.js` (без фреймворка).
-- Вкладки: create, payment, status, orders, settings.
+- Один `index.html` + **ядро** `app/static/js/app.js` (vanilla JS, без фреймворка, ~3500 строк).
+- `app.js` — **стабильное ядро**. Не рефакторить и не раздувать без крайней нужды.
+- Новые разделы UI — **отдельными скриптами** (`app/static/js/sections/<name>.js`), подключать после ядра.
+- Вкладки / URL: create, payment, orders, settings (клиентский роутинг).
 - Виджет Bitrix24: loader  
   `https://cdn-ru.bitrix24.ru/b24444000/crm/site_button/loader_4_q8v7f4.js`  
   (как на app.ecomkassa.ru).
 - Статусы чеков в UI переведены (wait→Ожидание, done→Готов, fail→Ошибка…).
 
 После правок static — менять `?v=` у css/js в `index.html` (cache-bust).
+
+Подробные правила для ИИ и модульного расширения: см. `AGENTS.md` §5.1 «Политика фронтенд-ядра».
 
 ---
 
