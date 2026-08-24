@@ -1,12 +1,13 @@
 /**
- * EKLK Reports — отдельный модуль.
- * amount из API уже сконвертирован бэкендом: копейки → рубли.
- * Баланс кассы за период = сумма amount (как отдал API).
+ * EKLK Reports — модуль.
+ * amount уже в рублях (бэкенд делит копейки на 100).
+ * Доход за период / наличные / по типам оплаты; фильтр по магазину.
  */
 (() => {
   const $ = (s) => document.querySelector(s);
 
   let lastReport = null;
+  let knownStores = []; // [{storeId, storeName}]
   const charts = {};
 
   const PT_LABELS = {
@@ -66,6 +67,34 @@
     });
   }
 
+  function updateStoreSelect(stores, keepValue) {
+    const sel = $("#rpt_store");
+    if (!sel) return;
+    const prev = keepValue !== undefined ? keepValue : sel.value;
+    // merge known
+    const map = new Map();
+    knownStores.forEach((s) => {
+      if (s && s.storeId != null) map.set(String(s.storeId), s);
+    });
+    (stores || []).forEach((s) => {
+      if (s && s.storeId != null) map.set(String(s.storeId), s);
+    });
+    knownStores = Array.from(map.values()).sort((a, b) =>
+      String(a.storeName || "").localeCompare(String(b.storeName || ""), "ru")
+    );
+    sel.innerHTML =
+      `<option value="">Все магазины</option>` +
+      knownStores
+        .map(
+          (s) =>
+            `<option value="${escapeHtml(String(s.storeId))}">${escapeHtml(
+              s.storeName || String(s.storeId)
+            )}</option>`
+        )
+        .join("");
+    if (prev && map.has(String(prev))) sel.value = String(prev);
+  }
+
   function renderCharts(data) {
     destroyCharts();
     if (typeof Chart === "undefined") return;
@@ -97,7 +126,7 @@
     const ctx4 = $("#rpt_chart_time");
     if (ctx4 && tm.labels?.length) {
       const datasets = [{
-        label: "Баланс (итого)",
+        label: "Доход (итого)",
         data: tm.total || [],
         borderColor: "#3b82f6",
         backgroundColor: "rgba(59,130,246,0.15)",
@@ -131,22 +160,35 @@
     const el = $("#rpt_summary");
     if (!el) return;
     const s = data.summary || {};
-    const balance = s.balance ?? s.total_signed ?? data.cash_drawer;
+    const period = s.period_label || `${data.startDate || "—"} — ${data.endDate || "—"}`;
+    const income = s.income ?? s.balance ?? s.total_signed;
+    const cash = s.cash_balance ?? data.cash_drawer;
     const byPt = s.by_payment_type || data.by_payment_type || {};
-    const rows = Object.entries(byPt)
+    const byStore = s.by_store || {};
+
+    const payRows = Object.entries(byPt)
       .map(
         ([k, v]) =>
           `<div class="kv"><span class="k">${escapeHtml(PT_LABELS[k] || k)}</span><span class="v">${money(v)} ₽</span></div>`
       )
       .join("");
 
+    const storeRows = Object.entries(byStore)
+      .map(
+        ([k, v]) =>
+          `<div class="kv"><span class="k">${escapeHtml(k)}</span><span class="v">${money(v)} ₽</span></div>`
+      )
+      .join("");
+
     el.innerHTML = `
-      <div class="kv"><span class="k">Период</span><span class="v">${escapeHtml(data.startDate || "—")} — ${escapeHtml(data.endDate || "—")}</span></div>
       <div class="kv"><span class="k">Тип отчёта</span><span class="v">${escapeHtml(data.reportType || "—")}</span></div>
       <div class="kv"><span class="k">Фирма</span><span class="v">${escapeHtml(data.firmName || "—")}</span></div>
-      <div class="kv"><span class="k">Баланс кассы за период</span><span class="v"><strong>${money(balance)} ₽</strong></span></div>
-      <div class="section-title" style="margin-top:12px;font-size:0.9rem">По типам оплаты</div>
-      ${rows || '<p class="hint">Нет разбивки</p>'}
+      <div class="kv"><span class="k">Доход за выбранный период (${escapeHtml(period)})</span><span class="v"><strong>${money(income)} ₽</strong></span></div>
+      <div class="kv"><span class="k">Баланс наличных (CASH)</span><span class="v"><strong>${money(cash)} ₽</strong></span></div>
+      <div class="section-title" style="margin-top:12px;font-size:0.9rem">Баланс по типам оплаты</div>
+      ${payRows || '<p class="hint">Нет данных</p>'}
+      <div class="section-title" style="margin-top:12px;font-size:0.9rem">По магазинам</div>
+      ${storeRows || '<p class="hint">Нет данных</p>'}
       <ul class="hint" style="margin-top:12px;padding-left:18px">
         ${(s.notes || []).map((n) => `<li>${escapeHtml(n)}</li>`).join("")}
       </ul>
@@ -187,10 +229,11 @@
       box.innerHTML = items
         .map((h) => {
           const s = h.summary || {};
-          const bal = s.balance ?? s.total_signed ?? s.cash_drawer;
+          const bal = s.income ?? s.balance ?? s.total_signed;
+          const period = s.period_label || "";
           return `<div class="tpl-card" style="padding:8px 10px;margin-bottom:6px">
             <div><strong>${escapeHtml(h.reportType)}</strong> · ${escapeHtml((h.fetchedAt || "").slice(0, 19))}</div>
-            <div class="hint">Баланс: ${money(bal)} ₽ · точек: ${s.points ?? "—"}</div>
+            <div class="hint">Доход${period ? " (" + escapeHtml(period) + ")" : ""}: ${money(bal)} ₽ · точек: ${s.points ?? "—"}</div>
           </div>`;
         })
         .join("");
@@ -202,9 +245,11 @@
   async function loadReport() {
     const type = $("#rpt_type")?.value || "monthly";
     const ot = $("#rpt_order_types")?.value || "";
+    const storeId = $("#rpt_store")?.value || "";
     let path = "";
     const qs = new URLSearchParams();
     if (ot) qs.set("order_types", ot);
+    if (storeId) qs.set("store_id", storeId);
 
     if (type === "daily") {
       const d = $("#rpt_date")?.value;
@@ -232,6 +277,8 @@
     try {
       const data = await api(path);
       lastReport = data;
+      const stores = (data.summary && data.summary.stores) || [];
+      updateStoreSelect(stores, storeId);
       renderSummary(data);
       renderPoints(data);
       renderCharts(data);
@@ -250,16 +297,21 @@
     }
     const s = lastReport.summary || {};
     const byPt = s.by_payment_type || lastReport.by_payment_type || {};
-    const balance = s.balance ?? s.total_signed;
+    const byStore = s.by_store || {};
+    const period = s.period_label || `${lastReport.startDate} — ${lastReport.endDate}`;
+    const income = s.income ?? s.balance;
     const summaryRows = [
       ["Тип отчёта", lastReport.reportType],
-      ["Начало", lastReport.startDate],
-      ["Конец", lastReport.endDate],
+      ["Период", period],
       ["Фирма", lastReport.firmName],
-      ["Баланс кассы за период, ₽", balance],
+      [`Доход за выбранный период (${period}), ₽`, income],
+      ["Баланс наличных (CASH), ₽", s.cash_balance],
       [],
       ["Тип оплаты", "Сумма, ₽"],
       ...Object.keys(byPt).map((k) => [PT_LABELS[k] || k, byPt[k]]),
+      [],
+      ["Магазин", "Сумма, ₽"],
+      ...Object.entries(byStore).map(([k, v]) => [k, v]),
       [],
       ["Примечания"],
       ...(s.notes || []).map((n) => [n]),
@@ -303,21 +355,11 @@
     });
   }
 
-  function ensureDetailHeader() {
-    const table = $("#rpt_table");
-    if (!table) return;
-    const tr = table.querySelector("thead tr");
-    if (tr) {
-      tr.innerHTML = `<th>Период</th><th>Кассир</th><th>Точка</th><th>Тип оплаты</th><th style="text-align:right">Сумма, ₽</th>`;
-    }
-  }
-
   let bound = false;
   window.EKLK_REPORTS = {
     onShow() {
       if (!bound) {
         bind();
-        ensureDetailHeader();
         bound = true;
       }
       loadHistory();

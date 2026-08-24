@@ -779,9 +779,9 @@
             <div class="card">
               <div class="section-title">Отчёты по расчётам</div>
               <p class="hint" style="margin-bottom:12px">
-                Для сверки баланса кассы. Суммы из API уже со знаком.
-                <strong>Денежный ящик</strong> = только наличные (CASH).
-                Зачёт аванса (PRE_PAID), кредит и встречное предоставление в ящик не входят.
+                Суммы API в копейках — в отчёте в рублях.
+                <strong>Доход за период</strong> = сумма всех операций; <strong>наличные</strong> = только CASH.
+                Можно отфильтровать по магазину (из ответа EcomKassa).
               </p>
               <div class="form-grid reports-filters">
                 <label>Тип отчёта
@@ -813,6 +813,11 @@
                   <select id="rpt_quarter" class="input">
                     <option value="1">I</option><option value="2">II</option>
                     <option value="3">III</option><option value="4">IV</option>
+                  </select>
+                </label>
+                <label>Магазин
+                  <select id="rpt_store" class="input">
+                    <option value="">Все магазины</option>
                   </select>
                 </label>
                 <label>Типы документов
@@ -1015,9 +1020,9 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-  <script src="/static/js/app.js?v=20260824e"></script>
-  <script src="/static/js/sections/catalog.js?v=20260824e"></script>
-  <script src="/static/js/sections/reports.js?v=20260824e"></script>
+  <script src="/static/js/app.js?v=20260824f"></script>
+  <script src="/static/js/sections/catalog.js?v=20260824f"></script>
+  <script src="/static/js/sections/reports.js?v=20260824f"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->

@@ -59,38 +59,71 @@ def _kop_to_rub(value) -> float:
         return 0.0
 
 
-def _aggregate(points: list[dict]) -> tuple[dict, float, dict]:
-    """
-    Сводка для бухгалтера.
+def _period_label(data: dict) -> str:
+    """Человекочитаемый период из ответа API."""
+    start = data.get("startDate") or ""
+    end = data.get("endDate") or ""
+    rtype = (data.get("reportType") or "").upper()
+    if start and end and start != end:
+        return f"{start} — {end}"
+    if start:
+        return str(start)
+    if end:
+        return str(end)
+    return rtype or "период"
 
-    amount в API — **копейки**. Конвертируем в рубли (/100).
-    Итоговая сумма amount за период = баланс кассы за период (как есть из API).
-    Разбивка по типам оплаты / точкам / кассирам — только для удобства, без
-    отдельной логики «возвратов» и «денежного ящика».
+
+def _aggregate(points: list[dict], *, period_label: str = "") -> dict:
+    """
+    amount в API — копейки → рубли.
+    balance / income = сумма всех amount (доход за период).
+    cash_balance = только CASH.
+    by_payment_type — баланс по типам оплаты.
+    Точки упорядочиваются по магазину (storeName, storeId).
     """
     by_type: dict[str, float] = {}
     by_store: dict[str, float] = {}
     by_cashier: dict[str, float] = {}
     by_time: dict[str, float] = {}
     by_time_pay: dict[str, dict[str, float]] = {}
+    stores_map: dict[str, dict] = {}  # key -> {storeId, storeName}
     total_all = 0.0
+    cash_balance = 0.0
 
-    for p in points:
-        if not isinstance(p, dict):
-            continue
+    # sort by store for stable report
+    def store_key(p: dict):
+        return (
+            str(p.get("storeName") or ""),
+            int(p.get("storeId") or 0),
+            str(p.get("time") or ""),
+        )
+
+    ordered = sorted([p for p in points if isinstance(p, dict)], key=store_key)
+
+    for p in ordered:
         amount = _kop_to_rub(p.get("amount"))
         pt = str(p.get("paymentType") or "UNKNOWN").upper()
-        store = str(p.get("storeName") or p.get("storeId") or "—")
+        store_name = str(p.get("storeName") or p.get("storeId") or "—")
+        store_id = p.get("storeId")
         cashier = str(p.get("cashier") or "—")
         tlabel = str(p.get("time") or "—")
 
         by_type[pt] = by_type.get(pt, 0.0) + amount
-        by_store[store] = by_store.get(store, 0.0) + amount
+        by_store[store_name] = by_store.get(store_name, 0.0) + amount
         by_cashier[cashier] = by_cashier.get(cashier, 0.0) + amount
         by_time[tlabel] = by_time.get(tlabel, 0.0) + amount
         by_time_pay.setdefault(tlabel, {})
         by_time_pay[tlabel][pt] = by_time_pay[tlabel].get(pt, 0.0) + amount
         total_all += amount
+        if pt == "CASH":
+            cash_balance += amount
+
+        sk = f"{store_id}:{store_name}"
+        if sk not in stores_map:
+            stores_map[sk] = {
+                "storeId": store_id,
+                "storeName": store_name,
+            }
 
     pay_keys = sorted(by_type.keys())
     chart_payment = {
@@ -108,13 +141,20 @@ def _aggregate(points: list[dict]) -> tuple[dict, float, dict]:
         },
     }
 
-    balance = round(total_all, 2)
+    income = round(total_all, 2)
     summary = {
-        "balance": balance,  # истинный баланс кассы за период (сумма amount из API, ₽)
-        "total_signed": balance,  # alias для совместимости UI
+        "period_label": period_label,
+        "income": income,  # доход за выбранный период
+        "balance": income,  # alias
+        "total_signed": income,
+        "cash_balance": round(cash_balance, 2),  # баланс наличных
         "by_payment_type": {k: round(v, 2) for k, v in sorted(by_type.items())},
         "by_store": {k: round(v, 2) for k, v in sorted(by_store.items())},
         "by_cashier": {k: round(v, 2) for k, v in sorted(by_cashier.items())},
+        "stores": sorted(
+            stores_map.values(),
+            key=lambda s: (str(s.get("storeName") or ""), int(s.get("storeId") or 0)),
+        ),
         "payment_labels": PAYMENT_LABELS,
         "charts": {
             "payment": chart_payment,
@@ -122,40 +162,64 @@ def _aggregate(points: list[dict]) -> tuple[dict, float, dict]:
         },
         "notes": [
             "Суммы в API приходят в копейках; в отчёте пересчитаны в рубли (÷100).",
-            "Баланс кассы за период = сумма всех amount из ответа API (без дополнительной фильтрации возвратов).",
-            "Разбивка по типам оплаты / точкам / кассирам — справочная.",
+            "Доход за период = сумма всех amount из ответа API.",
+            "Баланс наличных = сумма amount с paymentType=CASH.",
+            "Отчёт упорядочен по магазину (storeName / storeId).",
         ],
         "unit": "RUB",
         "source_unit": "kopecks",
     }
-    return summary, balance, {k: round(v, 2) for k, v in by_type.items()}
+    return summary
 
 
-def _to_response(data: dict) -> ReportResponse:
+def _to_response(
+    data: dict,
+    *,
+    store_id: int | None = None,
+) -> ReportResponse:
     points_raw = data.get("points") or []
     if not isinstance(points_raw, list):
         points_raw = []
 
-    # Конвертируем amount копейки → рубли в каждой точке
-    points = []
-    points_for_agg: list[dict] = []
-    for p in points_raw:
-        if not isinstance(p, dict):
-            continue
-        rub = _kop_to_rub(p.get("amount"))
-        points_for_agg.append(p)  # aggregate сам делит на 100
-        points.append(
-            ReportPoint(
-                time=p.get("time"),
-                cashier=p.get("cashier"),
-                storeId=p.get("storeId"),
-                storeName=p.get("storeName"),
-                paymentType=p.get("paymentType"),
-                amount=round(rub, 2),
-            )
+    # фильтр по магазину (если выбран)
+    if store_id is not None:
+        filtered = []
+        for p in points_raw:
+            if not isinstance(p, dict):
+                continue
+            try:
+                sid = int(p.get("storeId")) if p.get("storeId") is not None else None
+            except (TypeError, ValueError):
+                sid = None
+            if sid == int(store_id):
+                filtered.append(p)
+        points_raw = filtered
+
+    period_label = _period_label(data)
+    summary = _aggregate(points_raw, period_label=period_label)
+
+    # точки в рублях, сортировка по магазину
+    def sort_key(p: dict):
+        return (
+            str(p.get("storeName") or ""),
+            int(p.get("storeId") or 0),
+            str(p.get("time") or ""),
         )
 
-    summary, balance, by_pt = _aggregate(points_for_agg)
+    ordered = sorted([p for p in points_raw if isinstance(p, dict)], key=sort_key)
+    points = [
+        ReportPoint(
+            time=p.get("time"),
+            cashier=p.get("cashier"),
+            storeId=p.get("storeId"),
+            storeName=p.get("storeName"),
+            paymentType=p.get("paymentType"),
+            amount=round(_kop_to_rub(p.get("amount")), 2),
+        )
+        for p in ordered
+    ]
+
+    income = summary.get("income", 0.0)
     return ReportResponse(
         reportType=data.get("reportType"),
         startDate=data.get("startDate"),
@@ -165,13 +229,12 @@ def _to_response(data: dict) -> ReportResponse:
         firmName=data.get("firmName"),
         points=points,
         summary=summary,
-        cash_drawer=balance,  # для совместимости: баланс периода
-        money_balance=balance,
+        cash_drawer=summary.get("cash_balance"),
+        money_balance=income,
         offset_balance=None,
-        by_payment_type=by_pt,
+        by_payment_type=summary.get("by_payment_type"),
         raw=data,
     )
-
 
 
 def _push_history(login: str, report_type: str, params: dict, resp: ReportResponse) -> None:
@@ -185,9 +248,10 @@ def _push_history(login: str, report_type: str, params: dict, resp: ReportRespon
         "params": params,
         "fetchedAt": datetime.now(timezone.utc).isoformat(),
         "summary": {
+            "income": (resp.summary or {}).get("income"),
             "balance": (resp.summary or {}).get("balance"),
-            "total_signed": (resp.summary or {}).get("total_signed"),
-            "cash_drawer": resp.cash_drawer,
+            "cash_balance": (resp.summary or {}).get("cash_balance"),
+            "period_label": (resp.summary or {}).get("period_label"),
             "points": len(resp.points),
             "startDate": resp.startDate,
             "endDate": resp.endDate,
@@ -203,12 +267,18 @@ async def report_daily(
     user: CurrentUser,
     date: str = Query(..., description="YYYY-MM-DD"),
     order_types: Optional[str] = Query(None, description="VCHR,INVC,CORD"),
+    store_id: Optional[int] = Query(None, description="Фильтр по storeId из ответа"),
 ):
     client = _client_for(user)
     try:
         data = await client.report_daily(date, _parse_order_types(order_types))
-        resp = _to_response(data)
-        _push_history(user["username"], "DAILY", {"date": date, "order_types": order_types}, resp)
+        resp = _to_response(data, store_id=store_id)
+        _push_history(
+            user["username"],
+            "DAILY",
+            {"date": date, "order_types": order_types, "store_id": store_id},
+            resp,
+        )
         log_action("report_daily", f"date={date} points={len(resp.points)}", user_id=user["username"])
         return resp
     except EcomKassaError as e:
@@ -222,12 +292,18 @@ async def report_weekly(
     user: CurrentUser,
     date: str = Query(..., description="YYYY-MM-DD (день внутри недели)"),
     order_types: Optional[str] = Query(None),
+    store_id: Optional[int] = Query(None),
 ):
     client = _client_for(user)
     try:
         data = await client.report_weekly(date, _parse_order_types(order_types))
-        resp = _to_response(data)
-        _push_history(user["username"], "WEEKLY", {"date": date, "order_types": order_types}, resp)
+        resp = _to_response(data, store_id=store_id)
+        _push_history(
+            user["username"],
+            "WEEKLY",
+            {"date": date, "order_types": order_types, "store_id": store_id},
+            resp,
+        )
         return resp
     except EcomKassaError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -241,13 +317,17 @@ async def report_monthly(
     year: int = Query(..., ge=2000, le=2100),
     month: int = Query(..., ge=1, le=12),
     order_types: Optional[str] = Query(None),
+    store_id: Optional[int] = Query(None),
 ):
     client = _client_for(user)
     try:
         data = await client.report_monthly(year, month, _parse_order_types(order_types))
-        resp = _to_response(data)
+        resp = _to_response(data, store_id=store_id)
         _push_history(
-            user["username"], "MONTHLY", {"year": year, "month": month, "order_types": order_types}, resp
+            user["username"],
+            "MONTHLY",
+            {"year": year, "month": month, "order_types": order_types, "store_id": store_id},
+            resp,
         )
         return resp
     except EcomKassaError as e:
@@ -262,15 +342,16 @@ async def report_quarterly(
     year: int = Query(..., ge=2000, le=2100),
     quarter: int = Query(..., ge=1, le=4),
     order_types: Optional[str] = Query(None),
+    store_id: Optional[int] = Query(None),
 ):
     client = _client_for(user)
     try:
         data = await client.report_quarterly(year, quarter, _parse_order_types(order_types))
-        resp = _to_response(data)
+        resp = _to_response(data, store_id=store_id)
         _push_history(
             user["username"],
             "QUARTERLY",
-            {"year": year, "quarter": quarter, "order_types": order_types},
+            {"year": year, "quarter": quarter, "order_types": order_types, "store_id": store_id},
             resp,
         )
         return resp
@@ -285,12 +366,18 @@ async def report_annual(
     user: CurrentUser,
     year: int = Query(..., ge=2000, le=2100),
     order_types: Optional[str] = Query(None),
+    store_id: Optional[int] = Query(None),
 ):
     client = _client_for(user)
     try:
         data = await client.report_annual(year, _parse_order_types(order_types))
-        resp = _to_response(data)
-        _push_history(user["username"], "ANNUAL", {"year": year, "order_types": order_types}, resp)
+        resp = _to_response(data, store_id=store_id)
+        _push_history(
+            user["username"],
+            "ANNUAL",
+            {"year": year, "order_types": order_types, "store_id": store_id},
+            resp,
+        )
         return resp
     except EcomKassaError as e:
         raise HTTPException(status_code=400, detail=str(e))
