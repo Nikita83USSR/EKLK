@@ -96,6 +96,34 @@ input.invalid, select.invalid {
   box-shadow: 0 0 0 3px rgba(239,68,68,.18) !important;
   background: #fef2f2;
 }
+
+/* Checkbox: глобальный appearance:none ломал нативный вид в Chrome/Firefox.
+   Возвращаем системный чекбокс + accent-color под тему (light/dark/glass). */
+input[type="checkbox"] {
+  -webkit-appearance: checkbox;
+  appearance: auto;
+  width: 1.1em;
+  height: 1.1em;
+  min-width: 1.1em;
+  max-width: 1.1em;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+  vertical-align: middle;
+  color-scheme: inherit;
+  flex-shrink: 0;
+}
+input[type="checkbox"]:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: none;
+  border-color: transparent;
+}
 .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .row-3 { grid-template-columns: repeat(3, 1fr); }
 @media (max-width: 700px) { .row-3 { grid-template-columns: 1fr; } }
@@ -142,8 +170,12 @@ input.invalid, select.invalid {
 .link-pay { display: inline-block; margin-top: 8px; padding: 10px 16px; background: var(--accent); color: #fff !important; border-radius: 8px; font-weight: 600; }
 .extra-buyer { margin-top: 12px; padding: 12px; background: var(--surface2); border-radius: 8px; border: 1px dashed var(--border); }
 .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
-.checkbox-row input { width: auto; }
+.checkbox-row input[type="checkbox"] { width: 1.1em; height: 1.1em; }
 .checkbox-row label { margin: 0; color: var(--text); cursor: pointer; }
+
+/* Нет мигания логина при F5, если токен уже в localStorage (класс ставит inline-скрипт в <head>) */
+html.eklk-authed #loginScreen { display: none !important; }
+html.eklk-authed #appScreen { display: flex !important; }
 
 /* Settings */
 .settings-layout { max-width: none; width: 100%; }
@@ -1551,11 +1583,10 @@ body[data-theme="glass"] .modal-footer {
   text-overflow: ellipsis;
 }
 .tpl-providers input[type="checkbox"] {
-  width: auto;
+  width: 1.1em;
+  height: 1.1em;
   margin: 0;
   flex-shrink: 0;
-  -webkit-appearance: checkbox;
-  appearance: auto;
 }
 .btn-link-subtle {
   display: inline;

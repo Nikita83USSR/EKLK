@@ -4,8 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ app_name }} — Чек</title>
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("eklk_token")) {
+          document.documentElement.classList.add("eklk-authed");
+        }
+      } catch (e) { /* private mode / blocked storage */ }
+    })();
+  </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260822i" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260825a" />
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
@@ -1013,7 +1022,7 @@
             </div>
           </aside>
         </div>
-      </section>
+      </div>
 
 <!-- SETTINGS -->
       <section id="tab-settings" class="tab-panel hidden">
@@ -1147,10 +1156,10 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260824k"></script>
-  <script src="/static/js/sections/dashboard.js?v=20260824k"></script>
-  <script src="/static/js/sections/catalog.js?v=20260824k"></script>
-  <script src="/static/js/sections/reports.js?v=20260824k"></script>
+  <script src="/static/js/app.js?v=20260825a"></script>
+  <script src="/static/js/sections/dashboard.js?v=20260825a"></script>
+  <script src="/static/js/sections/catalog.js?v=20260825a"></script>
+  <script src="/static/js/sections/reports.js?v=20260825a"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
   <script data-skip-moving="true">
   (function(w,d,u){

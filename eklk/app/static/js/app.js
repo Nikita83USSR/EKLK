@@ -144,6 +144,7 @@
       localStorage.removeItem("eklk_token");
       // eklk_group (last store) intentionally kept across logout
     }
+    try { document.documentElement.classList.remove("eklk-authed"); } catch (e) { /* ignore */ }
     if ($("#appScreen")) $("#appScreen").classList.add("hidden");
     if ($("#loginScreen")) $("#loginScreen").classList.remove("hidden");
     if ($("#appFooter")) $("#appFooter").classList.add("hidden");
@@ -1129,6 +1130,7 @@
 
   // ---- Auth ----
   async function afterLogin(loginPayload) {
+    try { document.documentElement.classList.add("eklk-authed"); } catch (e) { /* ignore */ }
     if ($("#loginScreen")) $("#loginScreen").classList.add("hidden");
     if ($("#appScreen")) $("#appScreen").classList.remove("hidden");
     if ($("#appFooter")) $("#appFooter").classList.remove("hidden");
@@ -1165,12 +1167,18 @@
       });
       updateCreateSummary();
       updatePaySummary();
-      // После входа: / и неизвестные пути → дашборд (home), пункт меню «На главную» скрыт
+      // После явного логина — всегда дашборд; при F5 — раздел из URL (/ → home)
       if (typeof showTab === "function") {
-        let tab = pathToTab(location.pathname);
-        if (location.pathname === "/" || location.pathname === "" || location.pathname === "/home") {
+        let tab;
+        if (loginPayload) {
           tab = "home";
           history.replaceState({ tab: "home" }, "", "/home");
+        } else {
+          tab = pathToTab(location.pathname);
+          if (location.pathname === "/" || location.pathname === "" || location.pathname === "/home") {
+            tab = "home";
+            history.replaceState({ tab: "home" }, "", "/home");
+          }
         }
         showTab(tab, false);
       }
