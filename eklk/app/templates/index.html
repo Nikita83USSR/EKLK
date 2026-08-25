@@ -14,7 +14,7 @@
     })();
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260825a" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260825b" />
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
@@ -68,18 +68,36 @@
                 <p class="hint" id="dash_firm">—</p>
               </div>
               <div class="dash-filters">
-                <label>Точка продаж
-                  <select id="dash_store" class="input">
-                    <option value="">Все точки продаж</option>
-                  </select>
-                </label>
-                <label>Период
+                <label>Тип периода
                   <select id="dash_period" class="input">
-                    <option value="daily" selected>День</option>
+                    <option value="daily" selected>Дневной</option>
+                    <option value="weekly">Недельный</option>
+                    <option value="monthly">Месячный</option>
+                    <option value="quarterly">Квартальный</option>
+                    <option value="annual">Годовой</option>
                   </select>
                 </label>
-                <label>Дата
+                <label id="dash_date_wrap">Дата
                   <input type="date" id="dash_date" class="input" />
+                </label>
+                <label id="dash_year_wrap" class="hidden">Год
+                  <input type="number" id="dash_year" class="input" min="2020" max="2100" />
+                </label>
+                <label id="dash_month_wrap" class="hidden">Месяц
+                  <select id="dash_month" class="input">
+                    <option value="1">Январь</option><option value="2">Февраль</option>
+                    <option value="3">Март</option><option value="4">Апрель</option>
+                    <option value="5">Май</option><option value="6">Июнь</option>
+                    <option value="7">Июль</option><option value="8">Август</option>
+                    <option value="9">Сентябрь</option><option value="10">Октябрь</option>
+                    <option value="11">Ноябрь</option><option value="12">Декабрь</option>
+                  </select>
+                </label>
+                <label id="dash_quarter_wrap" class="hidden">Квартал
+                  <select id="dash_quarter" class="input">
+                    <option value="1">I</option><option value="2">II</option>
+                    <option value="3">III</option><option value="4">IV</option>
+                  </select>
                 </label>
                 <button type="button" class="btn" id="dash_refresh">Обновить</button>
               </div>
@@ -144,7 +162,29 @@
 
             <div class="dash-card" style="margin-top:16px">
               <div class="section-title">По типам оплаты</div>
-              <div id="dash_pay_types" class="dash-pay-types hint">Загрузка…</div>
+              <div class="dash-pay-charts" id="dash_pay_charts">
+                <div class="dash-mini-chart">
+                  <canvas id="dash_pt_cash" width="120" height="120"></canvas>
+                  <div class="dash-mini-label">Наличные</div>
+                  <div class="dash-mini-value" id="dash_pt_cash_val">—</div>
+                </div>
+                <div class="dash-mini-chart">
+                  <canvas id="dash_pt_card" width="120" height="120"></canvas>
+                  <div class="dash-mini-label">Безналичные</div>
+                  <div class="dash-mini-value" id="dash_pt_card_val">—</div>
+                </div>
+                <div class="dash-mini-chart">
+                  <canvas id="dash_pt_prepaid" width="120" height="120"></canvas>
+                  <div class="dash-mini-label">Зачёты</div>
+                  <div class="dash-mini-value" id="dash_pt_prepaid_val">—</div>
+                </div>
+                <div class="dash-mini-chart">
+                  <canvas id="dash_pt_credit" width="120" height="120"></canvas>
+                  <div class="dash-mini-label">Кредит</div>
+                  <div class="dash-mini-value" id="dash_pt_credit_val">—</div>
+                </div>
+              </div>
+              <div id="dash_pay_types" class="dash-pay-types hint" style="margin-top:12px">Загрузка…</div>
             </div>
 
             <div class="dash-actions" style="margin-top:20px">
@@ -159,8 +199,8 @@
                   <span class="dash-action-desc">Выставить счёт и отправить покупателю</span>
                 </a>
                 <a href="/templates" class="dash-action" data-dash-tab="templates">
-                  <span class="dash-action-title">Шаблоны</span>
-                  <span class="dash-action-desc">Сохранить частые позиции и не набивать заново</span>
+                  <span class="dash-action-title">Настроить шаблон</span>
+                  <span class="dash-action-desc">для многоразовой ссылки на оплату</span>
                 </a>
                 <a href="/orders" class="dash-action" data-dash-tab="orders">
                   <span class="dash-action-title">Список чеков</span>
@@ -1156,10 +1196,10 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260825a"></script>
-  <script src="/static/js/sections/dashboard.js?v=20260825a"></script>
-  <script src="/static/js/sections/catalog.js?v=20260825a"></script>
-  <script src="/static/js/sections/reports.js?v=20260825a"></script>
+  <script src="/static/js/app.js?v=20260825b"></script>
+  <script src="/static/js/sections/dashboard.js?v=20260825b"></script>
+  <script src="/static/js/sections/catalog.js?v=20260825b"></script>
+  <script src="/static/js/sections/reports.js?v=20260825b"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
   <script data-skip-moving="true">
   (function(w,d,u){

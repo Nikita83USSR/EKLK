@@ -1668,7 +1668,8 @@ body[data-theme="glass"] .tpl-qr-cell {
 }
 
 /* ===== Dashboard (home) — horizontal layout ===== */
-.dash { max-width: 1200px; }
+/* Dashboard — full width like other sections */
+.dash { max-width: none; width: 100%; }
 .dash-head {
   display: flex;
   flex-wrap: wrap;
@@ -1681,10 +1682,10 @@ body[data-theme="glass"] .tpl-qr-cell {
 .dash-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
   align-items: flex-end;
+  gap: 12px;
 }
-.dash-filters label { min-width: 140px; margin: 0; }
+.dash-filters label { min-width: 120px; margin: 0; }
 .dash-filters .btn { margin-bottom: 1px; }
 .dash-grid {
   display: grid;
@@ -1707,7 +1708,7 @@ body[data-theme="glass"] .tpl-qr-cell {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 .dash-metric-label { font-size: 0.8rem; color: var(--muted); font-weight: 500; margin-bottom: 4px; }
 .dash-metric-value { font-size: 1.45rem; font-weight: 700; letter-spacing: -0.02em; }
@@ -1725,23 +1726,48 @@ body[data-theme="glass"] .tpl-qr-cell {
 .dash-delta.up { color: #16a34a; }
 .dash-delta.down { color: #dc2626; }
 .dash-delta.flat { color: var(--muted); }
+/* Полукруг: компактнее, подписи внутри дуги */
 .dash-gauge-wrap {
   position: relative;
   display: flex;
   justify-content: center;
-  align-items: center;
-  min-height: 170px;
-  margin-top: 8px;
+  align-items: flex-end;
+  height: 150px;
+  max-width: 280px;
+  margin: 0 auto;
+  overflow: hidden;
+}
+.dash-gauge-wrap canvas {
+  max-height: 150px;
+  width: 100% !important;
+  height: auto !important;
 }
 .dash-gauge-center {
   position: absolute;
-  bottom: 12px;
-  left: 0; right: 0;
+  left: 50%;
+  bottom: 8%;
+  transform: translateX(-50%);
+  width: 70%;
+  max-width: 160px;
   text-align: center;
   pointer-events: none;
+  line-height: 1.2;
 }
-.dash-gauge-label { font-size: 0.8rem; color: var(--muted); }
-.dash-gauge-value { font-size: 1.6rem; font-weight: 700; margin-top: 2px; }
+.dash-gauge-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash-gauge-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .dash-pay-types {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -1755,6 +1781,35 @@ body[data-theme="glass"] .tpl-qr-cell {
   background: var(--surface2);
   border-radius: 8px;
   font-size: 0.9rem;
+}
+.dash-pay-charts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 4px;
+}
+@media (max-width: 700px) {
+  .dash-pay-charts { grid-template-columns: repeat(2, 1fr); }
+}
+.dash-mini-chart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+}
+.dash-mini-chart canvas {
+  max-width: 100px;
+  max-height: 100px;
+}
+.dash-mini-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+.dash-mini-value {
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 .header .logo { cursor: pointer; user-select: none; }
 
@@ -1791,3 +1846,4 @@ body[data-theme="glass"] .tpl-qr-cell {
   color: var(--muted);
   line-height: 1.35;
 }
+

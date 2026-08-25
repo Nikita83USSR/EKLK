@@ -1,6 +1,7 @@
 """
 Дашборд «На главную».
-Данные из mobile reports (день по умолчанию). Суммы в копейках → рубли.
+Данные из mobile reports. Суммы в копейках → рубли.
+Периоды: daily | weekly | monthly | quarterly | annual (как в разделе Отчёты).
 """
 from __future__ import annotations
 
@@ -17,6 +18,7 @@ from app.utils.logger import log_action
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 ZERO_INCOME = {"PRE_PAID"}
+VALID_PERIODS = ("daily", "weekly", "monthly", "quarterly", "annual")
 
 
 def _client_for(user: dict) -> EcomKassaClient:
@@ -51,9 +53,6 @@ def _metrics(points: list[dict]) -> dict:
     income = 0.0
     cash = 0.0
     by_type: dict[str, float] = {}
-    invoices = 0.0  # will use payment split as proxy if no doc type in points
-    # points don't have order type — split by payment is available;
-    # "по счетам / по чекам" from API orderTypes filter when fetching separately
     count = 0
     stores: dict[str, dict] = {}
 
@@ -63,9 +62,7 @@ def _metrics(points: list[dict]) -> dict:
         by_type[pt] = by_type.get(pt, 0.0) + amount
         total_checks += amount
         count += 1
-        if pt in ZERO_INCOME:
-            pass
-        else:
+        if pt not in ZERO_INCOME:
             income += amount
         if pt == "CASH":
             cash += amount
@@ -82,7 +79,7 @@ def _metrics(points: list[dict]) -> dict:
         "cash_balance": round(cash, 2),
         "sales_count": count,
         "avg_check": round(avg, 2),
-        "by_payment_type": {k: round(v, 2) for k, v in sorted(by_type.items())},
+        "by_payment_type": {k: round(v, 2) for k, v in by_type.items()},
         "stores": list(stores.values()),
         "payment_labels": PAYMENT_LABELS,
     }
@@ -94,41 +91,115 @@ def _pct_change(current: float, previous: float) -> float | None:
     return round((current - previous) / abs(previous) * 100.0, 2)
 
 
-def _prev_date(d: date) -> date:
-    return d - timedelta(days=1)
+def _prev_period_params(period: str, day: date, year: int, month: int, quarter: int) -> dict:
+    """Параметры предыдущего периода для % сравнения."""
+    if period == "daily":
+        d = day - timedelta(days=1)
+        return {"period": "daily", "date": d, "year": d.year, "month": d.month, "quarter": (d.month - 1) // 3 + 1}
+    if period == "weekly":
+        d = day - timedelta(days=7)
+        return {"period": "weekly", "date": d, "year": d.year, "month": d.month, "quarter": (d.month - 1) // 3 + 1}
+    if period == "monthly":
+        if month <= 1:
+            return {"period": "monthly", "date": date(year - 1, 12, 1), "year": year - 1, "month": 12, "quarter": 4}
+        return {
+            "period": "monthly",
+            "date": date(year, month - 1, 1),
+            "year": year,
+            "month": month - 1,
+            "quarter": (month - 2) // 3 + 1,
+        }
+    if period == "quarterly":
+        if quarter <= 1:
+            return {"period": "quarterly", "date": date(year - 1, 10, 1), "year": year - 1, "month": 10, "quarter": 4}
+        m = (quarter - 2) * 3 + 1
+        return {"period": "quarterly", "date": date(year, m, 1), "year": year, "month": m, "quarter": quarter - 1}
+    return {
+        "period": "annual",
+        "date": date(year - 1, 1, 1),
+        "year": year - 1,
+        "month": 1,
+        "quarter": 1,
+    }
+
+
+def _period_label(period: str, day: date, year: int, month: int, quarter: int) -> str:
+    if period == "daily":
+        return day.isoformat()
+    if period == "weekly":
+        return f"неделя от {day.isoformat()}"
+    if period == "monthly":
+        return f"{year}-{month:02d}"
+    if period == "quarterly":
+        return f"{year} Q{quarter}"
+    return str(year)
+
+
+async def _fetch_report(
+    client: EcomKassaClient,
+    period: str,
+    day: date,
+    year: int,
+    month: int,
+    quarter: int,
+    order_types: list[str] | None = None,
+) -> dict:
+    if period == "daily":
+        return await client.report_daily(day.isoformat(), order_types)
+    if period == "weekly":
+        return await client.report_weekly(day.isoformat(), order_types)
+    if period == "monthly":
+        return await client.report_monthly(year, month, order_types)
+    if period == "quarterly":
+        return await client.report_quarterly(year, quarter, order_types)
+    if period == "annual":
+        return await client.report_annual(year, order_types)
+    raise HTTPException(status_code=400, detail=f"period: ожидается {', '.join(VALID_PERIODS)}")
 
 
 @router.get("/summary")
 async def dashboard_summary(
     user: CurrentUser,
-    date_str: Optional[str] = Query(None, alias="date", description="YYYY-MM-DD, по умолчанию сегодня"),
+    date_str: Optional[str] = Query(None, alias="date", description="YYYY-MM-DD (daily/weekly)"),
+    year: Optional[int] = Query(None, ge=2020, le=2100),
+    month: Optional[int] = Query(None, ge=1, le=12),
+    quarter: Optional[int] = Query(None, ge=1, le=4),
     store_id: Optional[int] = Query(None),
-    period: str = Query("daily", description="daily|weekly|monthly"),
+    period: str = Query("daily", description="daily|weekly|monthly|quarterly|annual"),
 ):
     """
-    Сводка дашборда.
-    period=daily (по умолчанию): отчёт за день + сравнение с предыдущим днём.
+    Сводка дашборда за выбранный период + % к предыдущему аналогичному периоду.
     По счетам / по чекам — отдельные запросы orderTypes=INVC / VCHR.
     """
+    period = (period or "daily").lower().strip()
+    if period not in VALID_PERIODS:
+        raise HTTPException(status_code=400, detail=f"period: ожидается {', '.join(VALID_PERIODS)}")
+
+    today = date.today()
     if date_str:
         try:
             day = datetime.strptime(date_str, "%Y-%m-%d").date()
         except ValueError:
             raise HTTPException(status_code=400, detail="date: ожидается YYYY-MM-DD")
     else:
-        day = date.today()
+        day = today
+
+    y = year if year is not None else day.year
+    m = month if month is not None else day.month
+    q = quarter if quarter is not None else ((day.month - 1) // 3 + 1)
+
+    if period == "monthly":
+        day = date(y, m, 1)
+    elif period == "quarterly":
+        day = date(y, (q - 1) * 3 + 1, 1)
+    elif period == "annual":
+        day = date(y, 1, 1)
 
     client = _client_for(user)
     try:
-        ds = day.isoformat()
-
-        async def fetch_daily(d: str, order_types: list[str] | None = None):
-            return await client.report_daily(d, order_types)
-
-        # текущий день: все / чеки / счета
-        raw_all = await fetch_daily(ds, None)
-        raw_vchr = await fetch_daily(ds, ["VCHR"])
-        raw_invc = await fetch_daily(ds, ["INVC"])
+        raw_all = await _fetch_report(client, period, day, y, m, q, None)
+        raw_vchr = await _fetch_report(client, period, day, y, m, q, ["VCHR"])
+        raw_invc = await _fetch_report(client, period, day, y, m, q, ["INVC"])
 
         pts_all = _parse_points(raw_all, store_id)
         pts_vchr = _parse_points(raw_vchr, store_id)
@@ -138,12 +209,18 @@ async def dashboard_summary(
         by_checks = _metrics(pts_vchr)
         by_invoices = _metrics(pts_invc)
 
-        # предыдущий день для %
-        prev_ds = _prev_date(day).isoformat()
+        prev_p = _prev_period_params(period, day, y, m, q)
         try:
-            raw_prev = await fetch_daily(prev_ds, None)
-            pts_prev = _parse_points(raw_prev, store_id)
-            prev = _metrics(pts_prev)
+            raw_prev = await _fetch_report(
+                client,
+                prev_p["period"],
+                prev_p["date"],
+                prev_p["year"],
+                prev_p["month"],
+                prev_p["quarter"],
+                None,
+            )
+            prev = _metrics(_parse_points(raw_prev, store_id))
         except EcomKassaError:
             prev = {
                 "total_checks": 0.0,
@@ -152,22 +229,23 @@ async def dashboard_summary(
                 "avg_check": 0.0,
             }
 
-        profit = cur["income"]  # доход без PRE_PAID
+        profit = cur["income"]
         profit_prev = prev.get("income") or 0.0
 
-        # gauge: доля дохода в общей сумме чеков (0–100)
         gauge_pct = 0.0
         if cur["total_checks"]:
             gauge_pct = round(min(100.0, max(0.0, profit / cur["total_checks"] * 100.0)), 1)
 
-        # stores list from current
         stores = cur.get("stores") or []
+        label = _period_label(period, day, y, m, q)
 
         result = {
-            "period": "daily",
-            "date": ds,
-            "prev_date": prev_ds,
-            "period_label": ds,
+            "period": period,
+            "date": day.isoformat(),
+            "year": y,
+            "month": m,
+            "quarter": q,
+            "period_label": label,
             "firmName": raw_all.get("firmName"),
             "store_id": store_id,
             "by_invoices": by_invoices["total_checks"],
@@ -181,21 +259,29 @@ async def dashboard_summary(
             "payment_labels": PAYMENT_LABELS,
             "changes": {
                 "profit_pct": _pct_change(profit, profit_prev),
-                "sales_count_pct": _pct_change(float(cur["sales_count"]), float(prev.get("sales_count") or 0)),
+                "sales_count_pct": _pct_change(
+                    float(cur["sales_count"]), float(prev.get("sales_count") or 0)
+                ),
                 "avg_check_pct": _pct_change(cur["avg_check"], prev.get("avg_check") or 0.0),
-                "total_checks_pct": _pct_change(cur["total_checks"], prev.get("total_checks") or 0.0),
+                "total_checks_pct": _pct_change(
+                    cur["total_checks"], prev.get("total_checks") or 0.0
+                ),
             },
             "gauge_pct": gauge_pct,
             "stores": stores,
             "notes": [
-                "Период по умолчанию — день.",
+                "Периоды как в разделе Отчёты.",
                 "Суммы API в копейках, в дашборде в рублях.",
                 "Прибыль (доход) = сумма amount без зачёта аванса (PRE_PAID).",
                 "По счетам = orderTypes=INVC, по чекам = VCHR.",
-                "Сравнение % — с предыдущим календарным днём.",
+                "Сравнение % — с предыдущим аналогичным периодом.",
             ],
         }
-        log_action("dashboard_summary", f"date={ds} sales={cur['sales_count']}", user_id=user["username"])
+        log_action(
+            "dashboard_summary",
+            f"period={period} label={label} sales={cur['sales_count']}",
+            user_id=user["username"],
+        )
         return result
     except EcomKassaError as e:
         raise HTTPException(status_code=400, detail=str(e))

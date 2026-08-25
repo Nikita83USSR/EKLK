@@ -1,12 +1,19 @@
 /**
  * EKLK Home dashboard — отдельный модуль (не ядро).
- * Период по умолчанию: день. Данные: GET /api/v1/dashboard/summary
+ * Периоды как в Отчётах. Данные: GET /api/v1/dashboard/summary
  */
 (() => {
   const $ = (s) => document.querySelector(s);
   let gaugeChart = null;
+  const miniCharts = {};
   let bound = false;
-  let lastStores = [];
+
+  const PT_KEYS = [
+    { key: "CASH", canvas: "dash_pt_cash", val: "dash_pt_cash_val", color: "#22c55e", label: "Наличные" },
+    { key: "CREDIT_CARD", canvas: "dash_pt_card", val: "dash_pt_card_val", color: "#3b82f6", label: "Безналичные" },
+    { key: "PRE_PAID", canvas: "dash_pt_prepaid", val: "dash_pt_prepaid_val", color: "#f59e0b", label: "Зачёты" },
+    { key: "POST_PAID", canvas: "dash_pt_credit", val: "dash_pt_credit_val", color: "#8b5cf6", label: "Кредит" },
+  ];
 
   function api(path, opts) {
     if (window.EKLK && typeof window.EKLK.api === "function") return window.EKLK.api(path, opts);
@@ -31,35 +38,28 @@
   function todayISO() {
     return new Date().toISOString().slice(0, 10);
   }
-  function deltaHtml(pct) {
-    if (pct == null || Number.isNaN(Number(pct))) return `<span class="dash-delta flat">—</span>`;
-    const v = Number(pct);
-    const cls = v > 0 ? "up" : v < 0 ? "down" : "flat";
-    const sign = v > 0 ? "+" : "";
-    return `<span class="dash-delta ${cls}">${sign}${v.toFixed(2)}%</span>`;
+
+  function setDelta(el, v) {
+    if (!el) return;
+    el.className = "dash-delta " + (v > 0 ? "up" : v < 0 ? "down" : "flat");
+    el.textContent = v == null || Number.isNaN(Number(v)) ? "—" : `${v > 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
   }
 
-  function fillStores(stores, keep) {
-    const sel = $("#dash_store");
-    if (!sel) return;
-    const prev = keep !== undefined ? keep : sel.value;
-    const map = new Map();
-    lastStores.forEach((s) => { if (s?.storeId != null) map.set(String(s.storeId), s); });
-    (stores || []).forEach((s) => { if (s?.storeId != null) map.set(String(s.storeId), s); });
-    lastStores = Array.from(map.values()).sort((a, b) =>
-      String(a.storeName || "").localeCompare(String(b.storeName || ""), "ru")
-    );
-    sel.innerHTML =
-      `<option value="">Все точки продаж</option>` +
-      lastStores
-        .map(
-          (s) =>
-            `<option value="${escapeHtml(String(s.storeId))}">${escapeHtml(
-              s.storeName || String(s.storeId)
-            )}</option>`
-        )
-        .join("");
-    if (prev && map.has(String(prev))) sel.value = String(prev);
+  function syncFilterVisibility() {
+    const type = $("#dash_period")?.value || "daily";
+    const showDate = type === "daily" || type === "weekly";
+    const showYear = type === "monthly" || type === "quarterly" || type === "annual";
+    $("#dash_date_wrap")?.classList.toggle("hidden", !showDate);
+    $("#dash_year_wrap")?.classList.toggle("hidden", !showYear);
+    $("#dash_month_wrap")?.classList.toggle("hidden", type !== "monthly");
+    $("#dash_quarter_wrap")?.classList.toggle("hidden", type !== "quarterly");
+  }
+
+  function destroyMini() {
+    Object.keys(miniCharts).forEach((k) => {
+      try { miniCharts[k].destroy(); } catch (_) {}
+      delete miniCharts[k];
+    });
   }
 
   function renderGauge(profit, gaugePct) {
@@ -70,12 +70,15 @@
       gaugeChart = null;
     }
     const pct = Math.max(0, Math.min(100, Number(gaugePct) || 0));
+    const isDark = document.body?.getAttribute("data-theme") === "dark"
+      || document.body?.getAttribute("data-theme") === "glass";
+    const track = isDark ? "rgba(148,163,184,0.25)" : "#e2e8f0";
     gaugeChart = new Chart(canvas, {
       type: "doughnut",
       data: {
         datasets: [{
           data: [pct, 100 - pct],
-          backgroundColor: ["#60a5fa", "#e2e8f0"],
+          backgroundColor: ["#60a5fa", track],
           borderWidth: 0,
           circumference: 180,
           rotation: 270,
@@ -83,10 +86,56 @@
       },
       options: {
         responsive: true,
-        maintainAspectRatio: true,
-        cutout: "75%",
+        maintainAspectRatio: false,
+        cutout: "72%",
+        layout: { padding: { top: 0, bottom: 0, left: 4, right: 4 } },
         plugins: { legend: { display: false }, tooltip: { enabled: false } },
       },
+    });
+  }
+
+  function renderMiniCharts(byPt, total) {
+    destroyMini();
+    if (typeof Chart === "undefined") return;
+    const isDark = document.body?.getAttribute("data-theme") === "dark"
+      || document.body?.getAttribute("data-theme") === "glass";
+    const track = isDark ? "rgba(148,163,184,0.25)" : "#e2e8f0";
+    const sum = Number(total) || 0;
+
+    PT_KEYS.forEach((cfg) => {
+      const amount = Number(byPt[cfg.key]) || 0;
+      const elVal = $("#" + cfg.val);
+      if (elVal) elVal.textContent = money(amount);
+      const canvas = $("#" + cfg.canvas);
+      if (!canvas) return;
+      const pct = sum > 0 ? Math.max(0, Math.min(100, (amount / sum) * 100)) : 0;
+      miniCharts[cfg.key] = new Chart(canvas, {
+        type: "doughnut",
+        data: {
+          datasets: [{
+            data: [pct || 0.0001, Math.max(0.0001, 100 - pct)],
+            backgroundColor: [cfg.color, track],
+            borderWidth: 0,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          cutout: "68%",
+          layout: { padding: 2 },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label(ctx) {
+                  if (ctx.dataIndex !== 0) return "";
+                  return `${cfg.label}: ${pct.toFixed(1)}%`;
+                },
+              },
+            },
+          },
+        },
+      });
     });
   }
 
@@ -100,47 +149,20 @@
     if ($("#dash_checks")) $("#dash_checks").textContent = money(data.by_checks);
     if ($("#dash_profit")) $("#dash_profit").textContent = money(data.profit);
     const ch = data.changes || {};
-    if ($("#dash_profit_pct")) {
-      $("#dash_profit_pct").outerHTML = deltaHtml(ch.profit_pct).replace(
-        "dash-delta",
-        "dash-delta\" id=\"dash_profit_pct"
-      );
-      // simpler:
-      const el = $("#dash_profit_pct");
-      if (el) {
-        const v = ch.profit_pct;
-        el.className = "dash-delta " + (v > 0 ? "up" : v < 0 ? "down" : "flat");
-        el.textContent = v == null ? "—" : `${v > 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
-      }
-    }
+    setDelta($("#dash_profit_pct"), ch.profit_pct);
     if ($("#dash_sales_count")) $("#dash_sales_count").textContent = String(data.sales_count ?? "—");
-    if ($("#dash_sales_pct")) {
-      const v = ch.sales_count_pct;
-      const el = $("#dash_sales_pct");
-      el.className = "dash-delta " + (v > 0 ? "up" : v < 0 ? "down" : "flat");
-      el.textContent = v == null ? "—" : `${v > 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
-    }
+    setDelta($("#dash_sales_pct"), ch.sales_count_pct);
     if ($("#dash_avg_check")) $("#dash_avg_check").textContent = money(data.avg_check);
-    if ($("#dash_avg_pct")) {
-      const v = ch.avg_check_pct;
-      const el = $("#dash_avg_pct");
-      el.className = "dash-delta " + (v > 0 ? "up" : v < 0 ? "down" : "flat");
-      el.textContent = v == null ? "—" : `${v > 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
-    }
+    setDelta($("#dash_avg_pct"), ch.avg_check_pct);
     if ($("#dash_total")) $("#dash_total").textContent = money(data.total_checks);
-    if ($("#dash_total_pct")) {
-      const v = ch.total_checks_pct;
-      const el = $("#dash_total_pct");
-      el.className = "dash-delta " + (v > 0 ? "up" : v < 0 ? "down" : "flat");
-      el.textContent = v == null ? "—" : `${v > 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
-    }
+    setDelta($("#dash_total_pct"), ch.total_checks_pct);
     if ($("#dash_cash")) $("#dash_cash").textContent = money(data.cash_balance);
 
     const labels = data.payment_labels || {};
     const byPt = data.by_payment_type || {};
     const box = $("#dash_pay_types");
     if (box) {
-      const keys = Object.keys(byPt);
+      const keys = Object.keys(byPt).sort((a, b) => (byPt[b] || 0) - (byPt[a] || 0));
       if (!keys.length) {
         box.innerHTML = `<span class="hint">Нет данных за период</span>`;
       } else {
@@ -155,15 +177,24 @@
       }
     }
 
-    fillStores(data.stores || []);
     renderGauge(data.profit, data.gauge_pct);
+    renderMiniCharts(byPt, data.total_checks);
   }
 
   async function load() {
-    const date = $("#dash_date")?.value || todayISO();
-    const storeId = $("#dash_store")?.value || "";
-    const qs = new URLSearchParams({ date, period: "daily" });
-    if (storeId) qs.set("store_id", storeId);
+    const type = $("#dash_period")?.value || "daily";
+    const qs = new URLSearchParams({ period: type });
+    if (type === "daily" || type === "weekly") {
+      const d = $("#dash_date")?.value || todayISO();
+      qs.set("date", d);
+    } else {
+      qs.set("year", $("#dash_year")?.value || new Date().getFullYear());
+      if (type === "monthly") qs.set("month", $("#dash_month")?.value || new Date().getMonth() + 1);
+      if (type === "quarterly") {
+        const q = $("#dash_quarter")?.value || Math.floor(new Date().getMonth() / 3) + 1;
+        qs.set("quarter", q);
+      }
+    }
     try {
       const data = await api("/dashboard/summary?" + qs.toString());
       render(data);
@@ -172,11 +203,27 @@
     }
   }
 
-  function bind() {
+  function initDefaults() {
+    const now = new Date();
     if ($("#dash_date") && !$("#dash_date").value) $("#dash_date").value = todayISO();
+    if ($("#dash_year") && !$("#dash_year").value) $("#dash_year").value = String(now.getFullYear());
+    if ($("#dash_month") && !$("#dash_month").value) $("#dash_month").value = String(now.getMonth() + 1);
+    if ($("#dash_quarter") && !$("#dash_quarter").value) {
+      $("#dash_quarter").value = String(Math.floor(now.getMonth() / 3) + 1);
+    }
+    syncFilterVisibility();
+  }
+
+  function bind() {
+    initDefaults();
     $("#dash_refresh")?.addEventListener("click", load);
-    $("#dash_date")?.addEventListener("change", load);
-    $("#dash_store")?.addEventListener("change", load);
+    $("#dash_period")?.addEventListener("change", () => {
+      syncFilterVisibility();
+      load();
+    });
+    ["dash_date", "dash_year", "dash_month", "dash_quarter"].forEach((id) => {
+      $("#" + id)?.addEventListener("change", load);
+    });
     document.querySelectorAll("[data-dash-tab]").forEach((el) => {
       el.addEventListener("click", (ev) => {
         ev.preventDefault();
@@ -195,6 +242,8 @@
       if (!bound) {
         bind();
         bound = true;
+      } else {
+        syncFilterVisibility();
       }
       load();
     },
