@@ -396,14 +396,14 @@ Auth: **`Token`** (как ядро). Ответ: `points[]` с полями `tim
 - Неизвестные ключи уже лежащие в JSON **сохраняются** (не затираются).
 
 Сейчас:
-- user: `theme`, `last_pay_type`
-- firm: `selected_store_id`
+- user: `theme`, `last_pay_type`, `selected_store_id` (магазин на логин)
+- firm: пока без ключей (таблица зарезервирована)
 
 #### API
 
 - `GET /api/v1/auth/settings`
 - `PUT /api/v1/auth/settings` body `{ "user": {...}, "firm": {...} }`
-- `POST /auth/select-store` дополнительно пишет `firm.selected_store_id` в БД
+- `POST /auth/select-store` дополнительно пишет `user.selected_store_id` в БД
 
 #### Фронт
 

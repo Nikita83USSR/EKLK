@@ -35,14 +35,14 @@ CURRENT_SCHEMA_VERSION = 1
 USER_DEFAULTS: dict[str, Any] = {
     "theme": "light",
     "last_pay_type": None,
+    "selected_store_id": None,  # per-login default store (was firm-level)
 }
 
-FIRM_DEFAULTS: dict[str, Any] = {
-    "selected_store_id": None,
-}
+# Org-level prefs (reserved for future shared org settings)
+FIRM_DEFAULTS: dict[str, Any] = {}
 
-USER_WRITABLE = frozenset({"theme", "last_pay_type"})
-FIRM_WRITABLE = frozenset({"selected_store_id"})
+USER_WRITABLE = frozenset({"theme", "last_pay_type", "selected_store_id"})
+FIRM_WRITABLE = frozenset()  # no firm keys for now
 
 ALLOWED_THEMES = frozenset({"light", "dark", "glass"})
 
@@ -101,6 +101,11 @@ def _sanitize_user_patch(patch: dict[str, Any]) -> dict[str, Any]:
                 continue
             clean[k] = s
         elif k == "last_pay_type":
+            if v is None or v == "":
+                clean[k] = None
+            else:
+                clean[k] = str(v).strip()
+        elif k == "selected_store_id":
             if v is None or v == "":
                 clean[k] = None
             else:
@@ -233,6 +238,19 @@ async def get_settings(db: AsyncSession, login: str, firm_id: str | None) -> dic
     try:
         user = await _get_user_data_raw(db, login)
         firm = await _get_firm_data_raw(db, firm_id)
+        # One-time compatibility: store was firm-level; copy into user if missing
+        if not user.get("selected_store_id") and isinstance(firm, dict):
+            legacy = firm.get("selected_store_id")
+            if legacy is not None and legacy != "":
+                try:
+                    user = await _patch_user_raw(
+                        db, login, {"selected_store_id": legacy}
+                    )
+                except Exception as e:
+                    logger.warning("settings legacy store migrate failed: %s", e)
+                    user = merge_with_defaults(
+                        {**user, "selected_store_id": str(legacy)}, USER_DEFAULTS
+                    )
         return {
             "user": user,
             "firm": firm,

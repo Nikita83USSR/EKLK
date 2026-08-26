@@ -153,13 +153,13 @@ async def select_store(
             detail=f"Магазин storeId={store_id} не найден в профиле фирмы",
         )
     update_session_store(user["username"], store_id)
-    firm_id = settings_svc.firm_id_from_user(user)
-    if firm_id:
-        try:
-            await settings_svc.patch_firm(db, firm_id, {"selected_store_id": store_id})
-        except Exception:
-            # Prefs are best-effort; session already updated
-            pass
+    try:
+        await settings_svc.patch_user(
+            db, str(user["username"]), {"selected_store_id": store_id}
+        )
+    except Exception:
+        # Prefs are best-effort; session already updated
+        pass
     log_action(
         "store_selected",
         f"store_id={store_id}",

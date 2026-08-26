@@ -8,10 +8,12 @@ from pydantic import BaseModel, Field
 class UserSettingsData(BaseModel):
     theme: Optional[str] = Field(None, description="light | dark | glass")
     last_pay_type: Optional[str] = Field(None, description="Last selected payment provider id")
+    selected_store_id: Optional[str | int] = Field(None, description="Default storeId per login")
 
 
 class FirmSettingsData(BaseModel):
-    selected_store_id: Optional[str | int] = Field(None, description="Default storeId / group_code")
+    """Reserved for future org-level prefs."""
+    pass
 
 
 class SettingsOut(BaseModel):

@@ -54,16 +54,19 @@ async def put_settings(
             detail="Профиль фирмы не загружен — org-настройки пока недоступны",
         )
 
-    if body.firm and body.firm.get("selected_store_id") is not None:
-        store_id = body.firm.get("selected_store_id")
+    # selected_store_id is per-user
+    store_candidate = None
+    if body.user and body.user.get("selected_store_id") is not None:
+        store_candidate = body.user.get("selected_store_id")
+    if store_candidate is not None and store_candidate != "":
         firm = user.get("firm") or {}
         stores = firm.get("stores") or []
         if stores:
-            ok = any(str(s.get("storeId")) == str(store_id) for s in stores)
+            ok = any(str(s.get("storeId")) == str(store_candidate) for s in stores)
             if not ok:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Магазин storeId={store_id} не найден в профиле фирмы",
+                    detail=f"Магазин storeId={store_candidate} не найден в профиле фирмы",
                 )
 
     try:

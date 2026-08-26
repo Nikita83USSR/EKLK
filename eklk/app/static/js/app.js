@@ -55,12 +55,21 @@
       if (u.last_pay_type) {
         localStorage.setItem("eklk_last_pay_type", String(u.last_pay_type));
       }
-      const fromFirm =
+      // selected_store_id — на логин (user); firm.legacy только как запасной кэш
+      const fromUser =
+        u.selected_store_id != null && u.selected_store_id !== ""
+          ? String(u.selected_store_id)
+          : null;
+      const fromFirmLegacy =
         f.selected_store_id != null && f.selected_store_id !== ""
           ? String(f.selected_store_id)
           : null;
       const preferred =
-        fromFirm || preferredStoreHint || localStorage.getItem("eklk_group") || null;
+        fromUser ||
+        fromFirmLegacy ||
+        preferredStoreHint ||
+        localStorage.getItem("eklk_group") ||
+        null;
       return { preferredStore: preferred, user: u, firm: f, degraded: false };
     } catch (e) {
       return {
