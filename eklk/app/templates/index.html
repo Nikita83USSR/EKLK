@@ -49,6 +49,7 @@
           <button type="button" data-tab="orders">Список чеков</button>
           <button type="button" data-tab="catalog">Каталог</button>
           <button type="button" data-tab="reports">Отчёты</button>
+          <button type="button" data-tab="ai-cashier">ИИ кассир</button>
           <button type="button" data-tab="settings">Настройки</button>
         </nav>
         <div class="user-info">
@@ -214,6 +215,10 @@
                 <a href="/reports" class="dash-action" data-dash-tab="reports">
                   <span class="dash-action-title">Отчёты</span>
                   <span class="dash-action-desc">Сводки за период, балансы и выгрузка в Excel</span>
+                </a>
+                <a href="/ai-cashier" class="dash-action" data-dash-tab="ai-cashier">
+                  <span class="dash-action-title">ИИ кассир</span>
+                  <span class="dash-action-desc">Чеки и ссылки на оплату через нейросеть</span>
                 </a>
                 <a href="/settings" class="dash-action" data-dash-tab="settings">
                   <span class="dash-action-title">Настройки</span>
@@ -1064,6 +1069,21 @@
           </aside>
         </div>
       </div>
+
+
+      <section id="tab-ai-cashier" class="tab-panel hidden">
+        <div class="card" style="max-width:640px">
+          <div class="section-title">ИИ кассир</div>
+          <p class="hint" style="margin-bottom:14px">
+            Голосовой и текстовый помощник EcomKassa: создание чеков и ссылок на оплату.
+            При открытии раздела подключается виджет
+            <a href="https://iikassa.ru/" target="_blank" rel="noopener">iikassa.ru</a>
+            с вашим API-токеном кассы.
+          </p>
+          <p id="ai_cashier_status" class="hint">Загрузка виджета…</p>
+          <button type="button" class="btn mt-2" id="ai_cashier_open">Открыть чат</button>
+        </div>
+      </section>
 
 <!-- SETTINGS -->
       <section id="tab-settings" class="tab-panel hidden">

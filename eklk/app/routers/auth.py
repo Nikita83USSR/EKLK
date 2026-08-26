@@ -173,6 +173,26 @@ async def select_store(
     }
 
 
+@router.get("/ecom-token")
+async def ecom_token(user: CurrentUser):
+    """
+    Токен API EcomKassa (getToken) для встраиваемых партнёрских виджетов
+    (например ИИ-кассир). Не путать с JWT EKLK.
+    """
+    client = EcomKassaClient(
+        login=user["username"],
+        password=user["password"],
+        group_code=user.get("group_code") or "990",
+    )
+    try:
+        tok = await client.get_token()
+        return {"token": tok}
+    except EcomKassaError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        await client.close()
+
+
 @router.post("/logout")
 async def logout(user: CurrentUser):
     clear_session(user["username"])

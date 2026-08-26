@@ -75,6 +75,7 @@ async def index(request: Request):
 @app.get("/home", response_class=HTMLResponse)
 @app.get("/catalog", response_class=HTMLResponse)
 @app.get("/reports", response_class=HTMLResponse)
+@app.get("/ai-cashier", response_class=HTMLResponse)
 async def spa_section(request: Request):
     return jinja_templates.TemplateResponse("index.html", {"request": request, "app_name": settings.app_name})
 

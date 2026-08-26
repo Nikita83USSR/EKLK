@@ -1729,7 +1729,85 @@
   // Разделы: /create | /payment | /orders | /settings
   // В дальнейшем: URL-параметры (например /orders?external_id=…, /create?from=123).
   // Вкладка «Статус» (/status) удалена — статус чека в списке/деталки.
-  const APP_TABS = ["home", "create", "payment", "templates", "orders", "catalog", "reports", "settings"]; // CORE: home/catalog/reports — sections/*.js
+
+  // ── ИИ-кассир (виджет iikassa.ru) ─────────────────────────────────
+  let aiCashierReady = false;
+  let aiCashierLoading = null;
+
+  function loadAiCashierScript() {
+    if (window.AiCashier) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[data-ai-cashier-widget]');
+      if (existing) {
+        existing.addEventListener("load", () => resolve());
+        existing.addEventListener("error", () => reject(new Error("Не удалось загрузить виджет ИИ-кассир")));
+        return;
+      }
+      const s = document.createElement("script");
+      s.src = "https://iikassa.ru/widget.js";
+      s.async = true;
+      s.setAttribute("data-ai-cashier-widget", "1");
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error("Не удалось загрузить виджет ИИ-кассир"));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function fetchEcomApiToken() {
+    const data = await api("/auth/ecom-token");
+    if (!data || !data.token) throw new Error("Нет API-токена EcomKassa");
+    return data.token;
+  }
+
+  async function ensureAiCashier() {
+    const status = $("#ai_cashier_status");
+    if (status) status.textContent = "Подключение к ИИ-кассиру…";
+    if (aiCashierLoading) return aiCashierLoading;
+    aiCashierLoading = (async () => {
+      try {
+        await loadAiCashierScript();
+        const ecomToken = await fetchEcomApiToken();
+        if (!window.AiCashier || typeof window.AiCashier.init !== "function") {
+          throw new Error("AiCashier.init недоступен");
+        }
+        // init можно вызывать повторно с актуальным token
+        window.AiCashier.init({ token: ecomToken, button: true });
+        aiCashierReady = true;
+        if (status) {
+          status.textContent =
+            "Виджет готов. Можно открыть чат кнопкой ниже или плавающей кнопкой на странице.";
+        }
+        if (typeof window.AiCashier.open === "function") {
+          try {
+            await window.AiCashier.open({ token: ecomToken });
+          } catch (e) {
+            console.warn("AiCashier.open", e);
+          }
+        }
+      } catch (e) {
+        aiCashierReady = false;
+        const msg = (e && e.message) || String(e);
+        if (status) status.textContent = "Ошибка: " + msg;
+        if (typeof showAlert === "function") showAlert(msg);
+        throw e;
+      } finally {
+        aiCashierLoading = null;
+      }
+    })();
+    return aiCashierLoading;
+  }
+
+  function bindAiCashierUI() {
+    const btn = $("#ai_cashier_open");
+    if (!btn || btn.dataset.bound === "1") return;
+    btn.dataset.bound = "1";
+    btn.onclick = () => {
+      ensureAiCashier().catch(() => {});
+    };
+  }
+  bindAiCashierUI();
+
+  const APP_TABS = ["home", "create", "payment", "templates", "orders", "catalog", "reports", "ai-cashier", "settings"]; // CORE: home/catalog/reports — sections/*.js
 
   function pathToTab(pathname) {
     const p = String(pathname || "/").replace(/\/+$/, "") || "/";
@@ -1770,6 +1848,9 @@
     }
     if (tab === "home" && window.EKLK_HOME && typeof window.EKLK_HOME.onShow === "function") {
       try { window.EKLK_HOME.onShow(); } catch (e) { console.warn(e); }
+    }
+    if (tab === "ai-cashier") {
+      try { ensureAiCashier(); } catch (e) { console.warn(e); }
     }
     if (push) {
       const path = tabToPath(tab);
