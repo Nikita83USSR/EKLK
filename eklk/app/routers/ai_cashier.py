@@ -73,50 +73,95 @@ async def create_embed(
 
     use_secret = bool((settings.iikassa_partner_secret or "").strip())
     headers = {"Content-Type": "application/json"}
-    if use_secret:
-        headers["X-Partner-Secret"] = settings.iikassa_partner_secret.strip()
-        body: dict[str, Any] = {
-            "action": "issue",
-            "ecomkassa_login": login,
-            "ecomkassa_password": password,
-            "partner_id": PARTNER_ID,
-        }
-        mode = "issue"
-    else:
-        body = {
-            "action": "issue_from_token",
-            "ecomkassa_token": ecom_token,
-            "partner_id": PARTNER_ID,
-        }
-        mode = "issue_from_token"
 
-    # Для логов — без полного пароля/токена
-    body_log = dict(body)
-    if "ecomkassa_password" in body_log:
-        body_log["ecomkassa_password"] = "***"
-    if "ecomkassa_token" in body_log and body_log["ecomkassa_token"]:
-        tok = body_log["ecomkassa_token"]
-        body_log["ecomkassa_token"] = tok[:16] + f"…(len={len(tok)})"
+    # Варианты partner_id: официальный widget.js использует "widget".
+    # Кастомный id без регистрации у iikassa часто даёт 401 на issue_from_token.
+    partner_candidates = []
+    if PARTNER_ID:
+        partner_candidates.append(PARTNER_ID)
+    for pid in ("widget", "eklk"):
+        if pid not in partner_candidates:
+            partner_candidates.append(pid)
 
+    attempts: list[dict[str, Any]] = []
     status_code = 0
     resp_data: Any = None
     resp_text = ""
+    body: dict[str, Any] = {}
+    mode = "issue_from_token"
+    body_log: dict[str, Any] = {}
+
+    def _mask(b: dict[str, Any]) -> dict[str, Any]:
+        out = dict(b)
+        if "ecomkassa_password" in out:
+            out["ecomkassa_password"] = "***"
+        if out.get("ecomkassa_token"):
+            tok = str(out["ecomkassa_token"])
+            out["ecomkassa_token"] = tok[:16] + f"…(len={len(tok)})"
+        return out
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as http:
-            r = await http.post(EMBED_URL, headers=headers, json=body)
-            status_code = r.status_code
-            resp_text = r.text
-            try:
-                resp_data = r.json()
-            except Exception:
-                resp_data = {"raw": resp_text[:2000]}
+            if use_secret:
+                mode = "issue"
+                hdrs = dict(headers)
+                hdrs["X-Partner-Secret"] = settings.iikassa_partner_secret.strip()
+                body = {
+                    "action": "issue",
+                    "ecomkassa_login": login,
+                    "ecomkassa_password": password,
+                    "partner_id": PARTNER_ID or "widget",
+                }
+                body_log = _mask(body)
+                r = await http.post(EMBED_URL, headers=hdrs, json=body)
+                status_code = r.status_code
+                resp_text = r.text
+                try:
+                    resp_data = r.json()
+                except Exception:
+                    resp_data = {"raw": resp_text[:2000]}
+                attempts.append({
+                    "mode": mode,
+                    "partner_id": body.get("partner_id"),
+                    "http": status_code,
+                    "response": resp_data,
+                })
+            else:
+                mode = "issue_from_token"
+                for pid in partner_candidates:
+                    body = {
+                        "action": "issue_from_token",
+                        "ecomkassa_token": ecom_token,
+                        "partner_id": pid,
+                    }
+                    body_log = _mask(body)
+                    r = await http.post(EMBED_URL, headers=headers, json=body)
+                    status_code = r.status_code
+                    resp_text = r.text
+                    try:
+                        resp_data = r.json()
+                    except Exception:
+                        resp_data = {"raw": resp_text[:2000]}
+                    attempts.append({
+                        "mode": mode,
+                        "partner_id": pid,
+                        "http": status_code,
+                        "response": resp_data,
+                    })
+                    ok_try = (
+                        status_code == 200
+                        and isinstance(resp_data, dict)
+                        and bool(resp_data.get("embed_path"))
+                    )
+                    if ok_try:
+                        break
     except Exception as e:
         logger.exception("iikassa embed request failed")
         raise HTTPException(status_code=502, detail=f"Сеть iikassa: {e}")
 
     log_action(
         "ai_cashier_embed",
-        f"mode={mode} http={status_code} partner_id={PARTNER_ID}",
+        f"mode={mode} http={status_code} attempts={len(attempts)}",
         user_id=login,
         level="info" if status_code == 200 else "warning",
     )
@@ -152,6 +197,12 @@ async def create_embed(
             "ecom_token_meta": token_meta,
             "response_http_status": status_code,
             "response_body": resp_data,
+            "attempts": attempts,
+            "note": (
+                "widget.js по умолчанию шлёт partner_id=widget. "
+                "Кастомный partner_id без настройки у iikassa может давать 401. "
+                "Повторный вызов с тем же JWT обычно допустим; embed_token одноразовый (60с), не ecom-токен."
+            ),
         }
 
     if not ok:

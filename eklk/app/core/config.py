@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # ИИ-кассир (iikassa.ru) — partner-embed
     iikassa_embed_url: str = "https://functions.poehali.dev/10219b97-9c66-4c02-b8a3-939f2d6e06c6"
-    iikassa_partner_id: str = "eklk"
+    iikassa_partner_id: str = "widget"  # как в официальном widget.js (opts.partnerId || "widget")
     # Секрет для action=issue (логин/пароль кассы). Выдаёт владелец проекта ИИ-кассира.
     # Без секрета используется action=issue_from_token (токен EcomKassa).
     iikassa_partner_secret: str = ""
