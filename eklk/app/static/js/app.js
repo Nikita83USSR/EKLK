@@ -9,14 +9,14 @@
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
 
-  // Тема: light | dark | glass (localStorage eklk_theme). Logo invert в CSS для dark/glass.
+  // Тема: light | dark | glass. localStorage = кэш; после login — GET /auth/settings.
   const THEME_KEY = "eklk_theme";
   const THEMES = ["light", "dark", "glass"];
   function getStoredTheme() {
     const t = localStorage.getItem(THEME_KEY) || "light";
     return THEMES.includes(t) ? t : "light";
   }
-  function applyTheme(theme) {
+  function applyTheme(theme, persistServer) {
     const t = THEMES.includes(theme) ? theme : "light";
     document.body.setAttribute("data-theme", t === "light" ? "" : t);
     if (t === "light") document.body.removeAttribute("data-theme");
@@ -25,8 +25,53 @@
     $$('input[name="eklk_theme"]').forEach((el) => {
       el.checked = el.value === t;
     });
+    if (persistServer && token) {
+      api("/auth/settings", {
+        method: "PUT",
+        body: JSON.stringify({ user: { theme: t } }),
+      }).catch(() => {});
+    }
   }
   applyTheme(getStoredTheme());
+
+  /** Prefs с сервера (user + firm). Ошибка не ломает UI. */
+  async function loadServerSettings(preferredStoreHint) {
+    try {
+      const s = await api("/auth/settings");
+      const u = (s && s.user) || {};
+      const f = (s && s.firm) || {};
+      if (u.theme && THEMES.includes(u.theme)) {
+        applyTheme(u.theme, false);
+      }
+      if (u.last_pay_type) {
+        localStorage.setItem("eklk_last_pay_type", String(u.last_pay_type));
+      }
+      const fromFirm =
+        f.selected_store_id != null && f.selected_store_id !== ""
+          ? String(f.selected_store_id)
+          : null;
+      const preferred =
+        fromFirm || preferredStoreHint || localStorage.getItem("eklk_group") || null;
+      return { preferredStore: preferred, user: u, firm: f };
+    } catch (e) {
+      return {
+        preferredStore: preferredStoreHint || localStorage.getItem("eklk_group") || null,
+        user: null,
+        firm: null,
+      };
+    }
+  }
+
+  function persistLastPayType(val) {
+    if (!val) return;
+    localStorage.setItem("eklk_last_pay_type", String(val));
+    if (token) {
+      api("/auth/settings", {
+        method: "PUT",
+        body: JSON.stringify({ user: { last_pay_type: String(val) } }),
+      }).catch(() => {});
+    }
+  }
 
   const VAT_OPTS = `
     <option value="none" selected>Без НДС</option>
@@ -1135,14 +1180,26 @@
     if ($("#appScreen")) $("#appScreen").classList.remove("hidden");
     if ($("#appFooter")) $("#appFooter").classList.remove("hidden");
     try {
+      // Сначала prefs из БД (тема, магазин firm, last_pay_type)
+      const hint =
+        (loginPayload && loginPayload.selected_store_id) ||
+        localStorage.getItem("eklk_group") ||
+        null;
+      const srv = await loadServerSettings(hint);
+
       if (loginPayload && loginPayload.firm) {
-        // last store chosen by user wins over server default
-        const preferred = localStorage.getItem("eklk_group") || loginPayload.selected_store_id;
+        const preferred =
+          srv.preferredStore ||
+          localStorage.getItem("eklk_group") ||
+          loginPayload.selected_store_id;
         ingestFirm(loginPayload.firm, preferred);
       } else {
         const me = await api("/auth/me");
         if ($("#userName")) $("#userName").textContent = me.username || me.email || "";
-        const preferred = localStorage.getItem("eklk_group") || me.selected_store_id;
+        const preferred =
+          srv.preferredStore ||
+          localStorage.getItem("eklk_group") ||
+          me.selected_store_id;
         ingestFirm(me.firm, preferred);
       }
       const me2 = await api("/auth/me").catch(() => null);
@@ -1204,7 +1261,7 @@
           sel.value = lastType;
         }
         sel.onchange = () => {
-          if (sel.value) localStorage.setItem("eklk_last_pay_type", sel.value);
+          if (sel.value) persistLastPayType(sel.value);
           updatePaySummary();
         };
       }
@@ -2180,7 +2237,7 @@
     try {
       const payTypeId = parseInt($("#p_type").value, 10);
       if ($("#p_type") && $("#p_type").value) {
-        localStorage.setItem("eklk_last_pay_type", String($("#p_type").value));
+        persistLastPayType($("#p_type").value);
       }
       const body = {
         external_id: nextExternalId("PAY"),
@@ -2963,10 +3020,10 @@
     };
   });
 
-  // Theme picker
+  // Theme picker → localStorage + server user_settings
   $$('input[name="eklk_theme"]').forEach((el) => {
     el.addEventListener("change", () => {
-      if (el.checked) applyTheme(el.value);
+      if (el.checked) applyTheme(el.value, true);
     });
   });
   applyTheme(getStoredTheme());

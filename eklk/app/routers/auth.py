@@ -15,6 +15,7 @@ from app.core.deps import (
     update_session_store,
 )
 from app.clients.ecomkassa import EcomKassaClient, EcomKassaError
+from app.db import get_db
 from app.schemas.auth import (
     LoginRequest,
     TokenResponse,
@@ -23,7 +24,9 @@ from app.schemas.auth import (
     SelectStoreRequest,
     firm_from_payload,
 )
+from app.services import settings_service as settings_svc
 from app.utils.logger import log_action
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -130,8 +133,12 @@ async def get_firm(user: CurrentUser):
 
 
 @router.post("/select-store")
-async def select_store(body: SelectStoreRequest, user: CurrentUser):
-    """Запомнить выбранный магазин (group_code) в сессии."""
+async def select_store(
+    body: SelectStoreRequest,
+    user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Запомнить выбранный магазин в RAM-сессии и в firm_settings (БД)."""
     firm = user.get("firm") or {}
     stores = firm.get("stores") or []
     store_id = body.store_id
@@ -146,6 +153,13 @@ async def select_store(body: SelectStoreRequest, user: CurrentUser):
             detail=f"Магазин storeId={store_id} не найден в профиле фирмы",
         )
     update_session_store(user["username"], store_id)
+    firm_id = settings_svc.firm_id_from_user(user)
+    if firm_id:
+        try:
+            await settings_svc.patch_firm(db, firm_id, {"selected_store_id": store_id})
+        except Exception:
+            # Prefs are best-effort; session already updated
+            pass
     log_action(
         "store_selected",
         f"store_id={store_id}",

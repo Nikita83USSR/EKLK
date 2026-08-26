@@ -374,3 +374,45 @@ Auth: **`Token`** (как ядро). Ответ: `points[]` с полями `tim
 - Не путать **ящик (только нал)** и **общий баланс (нал+безнал)**.
 - Не класть `PRE_PAID` в `money_balance`.
 - Не трогать `app.js` для графиков/XLS — только `sections/reports.js` + router/client.
+
+### 12.3 Настройки в БД (user + firm)
+
+Ветка эксперимента: **`expbd`**.
+
+- **Без локальной регистрации.** Ключи только с сервера:
+  - `user_settings.login` = EcomKassa login (JWT → session)
+  - `firm_settings.firm_id` = `firmId` из session после `get_firm_profile`
+- Клиент **не** передаёт `login` / `firm_id` как ключ записи.
+- Пароль EcomKassa **не** пишется в БД (только RAM `SESSIONS`).
+
+#### Схема (forward-compatible)
+
+Таблицы: `user_settings`, `firm_settings`.  
+Полезная нагрузка — JSON в колонке `data` + `schema_version`.
+
+- Новые prefs = новые ключи в JSON / whitelist в `settings_service.py`.
+- Старые строки без ключа: на чтении подставляются `USER_DEFAULTS` / `FIRM_DEFAULTS`.
+- `PUT` делает shallow-merge; неизвестные клиентские ключи отбрасываются whitelist’ом.
+- Неизвестные ключи уже лежащие в JSON **сохраняются** (не затираются).
+
+Сейчас:
+- user: `theme`, `last_pay_type`
+- firm: `selected_store_id`
+
+#### API
+
+- `GET /api/v1/auth/settings`
+- `PUT /api/v1/auth/settings` body `{ "user": {...}, "firm": {...} }`
+- `POST /auth/select-store` дополнительно пишет `firm.selected_store_id` в БД
+
+#### Фронт
+
+`loadServerSettings()` после login; `applyTheme(..., true)` и `persistLastPayType` → PUT.  
+localStorage остаётся кэшем до ответа сервера.
+
+#### Добавление нового параметра
+
+1. Добавить ключ в `USER_DEFAULTS` или `FIRM_DEFAULTS`.
+2. Добавить в `USER_WRITABLE` / `FIRM_WRITABLE` (+ sanitize при необходимости).
+3. При необходимости поднять `CURRENT_SCHEMA_VERSION` и описать миграцию данных.
+4. Точечно дернуть PUT с фронта. Миграция таблицы не нужна.

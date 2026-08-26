@@ -8,8 +8,9 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.db import init_db
 from app.utils.logger import logger, log_action
-from app.routers import auth, ecom, orders, catalog, reports, dashboard
+from app.routers import auth, ecom, orders, catalog, reports, dashboard, settings as settings_router
 from app.routers import templates as templates_router
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -20,6 +21,11 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.info(f"{settings.app_name} v{settings.app_version} starting")
     logger.info(f"API backend (фискальный шлюз EcomKassa): {settings.ecomkassa_base_url} | protocol={settings.ecomkassa_api_version} | default_group={settings.ecomkassa_group_code}")
+    try:
+        await init_db()
+        logger.info("Database ready (user_settings / firm_settings)")
+    except Exception as e:
+        logger.error(f"Database init failed: {e}", exc_info=True)
     logger.info("=" * 60)
     log_action("startup", "Application started")
     yield
@@ -42,6 +48,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(settings_router.router, prefix="/api/v1")
 app.include_router(ecom.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
 app.include_router(templates_router.router, prefix="/api/v1")
