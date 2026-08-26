@@ -1731,7 +1731,6 @@
   // Вкладка «Статус» (/status) удалена — статус чека в списке/деталки.
 
   // ── ИИ-кассир (виджет iikassa.ru) ─────────────────────────────────
-  let aiCashierReady = false;
   let aiCashierLoading = null;
 
   function loadAiCashierScript() {
@@ -1739,8 +1738,11 @@
     return new Promise((resolve, reject) => {
       const existing = document.querySelector('script[data-ai-cashier-widget]');
       if (existing) {
+        if (window.AiCashier) return resolve();
         existing.addEventListener("load", () => resolve());
-        existing.addEventListener("error", () => reject(new Error("Не удалось загрузить виджет ИИ-кассир")));
+        existing.addEventListener("error", () =>
+          reject(new Error("Не удалось загрузить виджет ИИ-кассир"))
+        );
         return;
       }
       const s = document.createElement("script");
@@ -1756,42 +1758,97 @@
   async function fetchEcomApiToken() {
     const data = await api("/auth/ecom-token");
     if (!data || !data.token) throw new Error("Нет API-токена EcomKassa");
-    return data.token;
+    return String(data.token);
+  }
+
+  /**
+   * Виджет open() глотает ошибки в .catch — всегда передаём onError,
+   * иначе UI «молчит» при 401 токена / сетевых сбоях.
+   */
+  function openAiCashierChat(ecomToken) {
+    return new Promise((resolve, reject) => {
+      if (!window.AiCashier || typeof window.AiCashier.open !== "function") {
+        reject(new Error("AiCashier.open недоступен"));
+        return;
+      }
+      let settled = false;
+      const fail = (err) => {
+        if (settled) return;
+        settled = true;
+        reject(err instanceof Error ? err : new Error(String(err && err.message || err)));
+      };
+      const ok = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      try {
+        const p = window.AiCashier.open({
+          token: ecomToken,
+          onError: fail,
+        });
+        // open() при ошибке всё равно resolve(undefined) — ждём overlay
+        if (p && typeof p.then === "function") {
+          p.then(() => {
+            // Успех = появился overlay; иначе onError уже вызван или тихий fail
+            if (document.querySelector("[data-ai-cashier-overlay]")) ok();
+            else if (!settled) {
+              // Дать onError микротаск; если не пришёл — явная ошибка
+              setTimeout(() => {
+                if (!settled) {
+                  if (document.querySelector("[data-ai-cashier-overlay]")) ok();
+                  else fail(new Error("Чат не открылся (проверьте токен EcomKassa в консоли [AiCashier])"));
+                }
+              }, 300);
+            }
+          }).catch(fail);
+        } else {
+          setTimeout(() => {
+            if (document.querySelector("[data-ai-cashier-overlay]")) ok();
+            else fail(new Error("Чат не открылся"));
+          }, 300);
+        }
+      } catch (e) {
+        fail(e);
+      }
+    });
   }
 
   async function ensureAiCashier() {
     const status = $("#ai_cashier_status");
+    const btn = $("#ai_cashier_open");
     if (status) status.textContent = "Подключение к ИИ-кассиру…";
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Открытие…";
+    }
     if (aiCashierLoading) return aiCashierLoading;
+
     aiCashierLoading = (async () => {
       try {
         await loadAiCashierScript();
-        const ecomToken = await fetchEcomApiToken();
         if (!window.AiCashier || typeof window.AiCashier.init !== "function") {
-          throw new Error("AiCashier.init недоступен");
+          throw new Error("AiCashier.init недоступен после загрузки скрипта");
         }
-        // init можно вызывать повторно с актуальным token
+        const ecomToken = await fetchEcomApiToken();
         window.AiCashier.init({ token: ecomToken, button: true });
-        aiCashierReady = true;
+        await openAiCashierChat(ecomToken);
         if (status) {
           status.textContent =
-            "Виджет готов. Можно открыть чат кнопкой ниже или плавающей кнопкой на странице.";
-        }
-        if (typeof window.AiCashier.open === "function") {
-          try {
-            await window.AiCashier.open({ token: ecomToken });
-          } catch (e) {
-            console.warn("AiCashier.open", e);
-          }
+            "Чат открыт. Повторно — кнопка ниже или фиолетовая кнопка справа внизу.";
         }
       } catch (e) {
-        aiCashierReady = false;
         const msg = (e && e.message) || String(e);
+        console.error("ensureAiCashier", e);
         if (status) status.textContent = "Ошибка: " + msg;
         if (typeof showAlert === "function") showAlert(msg);
         throw e;
       } finally {
         aiCashierLoading = null;
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Открыть чат";
+        }
       }
     })();
     return aiCashierLoading;
@@ -1799,9 +1856,9 @@
 
   function bindAiCashierUI() {
     const btn = $("#ai_cashier_open");
-    if (!btn || btn.dataset.bound === "1") return;
-    btn.dataset.bound = "1";
-    btn.onclick = () => {
+    if (!btn) return;
+    btn.onclick = (ev) => {
+      if (ev) ev.preventDefault();
       ensureAiCashier().catch(() => {});
     };
   }
@@ -1850,7 +1907,8 @@
       try { window.EKLK_HOME.onShow(); } catch (e) { console.warn(e); }
     }
     if (tab === "ai-cashier") {
-      try { ensureAiCashier(); } catch (e) { console.warn(e); }
+      bindAiCashierUI();
+      ensureAiCashier().catch((e) => console.warn("ai-cashier", e));
     }
     if (push) {
       const path = tabToPath(tab);

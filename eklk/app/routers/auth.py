@@ -185,7 +185,7 @@ async def ecom_token(user: CurrentUser):
         group_code=user.get("group_code") or "990",
     )
     try:
-        tok = await client.get_token()
+        tok = await client.get_token(force=True)
         return {"token": tok}
     except EcomKassaError as e:
         raise HTTPException(status_code=400, detail=str(e))
