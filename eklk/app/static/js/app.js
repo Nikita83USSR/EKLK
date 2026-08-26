@@ -1760,7 +1760,7 @@
     overlay.remove();
   }
 
-  function applyAiCashierPanelStyle(overlay, panel) {
+  function applyAiCashierPanelStyle(overlay, shell, panel) {
     const o = AI_CASHIER_UI;
     const fs = aiCashierIsFullscreen();
     const width = o.width || 440;
@@ -1768,18 +1768,26 @@
     if (fs) {
       overlay.style.padding = "0";
       overlay.style.background = "#0f0f14";
-      panel.style.cssText = [
+      shell.style.cssText = [
         "position:relative", "width:100%", "height:100%",
-        "max-width:none", "max-height:none",
+        "max-width:none", "display:flex", "flex-direction:column",
+        "box-sizing:border-box",
+      ].join(";");
+      panel.style.cssText = [
+        "position:relative", "flex:1", "width:100%", "min-height:0",
         "background:#0f0f14", "border-radius:0",
         "overflow:hidden", "box-sizing:border-box",
       ].join(";");
     } else {
       overlay.style.padding = "16px";
       overlay.style.background = "rgba(15,15,20,0.55)";
-      panel.style.cssText = [
+      shell.style.cssText = [
         "position:relative", "width:100%", "max-width:" + width + "px",
-        "height:" + height + "px", "max-height:92vh",
+        "display:flex", "flex-direction:column", "box-sizing:border-box",
+      ].join(";");
+      panel.style.cssText = [
+        "position:relative", "width:100%", "height:" + height + "px",
+        "max-height:calc(92vh - 48px)",
         "background:#0f0f14", "border-radius:16px",
         "overflow:hidden", "box-shadow:0 20px 60px rgba(0,0,0,0.4)",
         "box-sizing:border-box",
@@ -1797,40 +1805,48 @@
       "box-sizing:border-box",
     ].join(";");
 
-    const panel = document.createElement("div");
-    panel.style.boxSizing = "border-box";
+    // Оболочка: кнопка снаружи (над окном), iframe внутри panel
+    const shell = document.createElement("div");
+
+    const toolbar = document.createElement("div");
+    toolbar.style.cssText = [
+      "display:flex", "justify-content:flex-end", "align-items:center",
+      "flex-shrink:0", "padding:0 0 10px 0", "box-sizing:border-box",
+      "min-height:44px",
+    ].join(";");
 
     const closeBtn = document.createElement("button");
     closeBtn.type = "button";
     closeBtn.setAttribute("aria-label", "Закрыть");
-    closeBtn.innerHTML = "&times;";
+    closeBtn.textContent = "Закрыть";
     closeBtn.style.cssText = [
-      "position:absolute",
-      "top:calc(8px + env(safe-area-inset-top, 0px))",
-      "right:8px", "z-index:2",
-      "width:36px", "height:36px", "border-radius:8px", "border:0",
-      "background:rgba(255,255,255,0.12)", "color:#fff", "font-size:22px",
-      "line-height:1", "cursor:pointer",
+      "border:0", "border-radius:10px", "padding:10px 18px",
+      "cursor:pointer", "font-size:14px", "font-weight:700",
+      "background:#7c3aed", "color:#ffffff",
+      "box-shadow:0 4px 14px rgba(0,0,0,0.35)",
     ].join(";");
     closeBtn.onclick = (e) => {
       e.stopPropagation();
       closeAiCashierOverlay();
     };
+    toolbar.appendChild(closeBtn);
 
+    const panel = document.createElement("div");
     const iframe = document.createElement("iframe");
     iframe.title = "ИИ-кассир";
     iframe.style.cssText = "width:100%;height:100%;border:0;display:block;";
     iframe.src = embedUrl;
-
-    panel.appendChild(closeBtn);
     panel.appendChild(iframe);
-    overlay.appendChild(panel);
+
+    shell.appendChild(toolbar);
+    shell.appendChild(panel);
+    overlay.appendChild(shell);
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) closeAiCashierOverlay();
     });
 
-    applyAiCashierPanelStyle(overlay, panel);
-    const onResize = () => applyAiCashierPanelStyle(overlay, panel);
+    applyAiCashierPanelStyle(overlay, shell, panel);
+    const onResize = () => applyAiCashierPanelStyle(overlay, shell, panel);
     overlay._aiResize = onResize;
     window.addEventListener("resize", onResize);
 
