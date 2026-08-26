@@ -1083,8 +1083,12 @@
           <p class="hint" style="margin-bottom:14px">
             Плавающая кнопка чата — <strong>слева внизу</strong> (чтобы не пересекаться с виджетом Битрикс справа).
           </p>
-          <p id="ai_cashier_status" class="hint">Загрузка виджета…</p>
+          <p id="ai_cashier_status" class="hint">Нажмите «Открыть чат» или откройте раздел повторно.</p>
           <button type="button" class="btn mt-2" id="ai_cashier_open">Открыть чат</button>
+          <details class="mt-3" id="ai_cashier_debug_wrap" open>
+            <summary class="hint" style="cursor:pointer">Отладка embed (временно)</summary>
+            <pre id="ai_cashier_debug" class="hint" style="white-space:pre-wrap;max-height:320px;overflow:auto;background:rgba(0,0,0,.06);padding:12px;border-radius:8px;font-size:12px">—</pre>
+          </details>
         </div>
       </section>
 
@@ -1220,7 +1224,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260826ai3"></script>
+  <script src="/static/js/app.js?v=20260826ai4"></script>
   <script src="/static/js/sections/dashboard.js?v=20260825c"></script>
   <script src="/static/js/sections/catalog.js?v=20260825c"></script>
   <script src="/static/js/sections/reports.js?v=20260825c"></script>

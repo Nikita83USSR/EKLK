@@ -1730,94 +1730,57 @@
   // В дальнейшем: URL-параметры (например /orders?external_id=…, /create?from=123).
   // Вкладка «Статус» (/status) удалена — статус чека в списке/деталки.
 
-  // ── ИИ-кассир (виджет iikassa.ru) ─────────────────────────────────
+  // ── ИИ-кассир (iikassa.ru partner-embed, api-docs) ─────────────────
   let aiCashierLoading = null;
 
-  function loadAiCashierScript() {
-    if (window.AiCashier) return Promise.resolve();
-    return new Promise((resolve, reject) => {
-      const existing = document.querySelector('script[data-ai-cashier-widget]');
-      if (existing) {
-        if (window.AiCashier) return resolve();
-        existing.addEventListener("load", () => resolve());
-        existing.addEventListener("error", () =>
-          reject(new Error("Не удалось загрузить виджет ИИ-кассир"))
-        );
-        return;
-      }
-      const s = document.createElement("script");
-      s.src = "https://iikassa.ru/widget.js";
-      s.async = true;
-      s.setAttribute("data-ai-cashier-widget", "1");
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error("Не удалось загрузить виджет ИИ-кассир"));
-      document.head.appendChild(s);
-    });
+  function setAiCashierDebug(obj) {
+    const el = $("#ai_cashier_debug");
+    if (!el) return;
+    try {
+      el.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+    } catch (e) {
+      el.textContent = String(obj);
+    }
   }
 
-  async function fetchEcomApiToken() {
-    const data = await api("/auth/ecom-token");
-    if (!data || !data.token) throw new Error("Нет API-токена EcomKassa");
-    return String(data.token);
-  }
-
-  /**
-   * Виджет open() глотает ошибки в .catch — всегда передаём onError,
-   * иначе UI «молчит» при 401 токена / сетевых сбоях.
-   */
-  function openAiCashierChat(ecomToken) {
-    return new Promise((resolve, reject) => {
-      if (!window.AiCashier || typeof window.AiCashier.open !== "function") {
-        reject(new Error("AiCashier.open недоступен"));
-        return;
-      }
-      let settled = false;
-      const fail = (err) => {
-        if (settled) return;
-        settled = true;
-        reject(err instanceof Error ? err : new Error(String(err && err.message || err)));
-      };
-      const ok = () => {
-        if (settled) return;
-        settled = true;
-        resolve();
-      };
-      try {
-        const p = window.AiCashier.open({
-          token: ecomToken,
-          onError: fail,
-        });
-        // open() при ошибке всё равно resolve(undefined) — ждём overlay
-        if (p && typeof p.then === "function") {
-          p.then(() => {
-            // Успех = появился overlay; иначе onError уже вызван или тихий fail
-            if (document.querySelector("[data-ai-cashier-overlay]")) ok();
-            else if (!settled) {
-              // Дать onError микротаск; если не пришёл — явная ошибка
-              setTimeout(() => {
-                if (!settled) {
-                  if (document.querySelector("[data-ai-cashier-overlay]")) ok();
-                  else fail(new Error("Чат не открылся (проверьте токен EcomKassa в консоли [AiCashier])"));
-                }
-              }, 300);
-            }
-          }).catch(fail);
-        } else {
-          setTimeout(() => {
-            if (document.querySelector("[data-ai-cashier-overlay]")) ok();
-            else fail(new Error("Чат не открылся"));
-          }, 300);
-        }
-      } catch (e) {
-        fail(e);
-      }
+  function openAiCashierEmbedUrl(embedUrl) {
+    // Свой overlay (как у widget.js), без зависимости от AiCashier.open
+    let overlay = document.querySelector("[data-ai-cashier-overlay]");
+    if (overlay) overlay.remove();
+    overlay = document.createElement("div");
+    overlay.setAttribute("data-ai-cashier-overlay", "");
+    overlay.style.cssText =
+      "position:fixed;inset:0;z-index:2147483646;background:rgba(15,15,20,0.55);" +
+      "display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box";
+    const panel = document.createElement("div");
+    panel.style.cssText =
+      "position:relative;width:100%;max-width:440px;height:680px;max-height:92vh;" +
+      "background:#0f0f14;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.4)";
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.setAttribute("aria-label", "Закрыть");
+    closeBtn.innerHTML = "&times;";
+    closeBtn.style.cssText =
+      "position:absolute;top:8px;right:8px;z-index:2;width:32px;height:32px;border-radius:8px;" +
+      "border:0;background:rgba(255,255,255,0.08);color:#fff;font-size:20px;line-height:1;cursor:pointer";
+    closeBtn.onclick = () => overlay.remove();
+    const iframe = document.createElement("iframe");
+    iframe.title = "ИИ-кассир";
+    iframe.style.cssText = "width:100%;height:100%;border:0;display:block";
+    iframe.src = embedUrl;
+    panel.appendChild(closeBtn);
+    panel.appendChild(iframe);
+    overlay.appendChild(panel);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) overlay.remove();
     });
+    document.body.appendChild(overlay);
   }
 
   async function ensureAiCashier() {
     const status = $("#ai_cashier_status");
     const btn = $("#ai_cashier_open");
-    if (status) status.textContent = "Подключение к ИИ-кассиру…";
+    if (status) status.textContent = "Запрос embed у iikassa (через наш backend)…";
     if (btn) {
       btn.disabled = true;
       btn.textContent = "Открытие…";
@@ -1826,40 +1789,28 @@
 
     aiCashierLoading = (async () => {
       try {
-        await loadAiCashierScript();
-        if (!window.AiCashier || typeof window.AiCashier.init !== "function") {
-          throw new Error("AiCashier.init недоступен после загрузки скрипта");
+        // debug=1 — полный request/response в ответе (временно)
+        const data = await api("/ai-cashier/embed?debug=1", { method: "POST" });
+        setAiCashierDebug(data);
+        if (!data || !data.ok || !data.embed_url) {
+          const err =
+            (data && data.error) ||
+            "Не удалось получить embed_path (см. отладку ниже)";
+          throw new Error(typeof err === "string" ? err : JSON.stringify(err));
         }
-        const ecomToken = await fetchEcomApiToken();
-        window.AiCashier.init({ token: ecomToken, button: true });
-        // Битрикс/другие чаты часто справа снизу — уводим FAB влево и выше z-index
-        try {
-          const fab = document.querySelector('button[aria-label="Открыть ИИ-кассира"]');
-          if (fab) {
-            fab.style.right = "auto";
-            fab.style.left = "20px";
-            fab.style.bottom = "24px";
-            fab.style.zIndex = "2147483646";
-            fab.title = "ИИ-кассир";
-          }
-        } catch (e) { /* ignore */ }
-        await openAiCashierChat(ecomToken);
+        openAiCashierEmbedUrl(data.embed_url);
         if (status) {
           status.textContent =
-            "Чат открыт. Повторно — кнопка ниже или фиолетовая кнопка справа внизу.";
+            "Чат открыт (mode=" +
+            (data.mode || "?") +
+            "). Если пусто — смотрите блок отладки.";
         }
       } catch (e) {
-        let msg = (e && e.message) || String(e);
-        // Типичный ответ партнёра iikassa при отказе token
-        if (/токен недействителен|истёк|expired|invalid/i.test(msg)) {
-          msg =
-            msg +
-            " — токен EcomKassa получен, но сервис iikassa.ru его не принял. " +
-            "Проверьте доступ аккаунта к ИИ-кассиру у EcomKassa или напишите в поддержку iikassa.";
-        }
+        const msg = (e && e.message) || String(e);
         console.error("ensureAiCashier", e);
         if (status) status.textContent = "Ошибка: " + msg;
         if (typeof showAlert === "function") showAlert(msg);
+        // если api() кинул до JSON — debug может быть пустым
         throw e;
       } finally {
         aiCashierLoading = null;

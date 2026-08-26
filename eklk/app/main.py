@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db import init_db
 from app.utils.logger import logger, log_action
-from app.routers import auth, ecom, orders, catalog, reports, dashboard, settings as settings_router
+from app.routers import auth, ecom, orders, catalog, reports, dashboard, settings as settings_router, ai_cashier
 from app.routers import templates as templates_router
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -49,6 +49,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(settings_router.router, prefix="/api/v1")
+app.include_router(ai_cashier.router, prefix="/api/v1")
 app.include_router(ecom.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
 app.include_router(templates_router.router, prefix="/api/v1")
