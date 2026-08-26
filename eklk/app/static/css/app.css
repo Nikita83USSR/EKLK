@@ -1497,6 +1497,13 @@ body[data-theme="glass"] .modal-footer {
   padding: 12px 14px;
   background: var(--card-bg, #fff);
 }
+.tpl-qr-cell .tpl-show-qr {
+  white-space: normal;
+  max-width: 120px;
+  line-height: 1.25;
+  text-align: center;
+  padding: 8px 10px;
+}
 .tpl-qr-cell {
   flex: 0 0 96px;
   width: 96px;

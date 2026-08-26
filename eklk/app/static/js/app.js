@@ -1352,22 +1352,30 @@
     if (link) openPayLinkModal(link, data);
   }
 
-  function openPayLinkModal(link, data) {
+  function openPayLinkModal(link, data, opts) {
+    opts = opts || {};
     const modal = $("#payLinkModal");
     if (!modal) return;
+    const titleEl = $("#payLinkModalTitle");
+    if (titleEl) titleEl.textContent = opts.title || "Ссылка на оплату";
     const input = $("#pay_link_input");
     if (input) input.value = link;
     const meta = $("#pay_modal_meta");
     if (meta) {
       const parts = [];
-      const provUi = selectedProviderLabel();
-      if (provUi) parts.push("платёжка: " + provUi);
+      if (!opts.fromTemplate) {
+        const provUi = selectedProviderLabel();
+        if (provUi) parts.push("платёжка: " + provUi);
+      }
       if (data && data.invoice_payload && data.invoice_payload.provider) {
         parts.push("провайдер: " + data.invoice_payload.provider);
       }
       if (data && data.uuid) parts.push("uuid: " + data.uuid);
+      if (opts.subtitle) parts.push(opts.subtitle);
       meta.textContent = parts.join(" · ");
     }
+    const repeatBtn = $("#pay_repeat");
+    if (repeatBtn) repeatBtn.classList.toggle("hidden", !!opts.fromTemplate);
     modal.classList.remove("hidden");
     modal.setAttribute("aria-hidden", "false");
     document.body.classList.add("modal-open");
@@ -3342,8 +3350,6 @@
       }
       box.innerHTML = list.map(renderTemplateCard).join("");
       bindTemplateCardActions();
-      // Очередь QR — по одному, иначе при большом списке часть не успевает отрисоваться
-      queueTemplateQRs();
     } catch (e) {
       box.innerHTML = '<p class="hint" style="color:#fca5a5">' + escHtml(e.message || String(e)) + "</p>";
     }
@@ -3454,7 +3460,9 @@
     const provLabel = providerLabelsList(providers);
     const storeId = (tpl.qrPay && tpl.qrPay.storeId) || "—";
     const qrCell = link
-      ? '<div class="tpl-qr-cell"><img class="tpl-qr-img tpl-qr-pending" data-link="' + escHtml(link) + '" width="96" height="96" alt="QR" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" /></div>'
+      ? '<div class="tpl-qr-cell">' +
+          '<button type="button" class="btn btn-secondary btn-sm tpl-show-qr" data-link="' + escHtml(link) + '" data-name="' + escHtml(tpl.name || "") + '">Показать QR-код</button>' +
+        '</div>'
       : '<div class="tpl-qr-cell tpl-qr-empty">нет QR</div>';
     return (
       '<div class="tpl-card" data-id="' + escHtml(id) + '">' +
@@ -3517,7 +3525,17 @@
         }
       };
     });
-    // QR рисуются очередью в queueTemplateQRs() после loadTemplates
+    $$(".tpl-show-qr").forEach((btn) => {
+      btn.onclick = () => {
+        const link = btn.dataset.link;
+        if (!link) return;
+        openPayLinkModal(link, null, {
+          title: "QR-код шаблона",
+          fromTemplate: true,
+          subtitle: btn.dataset.name ? ("шаблон: " + btn.dataset.name) : "",
+        });
+      };
+    });
   }
 
   function fillTplProviders(selected) {
