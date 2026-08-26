@@ -1730,16 +1730,60 @@
   // В дальнейшем: URL-параметры (например /orders?external_id=…, /create?from=123).
   // Вкладка «Статус» (/status) удалена — статус чека в списке/деталки.
 
-  // ── ИИ-кассир (iikassa.ru partner-embed) ───────────────────────────
+  // ── ИИ-кассир (embed + внешний вид как в widget.js) ────────────────
   let aiCashierLoading = null;
+  // Параметры окна — как в AiCashier.init (iikassa.ru/widget.js)
+  const AI_CASHIER_UI = {
+    width: 440,
+    height: 680,
+    mobileBreakpoint: 640,
+    fullscreenOnMobile: true,
+    fullscreen: false,
+  };
+
+  function aiCashierIsFullscreen() {
+    const o = AI_CASHIER_UI;
+    if (o.fullscreen) return true;
+    if (o.fullscreenOnMobile === false) return false;
+    return window.innerWidth <= (o.mobileBreakpoint || 640);
+  }
 
   function closeAiCashierOverlay() {
     const overlay = document.querySelector("[data-ai-cashier-overlay]");
-    if (overlay) {
-      if (overlay._aiEsc) {
-        try { document.removeEventListener("keydown", overlay._aiEsc); } catch (e) { /* ignore */ }
-      }
-      overlay.remove();
+    if (!overlay) return;
+    if (overlay._aiResize) {
+      try { window.removeEventListener("resize", overlay._aiResize); } catch (e) { /* ignore */ }
+    }
+    if (overlay._aiEsc) {
+      try { document.removeEventListener("keydown", overlay._aiEsc); } catch (e) { /* ignore */ }
+    }
+    overlay.remove();
+  }
+
+  function applyAiCashierPanelStyle(overlay, panel) {
+    const o = AI_CASHIER_UI;
+    const fs = aiCashierIsFullscreen();
+    const width = o.width || 440;
+    const height = o.height || 680;
+    if (fs) {
+      overlay.style.padding = "0";
+      overlay.style.background = "#0f0f14";
+      panel.style.cssText = [
+        "position:relative", "width:100%", "height:100%",
+        "max-width:none", "max-height:none",
+        "background:#0f0f14", "border-radius:0",
+        "overflow:hidden", "box-sizing:border-box",
+      ].join(";");
+    } else {
+      overlay.style.padding = "16px";
+      overlay.style.background = "rgba(15,15,20,0.55)";
+      panel.style.cssText = [
+        "position:relative", "width:100%", "max-width:" + width + "px",
+        "height:" + height + "px", "max-height:92vh",
+        "background:#0f0f14", "border-radius:16px",
+        "overflow:hidden", "box-shadow:0 20px 60px rgba(0,0,0,0.4)",
+        "box-sizing:border-box",
+      ].join(";");
     }
   }
 
@@ -1747,55 +1791,55 @@
     closeAiCashierOverlay();
     const overlay = document.createElement("div");
     overlay.setAttribute("data-ai-cashier-overlay", "");
-    overlay.style.cssText =
-      "position:fixed;inset:0;z-index:2147483646;background:rgba(15,15,20,0.55);" +
-      "display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box";
+    overlay.style.cssText = [
+      "position:fixed", "inset:0", "z-index:2147483646",
+      "display:flex", "align-items:center", "justify-content:center",
+      "box-sizing:border-box",
+    ].join(";");
 
     const panel = document.createElement("div");
-    panel.style.cssText =
-      "position:relative;width:100%;max-width:440px;height:680px;max-height:92vh;" +
-      "background:#0f0f14;border-radius:16px;overflow:hidden;" +
-      "box-shadow:0 20px 60px rgba(0,0,0,0.4)";
+    panel.style.boxSizing = "border-box";
 
-    // Панель закрытия сверху (виджет внутри iframe своей кнопки не даёт)
-    const bar = document.createElement("div");
-    bar.style.cssText =
-      "position:absolute;top:0;left:0;right:0;z-index:3;height:44px;" +
-      "display:flex;align-items:center;justify-content:space-between;" +
-      "padding:0 12px;background:rgba(15,15,20,0.92);border-bottom:1px solid rgba(255,255,255,0.08)";
-    const title = document.createElement("span");
-    title.textContent = "ИИ кассир";
-    title.style.cssText = "color:#fff;font-size:14px;font-weight:600";
     const closeBtn = document.createElement("button");
     closeBtn.type = "button";
     closeBtn.setAttribute("aria-label", "Закрыть");
-    closeBtn.textContent = "Закрыть";
-    closeBtn.style.cssText =
-      "border:0;border-radius:8px;padding:8px 14px;cursor:pointer;" +
-      "background:#7c3aed;color:#fff;font-size:13px;font-weight:600";
+    closeBtn.innerHTML = "&times;";
+    closeBtn.style.cssText = [
+      "position:absolute",
+      "top:calc(8px + env(safe-area-inset-top, 0px))",
+      "right:8px", "z-index:2",
+      "width:36px", "height:36px", "border-radius:8px", "border:0",
+      "background:rgba(255,255,255,0.12)", "color:#fff", "font-size:22px",
+      "line-height:1", "cursor:pointer",
+    ].join(";");
     closeBtn.onclick = (e) => {
       e.stopPropagation();
       closeAiCashierOverlay();
     };
-    bar.appendChild(title);
-    bar.appendChild(closeBtn);
 
     const iframe = document.createElement("iframe");
     iframe.title = "ИИ-кассир";
-    iframe.style.cssText = "width:100%;height:100%;border:0;display:block;padding-top:44px;box-sizing:border-box";
+    iframe.style.cssText = "width:100%;height:100%;border:0;display:block;";
     iframe.src = embedUrl;
 
-    panel.appendChild(bar);
+    panel.appendChild(closeBtn);
     panel.appendChild(iframe);
     overlay.appendChild(panel);
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) closeAiCashierOverlay();
     });
+
+    applyAiCashierPanelStyle(overlay, panel);
+    const onResize = () => applyAiCashierPanelStyle(overlay, panel);
+    overlay._aiResize = onResize;
+    window.addEventListener("resize", onResize);
+
     function onEsc(ev) {
       if (ev.key === "Escape") closeAiCashierOverlay();
     }
     overlay._aiEsc = onEsc;
     document.addEventListener("keydown", onEsc);
+
     document.body.appendChild(overlay);
   }
 
@@ -1813,12 +1857,13 @@
       try {
         const data = await api("/ai-cashier/embed", { method: "POST" });
         if (!data || !data.ok || !data.embed_url) {
-          const err =
-            (data && data.error) || "Не удалось открыть ИИ-кассир";
+          const err = (data && data.error) || "Не удалось открыть ИИ-кассир";
           throw new Error(typeof err === "string" ? err : JSON.stringify(err));
         }
         openAiCashierEmbedUrl(data.embed_url);
-        if (status) status.textContent = "Чат открыт. Закрыть — кнопка «Закрыть» в окне или Esc.";
+        if (status) {
+          status.textContent = "Чат открыт. Закрыть — × в углу, клик вне окна или Esc.";
+        }
       } catch (e) {
         const msg = (e && e.message) || String(e);
         console.error("ensureAiCashier", e);
