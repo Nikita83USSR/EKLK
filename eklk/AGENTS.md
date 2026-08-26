@@ -410,6 +410,15 @@ Auth: **`Token`** (как ядро). Ответ: `points[]` с полями `tim
 `loadServerSettings()` после login; `applyTheme(..., true)` и `persistLastPayType` → PUT.  
 localStorage остаётся кэшем до ответа сервера.
 
+#### Устойчивость к сбоям БД
+
+- `init_db()` при старте: ошибка только в лог, приложение **не** падает.
+- `GET/PUT /auth/settings`: при сбое БД → **200** + defaults/optimistic merge + `degraded: true` (+ `degraded_reason`).
+- Битый JSON / удалённая строка / нет таблицы → defaults, без 500.
+- `select-store`: RAM-сессия всегда; запись в firm_settings best-effort.
+- Фронт: при `degraded` или ошибке сети **не** затирает localStorage темой по умолчанию.
+- Чеки / оплаты / auth **не** зависят от здоровья SQLite.
+
 #### Добавление нового параметра
 
 1. Добавить ключ в `USER_DEFAULTS` или `FIRM_DEFAULTS`.

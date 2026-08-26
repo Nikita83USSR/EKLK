@@ -34,12 +34,21 @@
   }
   applyTheme(getStoredTheme());
 
-  /** Prefs с сервера (user + firm). Ошибка не ломает UI. */
+  /** Prefs с сервера (user + firm). Ошибка / degraded → localStorage, UI не падает. */
   async function loadServerSettings(preferredStoreHint) {
     try {
       const s = await api("/auth/settings");
       const u = (s && s.user) || {};
       const f = (s && s.firm) || {};
+      // degraded: сервер отдал дефолты (БД недоступна) — не затираем локальный кэш
+      if (s && s.degraded) {
+        return {
+          preferredStore: preferredStoreHint || localStorage.getItem("eklk_group") || null,
+          user: u,
+          firm: f,
+          degraded: true,
+        };
+      }
       if (u.theme && THEMES.includes(u.theme)) {
         applyTheme(u.theme, false);
       }
@@ -52,12 +61,13 @@
           : null;
       const preferred =
         fromFirm || preferredStoreHint || localStorage.getItem("eklk_group") || null;
-      return { preferredStore: preferred, user: u, firm: f };
+      return { preferredStore: preferred, user: u, firm: f, degraded: false };
     } catch (e) {
       return {
         preferredStore: preferredStoreHint || localStorage.getItem("eklk_group") || null,
         user: null,
         firm: null,
+        degraded: true,
       };
     }
   }
