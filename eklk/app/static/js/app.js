@@ -1730,57 +1730,79 @@
   // В дальнейшем: URL-параметры (например /orders?external_id=…, /create?from=123).
   // Вкладка «Статус» (/status) удалена — статус чека в списке/деталки.
 
-  // ── ИИ-кассир (iikassa.ru partner-embed, api-docs) ─────────────────
+  // ── ИИ-кассир (iikassa.ru partner-embed) ───────────────────────────
   let aiCashierLoading = null;
 
-  function setAiCashierDebug(obj) {
-    const el = $("#ai_cashier_debug");
-    if (!el) return;
-    try {
-      el.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
-    } catch (e) {
-      el.textContent = String(obj);
+  function closeAiCashierOverlay() {
+    const overlay = document.querySelector("[data-ai-cashier-overlay]");
+    if (overlay) {
+      if (overlay._aiEsc) {
+        try { document.removeEventListener("keydown", overlay._aiEsc); } catch (e) { /* ignore */ }
+      }
+      overlay.remove();
     }
   }
 
   function openAiCashierEmbedUrl(embedUrl) {
-    // Свой overlay (как у widget.js), без зависимости от AiCashier.open
-    let overlay = document.querySelector("[data-ai-cashier-overlay]");
-    if (overlay) overlay.remove();
-    overlay = document.createElement("div");
+    closeAiCashierOverlay();
+    const overlay = document.createElement("div");
     overlay.setAttribute("data-ai-cashier-overlay", "");
     overlay.style.cssText =
       "position:fixed;inset:0;z-index:2147483646;background:rgba(15,15,20,0.55);" +
       "display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box";
+
     const panel = document.createElement("div");
     panel.style.cssText =
       "position:relative;width:100%;max-width:440px;height:680px;max-height:92vh;" +
-      "background:#0f0f14;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.4)";
+      "background:#0f0f14;border-radius:16px;overflow:hidden;" +
+      "box-shadow:0 20px 60px rgba(0,0,0,0.4)";
+
+    // Панель закрытия сверху (виджет внутри iframe своей кнопки не даёт)
+    const bar = document.createElement("div");
+    bar.style.cssText =
+      "position:absolute;top:0;left:0;right:0;z-index:3;height:44px;" +
+      "display:flex;align-items:center;justify-content:space-between;" +
+      "padding:0 12px;background:rgba(15,15,20,0.92);border-bottom:1px solid rgba(255,255,255,0.08)";
+    const title = document.createElement("span");
+    title.textContent = "ИИ кассир";
+    title.style.cssText = "color:#fff;font-size:14px;font-weight:600";
     const closeBtn = document.createElement("button");
     closeBtn.type = "button";
     closeBtn.setAttribute("aria-label", "Закрыть");
-    closeBtn.innerHTML = "&times;";
+    closeBtn.textContent = "Закрыть";
     closeBtn.style.cssText =
-      "position:absolute;top:8px;right:8px;z-index:2;width:32px;height:32px;border-radius:8px;" +
-      "border:0;background:rgba(255,255,255,0.08);color:#fff;font-size:20px;line-height:1;cursor:pointer";
-    closeBtn.onclick = () => overlay.remove();
+      "border:0;border-radius:8px;padding:8px 14px;cursor:pointer;" +
+      "background:#7c3aed;color:#fff;font-size:13px;font-weight:600";
+    closeBtn.onclick = (e) => {
+      e.stopPropagation();
+      closeAiCashierOverlay();
+    };
+    bar.appendChild(title);
+    bar.appendChild(closeBtn);
+
     const iframe = document.createElement("iframe");
     iframe.title = "ИИ-кассир";
-    iframe.style.cssText = "width:100%;height:100%;border:0;display:block";
+    iframe.style.cssText = "width:100%;height:100%;border:0;display:block;padding-top:44px;box-sizing:border-box";
     iframe.src = embedUrl;
-    panel.appendChild(closeBtn);
+
+    panel.appendChild(bar);
     panel.appendChild(iframe);
     overlay.appendChild(panel);
     overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) overlay.remove();
+      if (e.target === overlay) closeAiCashierOverlay();
     });
+    function onEsc(ev) {
+      if (ev.key === "Escape") closeAiCashierOverlay();
+    }
+    overlay._aiEsc = onEsc;
+    document.addEventListener("keydown", onEsc);
     document.body.appendChild(overlay);
   }
 
   async function ensureAiCashier() {
     const status = $("#ai_cashier_status");
     const btn = $("#ai_cashier_open");
-    if (status) status.textContent = "Запрос embed у iikassa (через наш backend)…";
+    if (status) status.textContent = "Открытие чата…";
     if (btn) {
       btn.disabled = true;
       btn.textContent = "Открытие…";
@@ -1789,34 +1811,25 @@
 
     aiCashierLoading = (async () => {
       try {
-        // debug=1 — полный request/response в ответе (временно)
-        const data = await api("/ai-cashier/embed?debug=1", { method: "POST" });
-        setAiCashierDebug(data);
+        const data = await api("/ai-cashier/embed", { method: "POST" });
         if (!data || !data.ok || !data.embed_url) {
           const err =
-            (data && data.error) ||
-            "Не удалось получить embed_path (см. отладку ниже)";
+            (data && data.error) || "Не удалось открыть ИИ-кассир";
           throw new Error(typeof err === "string" ? err : JSON.stringify(err));
         }
         openAiCashierEmbedUrl(data.embed_url);
-        if (status) {
-          status.textContent =
-            "Чат открыт (mode=" +
-            (data.mode || "?") +
-            "). Если пусто — смотрите блок отладки.";
-        }
+        if (status) status.textContent = "Чат открыт. Закрыть — кнопка «Закрыть» в окне или Esc.";
       } catch (e) {
         const msg = (e && e.message) || String(e);
         console.error("ensureAiCashier", e);
         if (status) status.textContent = "Ошибка: " + msg;
         if (typeof showAlert === "function") showAlert(msg);
-        // если api() кинул до JSON — debug может быть пустым
         throw e;
       } finally {
         aiCashierLoading = null;
         if (btn) {
           btn.disabled = false;
-          btn.textContent = "Открыть чат";
+          btn.textContent = "Открыть чат снова";
         }
       }
     })();

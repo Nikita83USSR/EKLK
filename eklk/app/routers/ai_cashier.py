@@ -33,7 +33,7 @@ PARTNER_ID = settings.iikassa_partner_id or "eklk"
 @router.post("/embed")
 async def create_embed(
     user: CurrentUser,
-    debug: bool = Query(True, description="Включить request/response в ответ (временно для отладки)"),
+    debug: bool = Query(False, description="Включить request/response в ответ (только для отладки)"),
 ):
     """
     Получить embed_path для iframe чата ИИ-кассира.
