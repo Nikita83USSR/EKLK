@@ -1832,13 +1832,31 @@
         }
         const ecomToken = await fetchEcomApiToken();
         window.AiCashier.init({ token: ecomToken, button: true });
+        // Битрикс/другие чаты часто справа снизу — уводим FAB влево и выше z-index
+        try {
+          const fab = document.querySelector('button[aria-label="Открыть ИИ-кассира"]');
+          if (fab) {
+            fab.style.right = "auto";
+            fab.style.left = "20px";
+            fab.style.bottom = "24px";
+            fab.style.zIndex = "2147483646";
+            fab.title = "ИИ-кассир";
+          }
+        } catch (e) { /* ignore */ }
         await openAiCashierChat(ecomToken);
         if (status) {
           status.textContent =
             "Чат открыт. Повторно — кнопка ниже или фиолетовая кнопка справа внизу.";
         }
       } catch (e) {
-        const msg = (e && e.message) || String(e);
+        let msg = (e && e.message) || String(e);
+        // Типичный ответ партнёра iikassa при отказе token
+        if (/токен недействителен|истёк|expired|invalid/i.test(msg)) {
+          msg =
+            msg +
+            " — токен EcomKassa получен, но сервис iikassa.ru его не принял. " +
+            "Проверьте доступ аккаунта к ИИ-кассиру у EcomKassa или напишите в поддержку iikassa.";
+        }
         console.error("ensureAiCashier", e);
         if (status) status.textContent = "Ошибка: " + msg;
         if (typeof showAlert === "function") showAlert(msg);
