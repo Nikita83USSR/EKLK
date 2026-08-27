@@ -972,11 +972,14 @@
   function closeItemNameExpand(exceptInput) {
     document.querySelectorAll("tr.item-name-expand:not(.hidden)").forEach((exp) => {
       const wide = exp.querySelector(".it-name-wide");
-      if (exceptInput && (wide === exceptInput || exp.contains(exceptInput))) return;
+      if (exceptInput && wide && (wide === exceptInput || exp.contains(exceptInput))) return;
       const itemRow = exp.previousElementSibling;
-      if (itemRow) {
+      if (itemRow && wide) {
         const compact = itemRow.querySelector(".it-name");
-        if (compact && wide) compact.value = wide.value;
+        if (compact) {
+          compact.value = wide.value;
+          updateItemNameWarn(compact);
+        }
       }
       exp.classList.add("hidden");
     });
@@ -986,7 +989,20 @@
     if (!compact) return;
     const itemRow = compact.closest("tr.item-row");
     if (!itemRow) return;
-    closeItemNameExpand(null);
+    // закрыть другие, сохранив значения
+    document.querySelectorAll("tr.item-name-expand:not(.hidden)").forEach((exp) => {
+      if (exp.previousElementSibling === itemRow) return;
+      const wide0 = exp.querySelector(".it-name-wide");
+      const row0 = exp.previousElementSibling;
+      if (row0 && wide0) {
+        const c0 = row0.querySelector(".it-name");
+        if (c0) {
+          c0.value = wide0.value;
+          updateItemNameWarn(c0);
+        }
+      }
+      exp.classList.add("hidden");
+    });
     let exp = itemRow.nextElementSibling;
     if (!exp || !exp.classList.contains("item-name-expand")) {
       exp = document.createElement("tr");
@@ -995,7 +1011,6 @@
       exp.innerHTML =
         '<td colspan="' + cols + '">' +
           '<div class="it-name-expand-box">' +
-            '<label class="it-name-expand-label">Наименование</label>' +
             '<input type="text" class="it-name-wide" maxlength="127" placeholder="Товар или услуга" />' +
             '<span class="it-name-warn hidden"></span>' +
           "</div>" +
@@ -1016,11 +1031,11 @@
     wide.onkeydown = (ev) => {
       if (ev.key === "Escape") {
         compact.value = wide.value;
+        updateItemNameWarn(compact);
         exp.classList.add("hidden");
-        compact.focus();
+        compact.blur();
       }
     };
-    // focus wide without re-opening loop
     setTimeout(() => {
       try {
         wide.focus();
@@ -1028,6 +1043,21 @@
         wide.setSelectionRange(len, len);
       } catch (e) { /* ignore */ }
     }, 0);
+  }
+
+  // Клик вне расширенного поля / кнопок ввода — закрыть с сохранением
+  if (!window.__eklkNameExpandOutsideBound) {
+    window.__eklkNameExpandOutsideBound = true;
+    document.addEventListener(
+      "mousedown",
+      (ev) => {
+        const t = ev.target;
+        if (!t) return;
+        if (t.closest && t.closest("tr.item-name-expand, input.it-name, textarea.it-name")) return;
+        closeItemNameExpand(null);
+      },
+      true
+    );
   }
 
   function payRowHtml(fiscal = true) {
