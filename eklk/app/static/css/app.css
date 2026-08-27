@@ -195,7 +195,91 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
   width: 100%;
 }
 .items-table.items-stacked thead {
-  display: none;
+  display: block;
+  width: 100%;
+}
+.items-table.items-stacked thead tr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 4px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+.items-table.items-stacked thead th {
+  display: block;
+  padding: 0;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  border-bottom: none;
+}
+/* подписи — те же ширины, что и ячейки */
+.items-table.items-stacked thead th:nth-child(1),
+.items-table.items-stacked tbody tr.item-row > td:first-child {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+}
+.items-table.items-stacked thead th:nth-child(2),
+.items-table.items-stacked tbody tr.item-row > td:nth-child(2) {
+  flex: 0 0 128px;
+  width: 128px;
+  min-width: 128px;
+  max-width: 128px;
+}
+.items-table.items-stacked thead th:nth-child(3),
+.items-table.items-stacked tbody tr.item-row > td:nth-child(3) {
+  flex: 0 0 96px;
+  width: 96px;
+  min-width: 96px;
+  max-width: 96px;
+}
+.items-table.items-stacked thead th:nth-child(4),
+.items-table.items-stacked tbody tr.item-row > td:nth-child(4) {
+  flex: 0 0 72px;
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+}
+.items-table.items-stacked thead th:nth-child(5),
+.items-table.items-stacked tbody tr.item-row > td:nth-child(5) {
+  flex: 0 0 148px;
+  width: 148px;
+  min-width: 148px;
+  max-width: 148px;
+}
+.items-table.items-stacked thead th:nth-child(6),
+.items-table.items-stacked tbody tr.item-row > td:nth-child(6) {
+  flex: 0 0 200px;
+  width: 200px;
+  min-width: 200px;
+  max-width: 200px;
+}
+.items-table.items-stacked thead th:nth-child(7),
+.items-table.items-stacked tbody tr.item-row > td:nth-child(7) {
+  flex: 0 0 150px;
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+}
+.items-table.items-stacked thead th:nth-child(8),
+.items-table.items-stacked tbody tr.item-row > td:nth-child(8) {
+  flex: 0 0 48px;
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+  text-align: center;
+}
+.items-table.items-stacked thead th:nth-child(9),
+.items-table.items-stacked tbody tr.item-row > td:nth-child(9) {
+  flex: 0 0 44px;
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
 }
 .items-table.items-stacked tbody tr.item-row {
   display: flex;
@@ -213,70 +297,6 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
   padding: 0;
   box-sizing: border-box;
   flex: 0 0 auto;
-}
-/* 1 — наименование на всю строку */
-.items-table.items-stacked tbody tr.item-row > td:first-child {
-  flex: 0 0 100%;
-  width: 100%;
-  min-width: 100%;
-  max-width: 100%;
-}
-/* 2 — цена */
-.items-table.items-stacked tbody tr.item-row > td:nth-child(2) {
-  flex: 0 0 128px;
-  width: 128px;
-  min-width: 128px;
-  max-width: 128px;
-}
-/* 3 — количество */
-.items-table.items-stacked tbody tr.item-row > td:nth-child(3) {
-  flex: 0 0 96px;
-  width: 96px;
-  min-width: 96px;
-  max-width: 96px;
-}
-/* 4 — ед. изм. */
-.items-table.items-stacked tbody tr.item-row > td:nth-child(4) {
-  flex: 0 0 72px;
-  width: 72px;
-  min-width: 72px;
-  max-width: 72px;
-}
-/* 5 — НДС */
-.items-table.items-stacked tbody tr.item-row > td:nth-child(5) {
-  flex: 0 0 148px;
-  width: 148px;
-  min-width: 148px;
-  max-width: 148px;
-}
-/* 6 — предмет расчёта */
-.items-table.items-stacked tbody tr.item-row > td:nth-child(6) {
-  flex: 0 0 200px;
-  width: 200px;
-  min-width: 200px;
-  max-width: 200px;
-}
-/* 7 — признак расчёта */
-.items-table.items-stacked tbody tr.item-row > td:nth-child(7) {
-  flex: 0 0 150px;
-  width: 150px;
-  min-width: 150px;
-  max-width: 150px;
-}
-/* 8 — агент */
-.items-table.items-stacked tbody tr.item-row > td:nth-child(8) {
-  flex: 0 0 48px;
-  width: 48px;
-  min-width: 48px;
-  max-width: 48px;
-  text-align: center;
-}
-/* 9 — удалить */
-.items-table.items-stacked tbody tr.item-row > td:nth-child(9) {
-  flex: 0 0 44px;
-  width: 44px;
-  min-width: 44px;
-  max-width: 44px;
 }
 .items-table.items-stacked .it-name {
   width: 100% !important;
