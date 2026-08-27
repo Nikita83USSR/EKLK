@@ -3379,7 +3379,7 @@
     const storeId = (tpl.qrPay && tpl.qrPay.storeId) || "—";
     const qrCell = link
       ? '<div class="tpl-qr-cell">' +
-          '<button type="button" class="btn btn-secondary btn-sm tpl-show-qr" data-link="' + escHtml(link) + '" data-name="' + escHtml(tpl.name || "") + '" title="Показать QR-код">QR</button>' +
+          '<button type="button" class="btn btn-secondary btn-sm tpl-show-qr" data-link="' + escHtml(link) + '" data-name="' + escHtml(tpl.name || "") + '" title="Показать QR-код">Показать QR</button>' +
         '</div>'
       : '<div class="tpl-qr-cell tpl-qr-empty">нет QR</div>';
     return (
