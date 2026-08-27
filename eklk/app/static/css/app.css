@@ -393,6 +393,11 @@ html.eklk-authed #appScreen { display: flex !important; }
   border: 1px dashed var(--border);
   border-radius: 10px;
   padding: 16px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  box-sizing: border-box;
 }
 .receipt-view .r-section-title {
   margin: 14px 0 6px;
@@ -426,27 +431,30 @@ html.eklk-authed #appScreen { display: flex !important; }
   border-bottom: 1px dashed var(--border);
 }
 .receipt-view .r-head .r-title { font-weight: 700; font-size: 1rem; }
-.receipt-view .r-head .r-meta { color: var(--muted); font-size: 0.78rem; margin-top: 4px; }
+.receipt-view .r-head .r-meta { color: var(--muted); font-size: 0.78rem; margin-top: 4px; word-break: break-word; overflow-wrap: anywhere; }
 .receipt-view .r-line {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
+  gap: 4px 12px;
   padding: 4px 0;
   font-size: 0.82rem;
+  min-width: 0;
+  max-width: 100%;
 }
 .receipt-view .r-line > span:last-child {
   text-align: right;
   word-break: break-word;
   overflow-wrap: anywhere;
-  max-width: 62%;
+  max-width: 100%;
 }
 .receipt-view .r-item {
   padding: 8px 0;
   border-bottom: 1px dotted var(--border);
 }
-.receipt-view .r-item-name { font-weight: 500; }
-.receipt-view .r-item-sub { color: var(--muted); font-size: 0.75rem; margin-top: 2px; }
+.receipt-view .r-item-name { font-weight: 500; word-break: break-word; overflow-wrap: anywhere; }
+.receipt-view .r-item-sub { color: var(--muted); font-size: 0.75rem; margin-top: 2px; word-break: break-word; overflow-wrap: anywhere; }
 .receipt-view .r-total {
   margin-top: 12px;
   padding-top: 10px;
@@ -1016,13 +1024,20 @@ body[data-theme="glass"] .badge-status-fail {
 }
 .receipt-view .r-line span:first-child {
   color: var(--muted);
-  flex-shrink: 0;
-  max-width: 48%;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .receipt-view .r-line span:last-child {
   text-align: right;
   word-break: break-word;
+  overflow-wrap: anywhere;
   color: var(--text);
+  flex: 1 1 8rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Soft primary buttons on dark/glass (Telegram-like) */
