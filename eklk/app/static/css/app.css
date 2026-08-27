@@ -188,7 +188,7 @@ input[type="checkbox"]:focus {
 body[data-theme="dark"] .items-table .it-name-warn,
 body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
 
-/* Stacked: наименование на всю ширину сверху, без наложений */
+/* Stacked: наименование на всю ширину сверху; остальные — исходные ширины */
 .items-table.items-stacked {
   table-layout: auto;
   min-width: 0;
@@ -198,10 +198,10 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
   display: none;
 }
 .items-table.items-stacked tbody tr.item-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 8px;
-  align-items: start;
   width: 100%;
   box-sizing: border-box;
   margin: 0 0 12px;
@@ -210,31 +210,90 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
 }
 .items-table.items-stacked tbody tr.item-row > td {
   display: block;
-  width: auto !important;
-  min-width: 0 !important;
-  max-width: none !important;
   padding: 0;
   box-sizing: border-box;
+  flex: 0 0 auto;
 }
+/* 1 — наименование на всю строку */
 .items-table.items-stacked tbody tr.item-row > td:first-child {
-  grid-column: 1 / -1;
-  width: 100% !important;
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
 }
-.items-table.items-stacked tbody tr.item-row > td:nth-child(8),
-.items-table.items-stacked tbody tr.item-row > td:nth-child(9) {
+/* 2 — цена */
+.items-table.items-stacked tbody tr.item-row > td:nth-child(2) {
+  flex: 0 0 128px;
+  width: 128px;
+  min-width: 128px;
+  max-width: 128px;
+}
+/* 3 — количество */
+.items-table.items-stacked tbody tr.item-row > td:nth-child(3) {
+  flex: 0 0 96px;
+  width: 96px;
+  min-width: 96px;
+  max-width: 96px;
+}
+/* 4 — ед. изм. */
+.items-table.items-stacked tbody tr.item-row > td:nth-child(4) {
+  flex: 0 0 72px;
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+}
+/* 5 — НДС */
+.items-table.items-stacked tbody tr.item-row > td:nth-child(5) {
+  flex: 0 0 148px;
+  width: 148px;
+  min-width: 148px;
+  max-width: 148px;
+}
+/* 6 — предмет расчёта */
+.items-table.items-stacked tbody tr.item-row > td:nth-child(6) {
+  flex: 0 0 200px;
+  width: 200px;
+  min-width: 200px;
+  max-width: 200px;
+}
+/* 7 — признак расчёта */
+.items-table.items-stacked tbody tr.item-row > td:nth-child(7) {
+  flex: 0 0 150px;
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+}
+/* 8 — агент */
+.items-table.items-stacked tbody tr.item-row > td:nth-child(8) {
+  flex: 0 0 48px;
+  width: 48px;
+  min-width: 48px;
   max-width: 48px;
-  justify-self: start;
+  text-align: center;
+}
+/* 9 — удалить */
+.items-table.items-stacked tbody tr.item-row > td:nth-child(9) {
+  flex: 0 0 44px;
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
 }
 .items-table.items-stacked .it-name {
   width: 100% !important;
   min-width: 0 !important;
   max-width: none !important;
 }
-.items-table.items-stacked .it-price,
-.items-table.items-stacked .it-qty,
+.items-table.items-stacked .it-price {
+  width: 100%;
+  max-width: 120px;
+}
+.items-table.items-stacked .it-qty {
+  width: 100%;
+  max-width: 88px;
+}
 .items-table.items-stacked select {
   width: 100%;
-  max-width: none;
+  max-width: 100%;
 }
 
 .agent-row { display: flex; align-items: center; gap: 16px; margin-top: 12px; font-size: 0.9rem; flex-wrap: wrap; }
