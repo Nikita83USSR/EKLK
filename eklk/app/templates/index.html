@@ -16,7 +16,7 @@
     })();
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260827ui16" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260827ui18" />
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
@@ -867,7 +867,7 @@
                 <button type="button" class="btn btn-sm btn-danger" id="cat_delete_all">Удалить все…</button>
               </div>
               <div class="orders-table-wrap">
-                <table class="orders-table" id="cat_table">
+                <div class="orders-table-wrap"><table class="orders-table" id="cat_table">
                   <thead>
                     <tr>
                       <th style="width:36px"><input type="checkbox" id="cat_check_all" title="Выбрать все на странице" /></th>
@@ -882,7 +882,7 @@
                   <tbody id="cat_tbody">
                     <tr><td colspan="7" class="hint">Загрузка…</td></tr>
                   </tbody>
-                </table>
+                </table></div>
               </div>
               <div class="orders-pager">
                 <button type="button" class="btn btn-secondary btn-sm" id="cat_prev" disabled>← Назад</button>

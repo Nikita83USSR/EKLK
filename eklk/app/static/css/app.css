@@ -1682,8 +1682,8 @@ body[data-theme="glass"] .modal-footer {
   }
 }
 
-/* Горизонтальный телефон */
-@media (max-height: 480px) and (orientation: landscape) {
+/* Горизонтальный телефон / landscape mobile — список чеков и каталог */
+@media (orientation: landscape) and (max-height: 560px) {
   .header {
     padding: 4px 0;
   }
@@ -1732,7 +1732,123 @@ body[data-theme="glass"] .modal-footer {
     width: 120px !important;
     height: 120px !important;
   }
+
+  /* —— Список чеков: список + деталка в ряд при достаточной ширине —— */
+  .orders-layout {
+    grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
+    gap: 12px;
+    align-items: start;
+  }
+  .orders-list-pane,
+  .orders-detail-pane {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .orders-detail-pane {
+    position: sticky;
+    top: 52px;
+    max-height: calc(100dvh - 60px);
+    max-height: calc(100vh - 60px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .orders-filters {
+    margin-bottom: 8px;
+  }
+  .orders-filters .row {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
+    gap: 8px;
+  }
+  .orders-filters label {
+    font-size: 0.72rem;
+    margin-bottom: 2px;
+  }
+  .orders-filters input,
+  .orders-filters select {
+    font-size: 0.8rem;
+    padding: 6px 8px;
+  }
+  .orders-table {
+    font-size: 0.75rem;
+  }
+  .orders-table th {
+    padding: 6px 4px;
+    font-size: 0.68rem;
+  }
+  .orders-table td {
+    padding: 6px 4px;
+  }
+  .orders-table-wrap {
+    max-height: calc(100dvh - 200px);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .orders-pager {
+    margin-top: 8px;
+    gap: 6px;
+  }
+  .orders-pager .btn {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+  .section-title {
+    font-size: 0.95rem;
+    margin-bottom: 8px;
+  }
+
+  /* —— Каталог —— */
+  #tab-catalog .card > div[style*="display:flex"] {
+    gap: 6px !important;
+  }
+  #tab-catalog .input {
+    font-size: 0.8rem;
+    padding: 6px 8px;
+  }
+  #tab-catalog .btn-sm {
+    padding: 5px 8px;
+    font-size: 0.72rem;
+  }
+  #cat_table {
+    font-size: 0.75rem;
+  }
+  #cat_table th {
+    padding: 6px 4px;
+    font-size: 0.68rem;
+  }
+  #cat_table td {
+    padding: 6px 4px;
+  }
+  #tab-catalog .orders-table-wrap,
+  #tab-catalog .card > div[style*="overflow"] {
+    max-height: calc(100dvh - 180px);
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
+
+/* Очень узкий landscape (малая высота) — деталка под списком, компактнее */
+@media (orientation: landscape) and (max-height: 420px) {
+  .orders-layout {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .orders-detail-pane {
+    position: static;
+    max-height: none;
+  }
+  .orders-table-wrap {
+    max-height: calc(100dvh - 160px);
+  }
+}
+
+/* Широкий landscape телефон — точно 2 колонки чеков */
+@media (orientation: landscape) and (min-width: 700px) and (max-height: 560px) {
+  .orders-layout {
+    grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.9fr);
+  }
+}
+
+
 
 .header-inner,
 .footer-inner,
