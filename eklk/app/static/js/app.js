@@ -1109,46 +1109,16 @@
     </div>`;
   }
 
-  function measureEightChPx(refEl) {
-    const cs = refEl ? getComputedStyle(refEl) : getComputedStyle(document.body);
-    const span = document.createElement("span");
-    span.style.cssText =
-      "position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;" +
-      "font-size:" + cs.fontSize + ";font-family:" + cs.fontFamily +
-      ";font-weight:" + cs.fontWeight + ";letter-spacing:" + cs.letterSpacing + ";";
-    span.textContent = "WWWWWWWW"; // 8 знаков типичной ширины
-    document.body.appendChild(span);
-    const w = span.offsetWidth;
-    span.remove();
-    return w;
-  }
-
   function syncItemsTableLayout(table) {
     if (!table || !table.classList.contains("items-table")) return;
-    // временно снять stacked, чтобы измерить «обычную» ширину ячейки
-    const wasStacked = table.classList.contains("items-stacked");
-    if (wasStacked) table.classList.remove("items-stacked");
-
-    const nameInput = table.querySelector("tbody .it-name");
-    const nameTd = nameInput ? nameInput.closest("td") : table.querySelector("thead th.col-name, thead th:first-child");
-    let needStack = false;
-    if (nameTd) {
-      const eight = measureEightChPx(nameInput || nameTd);
-      const cellW = nameTd.getBoundingClientRect().width;
-      // запас на padding/border
-      needStack = cellW < eight + 12;
-    } else {
-      // fallback: узкий контейнер
-      const wrap = table.parentElement;
-      const avail = wrap ? wrap.clientWidth : window.innerWidth;
-      needStack = avail < 920;
-    }
-
+    // Стабильно: только ширина контейнера, без снятия класса (иначе прыжки на mobile)
+    const wrap = table.parentElement;
+    const avail = wrap ? wrap.clientWidth : table.clientWidth || window.innerWidth;
+    const needStack = avail < 920;
+    const isStacked = table.classList.contains("items-stacked");
+    if (isStacked === needStack) return;
     table.classList.toggle("items-stacked", needStack);
-    if (needStack) {
-      // float не должен оставаться открытым
-      closeItemNameExpand(null);
-    }
+    if (needStack) closeItemNameExpand(null);
   }
 
   function syncAllItemsTablesLayout() {
@@ -1158,15 +1128,35 @@
   if (!window.__eklkItemsLayoutBound) {
     window.__eklkItemsLayoutBound = true;
     let layoutTimer = null;
+    let lastW = window.innerWidth;
     const schedule = () => {
+      // игнор «ложных» resize от скрытия адресной строки (меняется только высота)
+      const w = window.innerWidth;
+      if (Math.abs(w - lastW) < 2 && layoutTimer) return;
+      lastW = w;
       if (layoutTimer) clearTimeout(layoutTimer);
-      layoutTimer = setTimeout(syncAllItemsTablesLayout, 80);
+      layoutTimer = setTimeout(syncAllItemsTablesLayout, 120);
     };
     window.addEventListener("resize", schedule);
-    window.addEventListener("orientationchange", schedule);
-    // после смены темы / шрифта
+    window.addEventListener("orientationchange", () => {
+      lastW = 0;
+      schedule();
+    });
     if (typeof ResizeObserver !== "undefined") {
-      const ro = new ResizeObserver(schedule);
+      const ro = new ResizeObserver((entries) => {
+        // только если реально изменилась ширина обёртки
+        let changed = false;
+        entries.forEach((en) => {
+          const w = en.contentRect && en.contentRect.width;
+          if (w == null) return;
+          const prev = en.target.__eklkLastW;
+          if (prev == null || Math.abs(prev - w) >= 2) {
+            en.target.__eklkLastW = w;
+            changed = true;
+          }
+        });
+        if (changed) schedule();
+      });
       const observeWraps = () => {
         document.querySelectorAll(".items-table").forEach((t) => {
           const w = t.parentElement;
