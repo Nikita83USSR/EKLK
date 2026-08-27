@@ -158,25 +158,7 @@
     setDelta($("#dash_total_pct"), ch.total_checks_pct);
     if ($("#dash_cash")) $("#dash_cash").textContent = money(data.cash_balance);
 
-    const labels = data.payment_labels || {};
     const byPt = data.by_payment_type || {};
-    const box = $("#dash_pay_types");
-    if (box) {
-      const keys = Object.keys(byPt).sort((a, b) => (byPt[b] || 0) - (byPt[a] || 0));
-      if (!keys.length) {
-        box.innerHTML = `<span class="hint">Нет данных за период</span>`;
-      } else {
-        box.innerHTML = keys
-          .map(
-            (k) =>
-              `<div class="dash-pay-item"><span>${escapeHtml(labels[k] || k)}</span><strong>${money(
-                byPt[k]
-              )}</strong></div>`
-          )
-          .join("");
-      }
-    }
-
     renderGauge(data.profit, data.gauge_pct);
     renderMiniCharts(byPt, data.total_checks);
   }

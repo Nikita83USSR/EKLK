@@ -907,7 +907,7 @@
 
   function itemRowHtml() {
     return `<tr class="item-row">
-      <td><input class="it-name" placeholder="Товар или услуга" value="Товар" /></td>
+      <td><input class="it-name" placeholder="Товар или услуга" value="Товар" maxlength="127" /><span class="it-name-warn hidden"></span></td>
       <td><input class="it-price" type="number" step="0.01" min="0.01" inputmode="decimal" value="1.00" /></td>
       <td><input class="it-qty" type="number" step="0.001" min="0.01" inputmode="decimal" value="1" /></td>
       <td><select class="it-measure">${MEASURE_OPTS}</select></td>
@@ -917,6 +917,20 @@
       <td style="text-align:center"><input type="checkbox" class="it-agent" title="Агент по этой позиции" /></td>
       <td><button type="button" class="btn btn-secondary btn-sm it-rm">🗑</button></td>
     </tr>`;
+  }
+
+  function updateItemNameWarn(input) {
+    if (!input || !input.classList.contains("it-name")) return;
+    const warn = input.parentElement && input.parentElement.querySelector(".it-name-warn");
+    if (!warn) return;
+    const len = (input.value || "").length;
+    if (len >= 127) {
+      warn.textContent = "По ФФД действует ограничение на длину строки, остальное будет обрезано при отправке на кассу";
+      warn.classList.remove("hidden");
+    } else {
+      warn.textContent = "";
+      warn.classList.add("hidden");
+    }
   }
 
   function payRowHtml(fiscal = true) {
@@ -953,12 +967,18 @@
         if (el.classList.contains("it-method")) {
           syncObjectOptionsForRow(el.closest("tr"));
         }
+        if (el.classList.contains("it-name")) {
+          updateItemNameWarn(el);
+        }
         onChange && onChange();
         if (el.classList.contains("it-agent")) {
           if (tbodyId === "c_items") syncAgentBoxFromItems();
           if (tbodyId === "p_items") syncPayAgentBoxFromItems();
         }
       };
+      if (el.classList.contains("it-name")) {
+        updateItemNameWarn(el);
+      }
       // количество: max 3 знака (тысячные); цена/сумма: max 2 (копейки)
       if (el.classList.contains("it-qty")) {
         restrictDecimalInput(el, 3);
@@ -1022,7 +1042,7 @@
       // цена × кол-во: любая дробь копейки → округление ВВЕРХ до 1 коп.
       const sum = ceilMoney(price * quantity);
       return {
-        name: (row.querySelector(".it-name").value || "").trim() || "Товар",
+        name: ((row.querySelector(".it-name").value || "").trim() || "Товар").slice(0, 128),
         price,
         quantity,
         sum,
@@ -1738,142 +1758,46 @@
   // В дальнейшем: URL-параметры (например /orders?external_id=…, /create?from=123).
   // Вкладка «Статус» (/status) удалена — статус чека в списке/деталки.
 
-  // ── ИИ-кассир (embed + внешний вид как в widget.js) ────────────────
+  // ── ИИ-кассир (inline embed в разделе, без close) ────────────────
   let aiCashierLoading = null;
-  // Параметры окна — как в AiCashier.init (iikassa.ru/widget.js)
-  const AI_CASHIER_UI = {
-    width: 440,
-    height: 680,
-    mobileBreakpoint: 640,
-    fullscreenOnMobile: true,
-    fullscreen: false,
-  };
-
-  function aiCashierIsFullscreen() {
-    const o = AI_CASHIER_UI;
-    if (o.fullscreen) return true;
-    if (o.fullscreenOnMobile === false) return false;
-    return window.innerWidth <= (o.mobileBreakpoint || 640);
-  }
+  let aiCashierEmbedUrl = null;
 
   function closeAiCashierOverlay() {
+    // legacy no-op: виджет больше не в overlay
     const overlay = document.querySelector("[data-ai-cashier-overlay]");
-    if (!overlay) return;
-    if (overlay._aiResize) {
-      try { window.removeEventListener("resize", overlay._aiResize); } catch (e) { /* ignore */ }
-    }
-    if (overlay._aiEsc) {
-      try { document.removeEventListener("keydown", overlay._aiEsc); } catch (e) { /* ignore */ }
-    }
-    overlay.remove();
-  }
-
-  function applyAiCashierPanelStyle(overlay, shell, panel) {
-    const o = AI_CASHIER_UI;
-    const fs = aiCashierIsFullscreen();
-    const width = o.width || 440;
-    const height = o.height || 680;
-    if (fs) {
-      overlay.style.padding = "0";
-      overlay.style.background = "#0f0f14";
-      shell.style.cssText = [
-        "position:relative", "width:100%", "height:100%",
-        "max-width:none", "display:flex", "flex-direction:column",
-        "box-sizing:border-box",
-      ].join(";");
-      panel.style.cssText = [
-        "position:relative", "flex:1", "width:100%", "min-height:0",
-        "background:#0f0f14", "border-radius:0",
-        "overflow:hidden", "box-sizing:border-box",
-      ].join(";");
-    } else {
-      overlay.style.padding = "16px";
-      overlay.style.background = "rgba(15,15,20,0.55)";
-      shell.style.cssText = [
-        "position:relative", "width:100%", "max-width:" + width + "px",
-        "display:flex", "flex-direction:column", "box-sizing:border-box",
-      ].join(";");
-      panel.style.cssText = [
-        "position:relative", "width:100%", "height:" + height + "px",
-        "max-height:calc(92vh - 48px)",
-        "background:#0f0f14", "border-radius:16px",
-        "overflow:hidden", "box-shadow:0 20px 60px rgba(0,0,0,0.4)",
-        "box-sizing:border-box",
-      ].join(";");
+    if (overlay) {
+      if (overlay._aiResize) {
+        try { window.removeEventListener("resize", overlay._aiResize); } catch (e) { /* ignore */ }
+      }
+      if (overlay._aiEsc) {
+        try { document.removeEventListener("keydown", overlay._aiEsc); } catch (e) { /* ignore */ }
+      }
+      overlay.remove();
     }
   }
 
-  function openAiCashierEmbedUrl(embedUrl) {
+  function mountAiCashierIframe(embedUrl) {
+    const host = $("#ai_cashier_embed");
+    if (!host) return;
     closeAiCashierOverlay();
-    const overlay = document.createElement("div");
-    overlay.setAttribute("data-ai-cashier-overlay", "");
-    overlay.style.cssText = [
-      "position:fixed", "inset:0", "z-index:2147483646",
-      "display:flex", "align-items:center", "justify-content:center",
-      "box-sizing:border-box",
-    ].join(";");
-
-    // Оболочка: кнопка снаружи (над окном), iframe внутри panel
-    const shell = document.createElement("div");
-
-    const toolbar = document.createElement("div");
-    toolbar.style.cssText = [
-      "display:flex", "justify-content:flex-end", "align-items:center",
-      "flex-shrink:0", "padding:0 0 10px 0", "box-sizing:border-box",
-      "min-height:44px",
-    ].join(";");
-
-    const closeBtn = document.createElement("button");
-    closeBtn.type = "button";
-    closeBtn.setAttribute("aria-label", "Закрыть");
-    closeBtn.textContent = "Закрыть";
-    closeBtn.style.cssText = [
-      "border:0", "border-radius:10px", "padding:10px 18px",
-      "cursor:pointer", "font-size:14px", "font-weight:700",
-      "background:#7c3aed", "color:#ffffff",
-      "box-shadow:0 4px 14px rgba(0,0,0,0.35)",
-    ].join(";");
-    closeBtn.onclick = (e) => {
-      e.stopPropagation();
-      closeAiCashierOverlay();
-    };
-    toolbar.appendChild(closeBtn);
-
-    const panel = document.createElement("div");
-    const iframe = document.createElement("iframe");
-    iframe.title = "ИИ-кассир";
-    iframe.style.cssText = "width:100%;height:100%;border:0;display:block;";
-    iframe.src = embedUrl;
-    panel.appendChild(iframe);
-
-    shell.appendChild(toolbar);
-    shell.appendChild(panel);
-    overlay.appendChild(shell);
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) closeAiCashierOverlay();
-    });
-
-    applyAiCashierPanelStyle(overlay, shell, panel);
-    const onResize = () => applyAiCashierPanelStyle(overlay, shell, panel);
-    overlay._aiResize = onResize;
-    window.addEventListener("resize", onResize);
-
-    function onEsc(ev) {
-      if (ev.key === "Escape") closeAiCashierOverlay();
+    let iframe = host.querySelector("iframe");
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.title = "ИИ-кассир";
+      host.appendChild(iframe);
     }
-    overlay._aiEsc = onEsc;
-    document.addEventListener("keydown", onEsc);
-
-    document.body.appendChild(overlay);
+    if (iframe.src !== embedUrl) {
+      iframe.src = embedUrl;
+    }
   }
 
   async function ensureAiCashier() {
     const status = $("#ai_cashier_status");
-    const btn = $("#ai_cashier_open");
     if (status) status.textContent = "Открытие чата…";
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = "Открытие…";
+    if (aiCashierEmbedUrl) {
+      mountAiCashierIframe(aiCashierEmbedUrl);
+      if (status) status.textContent = "Чат открыт";
+      return;
     }
     if (aiCashierLoading) return aiCashierLoading;
 
@@ -1884,10 +1808,9 @@
           const err = (data && data.error) || "Не удалось открыть ИИ-кассир";
           throw new Error(typeof err === "string" ? err : JSON.stringify(err));
         }
-        openAiCashierEmbedUrl(data.embed_url);
-        if (status) {
-          status.textContent = "Чат открыт. Закрыть — × в углу, клик вне окна или Esc.";
-        }
+        aiCashierEmbedUrl = data.embed_url;
+        mountAiCashierIframe(aiCashierEmbedUrl);
+        if (status) status.textContent = "Чат открыт";
       } catch (e) {
         const msg = (e && e.message) || String(e);
         console.error("ensureAiCashier", e);
@@ -1896,24 +1819,14 @@
         throw e;
       } finally {
         aiCashierLoading = null;
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = "Открыть чат снова";
-        }
       }
     })();
     return aiCashierLoading;
   }
 
   function bindAiCashierUI() {
-    const btn = $("#ai_cashier_open");
-    if (!btn) return;
-    btn.onclick = (ev) => {
-      if (ev) ev.preventDefault();
-      ensureAiCashier().catch(() => {});
-    };
+    // кнопка «Открыть снова» убрана — виджет всегда в разделе
   }
-  bindAiCashierUI();
 
   const APP_TABS = ["home", "create", "payment", "templates", "orders", "catalog", "reports", "ai-cashier", "settings"]; // CORE: home/catalog/reports — sections/*.js
 
@@ -1976,6 +1889,12 @@
     logoEl.setAttribute("role", "link");
     logoEl.setAttribute("title", "На главную");
     logoEl.style.cursor = "pointer";
+  }
+
+  // Шестерёнка настроек (вместо пункта в nav)
+  const settingsBtn = $("#settingsBtn");
+  if (settingsBtn) {
+    settingsBtn.addEventListener("click", () => showTab("settings", true));
   }
 
   $$(".nav button[data-tab]").forEach((btn) => {
@@ -2459,7 +2378,6 @@
           inn: ($("#p_inn") && $("#p_inn").value.trim()) || undefined,
         },
         sno: $("#p_sno").value,
-        success_url: ($("#p_success") && $("#p_success").value.trim()) || undefined,
         group_code: String(($("#p_store") && $("#p_store").value) || getSelectedStoreId() || ""),
       };
 
@@ -3461,7 +3379,7 @@
     const storeId = (tpl.qrPay && tpl.qrPay.storeId) || "—";
     const qrCell = link
       ? '<div class="tpl-qr-cell">' +
-          '<button type="button" class="btn btn-secondary btn-sm tpl-show-qr" data-link="' + escHtml(link) + '" data-name="' + escHtml(tpl.name || "") + '">Показать QR-код</button>' +
+          '<button type="button" class="btn btn-secondary btn-sm tpl-show-qr" data-link="' + escHtml(link) + '" data-name="' + escHtml(tpl.name || "") + '" title="Показать QR-код">QR</button>' +
         '</div>'
       : '<div class="tpl-qr-cell tpl-qr-empty">нет QR</div>';
     return (
@@ -3498,7 +3416,8 @@
 
   function bindTemplateCardActions() {
     $$(".tpl-copy").forEach((btn) => {
-      btn.onclick = async () => {
+      btn.onclick = async (ev) => {
+        if (ev) ev.stopPropagation();
         const link = btn.dataset.link;
         try {
           await navigator.clipboard.writeText(link);
@@ -3511,10 +3430,14 @@
       };
     });
     $$(".tpl-edit").forEach((btn) => {
-      btn.onclick = () => openTplModal(btn.dataset.id);
+      btn.onclick = (ev) => {
+        if (ev) ev.stopPropagation();
+        openTplModal(btn.dataset.id);
+      };
     });
     $$(".tpl-del").forEach((btn) => {
-      btn.onclick = async () => {
+      btn.onclick = async (ev) => {
+        if (ev) ev.stopPropagation();
         if (!confirm("Удалить шаблон? Многоразовая ссылка перестанет работать.")) return;
         try {
           await api("/templates/" + encodeURIComponent(btn.dataset.id), { method: "DELETE" });
@@ -3526,7 +3449,8 @@
       };
     });
     $$(".tpl-show-qr").forEach((btn) => {
-      btn.onclick = () => {
+      btn.onclick = (ev) => {
+        if (ev) ev.stopPropagation();
         const link = btn.dataset.link;
         if (!link) return;
         openPayLinkModal(link, null, {
@@ -3534,6 +3458,21 @@
           fromTemplate: true,
           subtitle: btn.dataset.name ? ("шаблон: " + btn.dataset.name) : "",
         });
+      };
+    });
+    $$(".tpl-link-row a").forEach((a) => {
+      a.onclick = (ev) => { if (ev) ev.stopPropagation(); };
+    });
+    $$(".tpl-link-input").forEach((inp) => {
+      inp.onclick = (ev) => { if (ev) ev.stopPropagation(); };
+    });
+    $$(".tpl-card").forEach((card) => {
+      card.onclick = (ev) => {
+        const t = ev.target;
+        if (!t) return;
+        if (t.closest("button, a, input, select, textarea, label")) return;
+        const id = card.dataset.id;
+        if (id) openTplModal(id);
       };
     });
   }

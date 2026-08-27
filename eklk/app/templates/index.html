@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ app_name }} — Чек</title>
+  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/static/img/eklk-icon-256.png" />
   <script>
     (function () {
       try {
@@ -14,7 +16,7 @@
     })();
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260826tpl1" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260827ui1" />
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
@@ -42,7 +44,7 @@
         </div>
         <nav class="nav">
           <!-- URL: /home /create /payment /templates /orders /settings (см. app.js route) -->
-          <button type="button" data-tab="home">Главное меню</button>
+          <button type="button" data-tab="home">Главная</button>
           <button type="button" data-tab="create">Чек</button>
           <button type="button" data-tab="payment">Ссылка на оплату</button>
           <button type="button" data-tab="templates">Многоразовые ссылки</button>
@@ -50,10 +52,10 @@
           <button type="button" data-tab="catalog">Каталог</button>
           <button type="button" data-tab="reports">Отчёты</button>
           <button type="button" data-tab="ai-cashier">ИИ кассир</button>
-          <button type="button" data-tab="settings">Настройки</button>
         </nav>
         <div class="user-info">
           <span id="userName"></span>
+          <button type="button" class="btn btn-secondary btn-sm btn-icon" id="settingsBtn" title="Настройки" aria-label="Настройки">⚙</button>
           <button type="button" class="btn btn-secondary btn-sm" id="logoutBtn">Выйти</button>
         </div>
       </div>
@@ -186,7 +188,6 @@
                   <div class="dash-mini-value" id="dash_pt_credit_val">—</div>
                 </div>
               </div>
-              <div id="dash_pay_types" class="dash-pay-types hint" style="margin-top:12px">Загрузка…</div>
             </div>
 
             <div class="dash-actions" style="margin-top:20px">
@@ -487,16 +488,6 @@
                 <div>
                   <label>Платёжная система (эквайринг)</label>
                   <select id="p_type"></select>
-                </div>
-              </div>
-              <div class="row">
-                <div>
-                  <label>URL успеха (необязательно)</label>
-                  <input id="p_success" placeholder="https://site.ru/ok" />
-                </div>
-                <div>
-                  <label>Вид оплаты</label>
-                  <input value="Безналичными (онлайн)" disabled />
                 </div>
               </div>
             </div>
@@ -1072,14 +1063,12 @@
 
 
       <section id="tab-ai-cashier" class="tab-panel hidden">
-        <div class="card" style="max-width:640px">
-          <div class="section-title">ИИ кассир</div>
-          <p class="hint" style="margin-bottom:14px">
-            Голосовой и текстовый помощник: чеки и ссылки на оплату.
-            Чат открывается при входе в раздел.
-          </p>
-          <p id="ai_cashier_status" class="hint">Открытие чата…</p>
-          <button type="button" class="btn mt-2" id="ai_cashier_open">Открыть чат снова</button>
+        <div class="ai-cashier-panel">
+          <div class="ai-cashier-head">
+            <span class="section-title" style="border:none;padding:0;margin:0">ИИ кассир</span>
+            <span id="ai_cashier_status" class="hint" style="margin:0">Открытие чата…</span>
+          </div>
+          <div id="ai_cashier_embed" class="ai-cashier-embed"></div>
         </div>
       </section>
 
@@ -1215,8 +1204,8 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260826tpl1"></script>
-  <script src="/static/js/sections/dashboard.js?v=20260825c"></script>
+  <script src="/static/js/app.js?v=20260827ui1"></script>
+  <script src="/static/js/sections/dashboard.js?v=20260827ui1"></script>
   <script src="/static/js/sections/catalog.js?v=20260825c"></script>
   <script src="/static/js/sections/reports.js?v=20260825c"></script>
   <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
