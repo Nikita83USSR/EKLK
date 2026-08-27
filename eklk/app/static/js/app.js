@@ -1012,6 +1012,8 @@
 
   function openItemNameExpand(compact, onChange) {
     if (!compact) return;
+    // В stacked-режиме наименование уже на всю ширину — float не нужен
+    if (compact.closest(".items-table.items-stacked")) return;
     if (__nameFloatCompact === compact && __nameFloatEl && __nameFloatEl.classList.contains("is-open")) {
       const w = __nameFloatEl.querySelector(".it-name-wide");
       if (w) w.focus();
@@ -1107,6 +1109,79 @@
     </div>`;
   }
 
+  function measureEightChPx(refEl) {
+    const cs = refEl ? getComputedStyle(refEl) : getComputedStyle(document.body);
+    const span = document.createElement("span");
+    span.style.cssText =
+      "position:absolute;left:-9999px;top:0;visibility:hidden;white-space:nowrap;" +
+      "font-size:" + cs.fontSize + ";font-family:" + cs.fontFamily +
+      ";font-weight:" + cs.fontWeight + ";letter-spacing:" + cs.letterSpacing + ";";
+    span.textContent = "WWWWWWWW"; // 8 знаков типичной ширины
+    document.body.appendChild(span);
+    const w = span.offsetWidth;
+    span.remove();
+    return w;
+  }
+
+  function syncItemsTableLayout(table) {
+    if (!table || !table.classList.contains("items-table")) return;
+    // временно снять stacked, чтобы измерить «обычную» ширину ячейки
+    const wasStacked = table.classList.contains("items-stacked");
+    if (wasStacked) table.classList.remove("items-stacked");
+
+    const nameInput = table.querySelector("tbody .it-name");
+    const nameTd = nameInput ? nameInput.closest("td") : table.querySelector("thead th.col-name, thead th:first-child");
+    let needStack = false;
+    if (nameTd) {
+      const eight = measureEightChPx(nameInput || nameTd);
+      const cellW = nameTd.getBoundingClientRect().width;
+      // запас на padding/border
+      needStack = cellW < eight + 12;
+    } else {
+      // fallback: узкий контейнер
+      const wrap = table.parentElement;
+      const avail = wrap ? wrap.clientWidth : window.innerWidth;
+      needStack = avail < 920;
+    }
+
+    table.classList.toggle("items-stacked", needStack);
+    if (needStack) {
+      // float не должен оставаться открытым
+      closeItemNameExpand(null);
+    }
+  }
+
+  function syncAllItemsTablesLayout() {
+    document.querySelectorAll(".items-table").forEach(syncItemsTableLayout);
+  }
+
+  if (!window.__eklkItemsLayoutBound) {
+    window.__eklkItemsLayoutBound = true;
+    let layoutTimer = null;
+    const schedule = () => {
+      if (layoutTimer) clearTimeout(layoutTimer);
+      layoutTimer = setTimeout(syncAllItemsTablesLayout, 80);
+    };
+    window.addEventListener("resize", schedule);
+    window.addEventListener("orientationchange", schedule);
+    // после смены темы / шрифта
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(schedule);
+      const observeWraps = () => {
+        document.querySelectorAll(".items-table").forEach((t) => {
+          const w = t.parentElement;
+          if (w && !w.__eklkRo) {
+            w.__eklkRo = true;
+            ro.observe(w);
+          }
+        });
+      };
+      window.__eklkObserveItemWraps = observeWraps;
+      setTimeout(observeWraps, 0);
+    }
+    setTimeout(syncAllItemsTablesLayout, 0);
+  }
+
   function bindItemTable(tbodyId, onChange) {
     const tb = $(`#${tbodyId}`);
     tb.querySelectorAll(".it-rm").forEach((btn) => {
@@ -1170,6 +1245,11 @@
     });
     // initial constraint sync
     tb.querySelectorAll(".item-row").forEach(syncObjectOptionsForRow);
+    const table = tb.closest(".items-table") || tb.parentElement;
+    if (table) {
+      syncItemsTableLayout(table);
+      if (typeof window.__eklkObserveItemWraps === "function") window.__eklkObserveItemWraps();
+    }
   }
 
   function syncAgentBoxFromItems() {

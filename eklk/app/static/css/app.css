@@ -187,6 +187,56 @@ input[type="checkbox"]:focus {
 }
 body[data-theme="dark"] .items-table .it-name-warn,
 body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
+
+/* Stacked: наименование на всю ширину сверху, без наложений */
+.items-table.items-stacked {
+  table-layout: auto;
+  min-width: 0;
+  width: 100%;
+}
+.items-table.items-stacked thead {
+  display: none;
+}
+.items-table.items-stacked tbody tr.item-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 8px;
+  align-items: start;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 12px;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+.items-table.items-stacked tbody tr.item-row > td {
+  display: block;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  padding: 0;
+  box-sizing: border-box;
+}
+.items-table.items-stacked tbody tr.item-row > td:first-child {
+  grid-column: 1 / -1;
+  width: 100% !important;
+}
+.items-table.items-stacked tbody tr.item-row > td:nth-child(8),
+.items-table.items-stacked tbody tr.item-row > td:nth-child(9) {
+  max-width: 48px;
+  justify-self: start;
+}
+.items-table.items-stacked .it-name {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+.items-table.items-stacked .it-price,
+.items-table.items-stacked .it-qty,
+.items-table.items-stacked select {
+  width: 100%;
+  max-width: none;
+}
+
 .agent-row { display: flex; align-items: center; gap: 16px; margin-top: 12px; font-size: 0.9rem; flex-wrap: wrap; }
 .radio-group { display: flex; gap: 16px; align-items: center; }
 .radio-group label { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text); font-size: 0.9rem; margin: 0; }
