@@ -923,53 +923,57 @@
     if (!input) return;
     const isName = input.classList.contains("it-name") || input.classList.contains("it-name-wide");
     if (!isName) return;
-    const root = input.closest("td") || input.parentElement;
-    const warns = root ? root.querySelectorAll(".it-name-warn") : [];
-    const row = input.closest("tr");
-    const itemRow = row && row.classList.contains("item-name-expand")
-      ? row.previousElementSibling
-      : row;
-    if (itemRow && itemRow.classList.contains("item-row")) {
-      const compact = itemRow.querySelector(".it-name");
-      const compactWarn = itemRow.querySelector(".it-name-warn");
-      if (compactWarn) warns.length ? null : null;
-      // collect both compact and expand warns
-      const all = [];
-      if (compactWarn) all.push(compactWarn);
-      const exp = itemRow.nextElementSibling;
-      if (exp && exp.classList.contains("item-name-expand")) {
-        const w = exp.querySelector(".it-name-warn");
-        if (w) all.push(w);
-      }
-      if (!all.length && warns.length) all.push(...warns);
-      const len = (input.value || "").length;
-      const msg = len >= 127
-        ? "По ФФД действует ограничение на длину строки, остальное будет обрезано при отправке на кассу"
-        : "";
-      all.forEach((warn) => {
-        if (msg) {
-          warn.textContent = msg;
-          warn.classList.remove("hidden");
-        } else {
-          warn.textContent = "";
-          warn.classList.add("hidden");
-        }
-      });
-      return;
-    }
-    const warn = root && root.querySelector(".it-name-warn");
-    if (!warn) return;
     const len = (input.value || "").length;
-    if (len >= 127) {
-      warn.textContent = "По ФФД действует ограничение на длину строки, остальное будет обрезано при отправке на кассу";
-      warn.classList.remove("hidden");
-    } else {
-      warn.textContent = "";
-      warn.classList.add("hidden");
+    const msg = len >= 127
+      ? "По ФФД действует ограничение на длину строки, остальное будет обрезано при отправке на кассу"
+      : "";
+    const all = [];
+    const row = input.closest("tr.item-row");
+    if (row) {
+      const cw = row.querySelector(".it-name-warn");
+      if (cw) all.push(cw);
     }
+    if (__nameFloatEl) {
+      const fw = __nameFloatEl.querySelector(".it-name-warn");
+      if (fw) all.push(fw);
+    }
+    const root = input.closest(".it-name-float") || input.parentElement;
+    if (root) {
+      const w = root.querySelector(".it-name-warn");
+      if (w && !all.includes(w)) all.push(w);
+    }
+    if (!all.length) return;
+    all.forEach((warn) => {
+      if (msg) {
+        warn.textContent = msg;
+        warn.classList.remove("hidden");
+      } else {
+        warn.textContent = "";
+        warn.classList.add("hidden");
+      }
+    });
+  }
+
+  let __nameFloatEl = null;
+  let __nameFloatCompact = null;
+  let __nameFloatOnChange = null;
+
+  function syncNameFloatPosition() {
+    if (!__nameFloatEl || !__nameFloatCompact) return;
+    const r = __nameFloatCompact.getBoundingClientRect();
+    const pad = 8;
+    const width = Math.min(Math.max(r.width, window.innerWidth * 0.5), window.innerWidth - pad * 2);
+    let left = r.left;
+    if (left + width > window.innerWidth - pad) left = window.innerWidth - pad - width;
+    if (left < pad) left = pad;
+    const top = r.bottom + 6;
+    __nameFloatEl.style.width = width + "px";
+    __nameFloatEl.style.left = left + "px";
+    __nameFloatEl.style.top = top + "px";
   }
 
   function closeItemNameExpand(exceptInput) {
+    // legacy table rows (если остались)
     document.querySelectorAll("tr.item-name-expand:not(.hidden)").forEach((exp) => {
       const wide = exp.querySelector(".it-name-wide");
       if (exceptInput && wide && (wide === exceptInput || exp.contains(exceptInput))) return;
@@ -983,69 +987,92 @@
       }
       exp.classList.add("hidden");
     });
+    if (!__nameFloatEl) return;
+    const wide = __nameFloatEl.querySelector(".it-name-wide");
+    if (exceptInput && wide && (wide === exceptInput || __nameFloatEl.contains(exceptInput))) return;
+    if (__nameFloatCompact && wide) {
+      __nameFloatCompact.value = wide.value;
+      updateItemNameWarn(__nameFloatCompact);
+      if (__nameFloatOnChange) __nameFloatOnChange();
+    }
+    const el = __nameFloatEl;
+    el.classList.remove("is-open");
+    el.classList.add("is-closing");
+    const done = () => {
+      if (el.parentNode) el.parentNode.removeChild(el);
+      if (__nameFloatEl === el) {
+        __nameFloatEl = null;
+        __nameFloatCompact = null;
+        __nameFloatOnChange = null;
+      }
+    };
+    el.addEventListener("transitionend", done, { once: true });
+    setTimeout(done, 220);
   }
 
   function openItemNameExpand(compact, onChange) {
     if (!compact) return;
-    const itemRow = compact.closest("tr.item-row");
-    if (!itemRow) return;
-    // закрыть другие, сохранив значения
-    document.querySelectorAll("tr.item-name-expand:not(.hidden)").forEach((exp) => {
-      if (exp.previousElementSibling === itemRow) return;
-      const wide0 = exp.querySelector(".it-name-wide");
-      const row0 = exp.previousElementSibling;
-      if (row0 && wide0) {
-        const c0 = row0.querySelector(".it-name");
-        if (c0) {
-          c0.value = wide0.value;
-          updateItemNameWarn(c0);
-        }
-      }
-      exp.classList.add("hidden");
-    });
-    let exp = itemRow.nextElementSibling;
-    if (!exp || !exp.classList.contains("item-name-expand")) {
-      exp = document.createElement("tr");
-      exp.className = "item-name-expand";
-      const cols = itemRow.children.length || 9;
-      exp.innerHTML =
-        '<td colspan="' + cols + '">' +
-          '<div class="it-name-expand-box">' +
-            '<input type="text" class="it-name-wide" maxlength="127" placeholder="Товар или услуга" />' +
-            '<span class="it-name-warn hidden"></span>' +
-          "</div>" +
-        "</td>";
-      itemRow.after(exp);
+    if (__nameFloatCompact === compact && __nameFloatEl && __nameFloatEl.classList.contains("is-open")) {
+      const w = __nameFloatEl.querySelector(".it-name-wide");
+      if (w) w.focus();
+      return;
     }
-    const wide = exp.querySelector(".it-name-wide");
-    if (!wide) return;
+    closeItemNameExpand(null);
+
+    const box = document.createElement("div");
+    box.className = "it-name-float";
+    box.innerHTML =
+      '<input type="text" class="it-name-wide" maxlength="127" placeholder="Товар или услуга" />' +
+      '<span class="it-name-warn hidden"></span>';
+    document.body.appendChild(box);
+
+    __nameFloatEl = box;
+    __nameFloatCompact = compact;
+    __nameFloatOnChange = onChange;
+
+    const wide = box.querySelector(".it-name-wide");
     wide.value = compact.value || "";
-    exp.classList.remove("hidden");
     updateItemNameWarn(wide);
+
     wide.oninput = () => {
       compact.value = wide.value;
       updateItemNameWarn(wide);
       updateItemNameWarn(compact);
       onChange && onChange();
     };
+
+    const saveAndClose = () => {
+      compact.value = wide.value;
+      updateItemNameWarn(compact);
+      onChange && onChange();
+      closeItemNameExpand(null);
+    };
+
     wide.onkeydown = (ev) => {
-      if (ev.key === "Escape") {
-        compact.value = wide.value;
-        updateItemNameWarn(compact);
-        exp.classList.add("hidden");
-        compact.blur();
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        saveAndClose();
+      } else if (ev.key === "Escape") {
+        ev.preventDefault();
+        saveAndClose();
       }
     };
+
+    syncNameFloatPosition();
+    // force reflow then open for slide animation
+    void box.offsetWidth;
+    box.classList.add("is-open");
+
     setTimeout(() => {
       try {
         wide.focus();
         const len = wide.value.length;
         wide.setSelectionRange(len, len);
       } catch (e) { /* ignore */ }
-    }, 0);
+    }, 30);
   }
 
-  // Клик вне расширенного поля / кнопок ввода — закрыть с сохранением
   if (!window.__eklkNameExpandOutsideBound) {
     window.__eklkNameExpandOutsideBound = true;
     document.addEventListener(
@@ -1053,11 +1080,13 @@
       (ev) => {
         const t = ev.target;
         if (!t) return;
-        if (t.closest && t.closest("tr.item-name-expand, input.it-name, textarea.it-name")) return;
+        if (t.closest && t.closest(".it-name-float, tr.item-name-expand, input.it-name")) return;
         closeItemNameExpand(null);
       },
       true
     );
+    window.addEventListener("resize", () => syncNameFloatPosition());
+    window.addEventListener("scroll", () => syncNameFloatPosition(), true);
   }
 
   function payRowHtml(fiscal = true) {
