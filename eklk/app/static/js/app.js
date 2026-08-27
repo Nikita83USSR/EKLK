@@ -1110,44 +1110,69 @@
     </div>`;
   }
 
+  function measureEightCh(el) {
+    const cs = getComputedStyle(el || document.body);
+    const span = document.createElement("span");
+    span.textContent = "WWWWWWWW";
+    span.style.cssText =
+      "position:absolute;left:-99999px;top:0;visibility:hidden;white-space:nowrap;" +
+      "font-size:" + cs.fontSize + ";font-family:" + cs.fontFamily +
+      ";font-weight:" + cs.fontWeight + ";letter-spacing:" + cs.letterSpacing + ";";
+    document.body.appendChild(span);
+    const w = span.getBoundingClientRect().width;
+    span.remove();
+    return w;
+  }
+
   function nameOverlapsPrice(table) {
     if (!table) return false;
-    // временно без stacked, чтобы замерить реальную таблицу
-    const forced = table.classList.contains("items-stacked");
-    if (forced) table.classList.remove("items-stacked");
+    const was = table.classList.contains("items-stacked");
+    if (was) table.classList.remove("items-stacked");
+    // принудительный reflow в режиме таблицы
+    void table.offsetWidth;
+
     const name = table.querySelector("tbody .it-name");
     const price = table.querySelector("tbody .it-price");
     let overlap = false;
     if (name && price) {
       const nr = name.getBoundingClientRect();
       const pr = price.getBoundingClientRect();
-      // наезд по горизонтали и одна «линия» по вертикали
-      const sameRow = Math.abs(nr.top - pr.top) < 24;
-      overlap = sameRow && nr.right > pr.left + 1 && nr.left < pr.right - 1;
-      // ячейка имени уже, чем ~8 символов
+      const sameRow = Math.abs(nr.top - pr.top) < 30;
+      // реальное пересечение bounding boxes
+      if (sameRow && nr.width > 0 && pr.width > 0) {
+        overlap = nr.right > pr.left + 0.5 && nr.left < pr.right - 0.5;
+      }
+      // имя уже 8 символов (с запасом)
+      if (!overlap && nr.width > 0) {
+        const eight = measureEightCh(name);
+        overlap = nr.width < eight + 4;
+      }
+      // контейнер уже, чем сумма min-ширин колонок → однозначно не влезает
       if (!overlap) {
-        const eight = (parseFloat(getComputedStyle(name).fontSize) || 14) * 0.6 * 8;
-        overlap = nr.width > 0 && nr.width < eight + 8;
+        const wrap = table.parentElement;
+        const avail = wrap ? wrap.clientWidth : table.clientWidth;
+        if (avail > 0 && avail < 900) overlap = true;
       }
     }
-    if (forced) table.classList.add("items-stacked");
+    if (was) table.classList.add("items-stacked");
     return overlap;
   }
 
   function syncItemsTableLayout() {
     const isPortrait = window.matchMedia && window.matchMedia("(orientation: portrait)").matches;
+    let anyStacked = isPortrait;
     document.querySelectorAll(".items-table").forEach((table) => {
-      // Landscape — не трогаем (как просил пользователь)
-      if (!isPortrait) {
+      if (isPortrait) {
+        // портрет — CSS media; класс не обязателен
         table.classList.remove("items-stacked");
         return;
       }
-      // Portrait: CSS media уже stacked; класс — если имя наезжает на цену
-      // (на случай промежуточных ширин / zoom)
+      // ПК / landscape: если имя наезжает на цену (zoom, узкое окно) — уводим наверх
       const need = nameOverlapsPrice(table);
       table.classList.toggle("items-stacked", need);
+      if (need) anyStacked = true;
     });
-    if (isPortrait) closeItemNameExpand(null);
+    if (anyStacked) closeItemNameExpand(null);
   }
 
   function syncAllItemsTablesLayout() {
@@ -1157,14 +1182,15 @@
   if (!window.__eklkItemsLayoutBound) {
     window.__eklkItemsLayoutBound = true;
     let lastW = window.innerWidth;
+    let lastZoom = 1;
     let timer = null;
     const schedule = () => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(syncItemsTableLayout, 100);
+      timer = setTimeout(syncItemsTableLayout, 80);
     };
     window.addEventListener("resize", () => {
       const w = window.innerWidth;
-      if (Math.abs(w - lastW) < 2) return;
+      if (Math.abs(w - lastW) < 1) return;
       lastW = w;
       schedule();
     });
@@ -1172,6 +1198,16 @@
       lastW = 0;
       schedule();
     });
+    // zoom / visualViewport (ПК масштабирование, mobile pinch)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", () => {
+        const z = window.visualViewport.scale || 1;
+        if (Math.abs(z - lastZoom) < 0.01 && Math.abs(window.innerWidth - lastW) < 1) return;
+        lastZoom = z;
+        lastW = window.innerWidth;
+        schedule();
+      });
+    }
     if (window.matchMedia) {
       try {
         window.matchMedia("(orientation: portrait)").addEventListener("change", schedule);
@@ -1182,6 +1218,7 @@
       }
     }
     setTimeout(syncItemsTableLayout, 50);
+    setTimeout(syncItemsTableLayout, 300);
   }
 
   function bindItemTable(tbodyId, onChange) {
