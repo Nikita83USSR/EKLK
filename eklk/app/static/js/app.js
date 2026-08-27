@@ -1012,8 +1012,8 @@
 
   function openItemNameExpand(compact, onChange) {
     if (!compact) return;
-    // В stacked-режиме наименование уже на всю ширину — float не нужен
-    if (compact.closest(".items-table.items-stacked")) return;
+    // На узком экране наименование уже на всю ширину — float не нужен
+    if (window.matchMedia && window.matchMedia("(max-width: 960px)").matches) return;
     if (__nameFloatCompact === compact && __nameFloatEl && __nameFloatEl.classList.contains("is-open")) {
       const w = __nameFloatEl.querySelector(".it-name-wide");
       if (w) w.focus();
@@ -1109,67 +1109,40 @@
     </div>`;
   }
 
-  function syncItemsTableLayout(table) {
-    if (!table || !table.classList.contains("items-table")) return;
-    // Стабильно: только ширина контейнера, без снятия класса (иначе прыжки на mobile)
-    const wrap = table.parentElement;
-    const avail = wrap ? wrap.clientWidth : table.clientWidth || window.innerWidth;
-    const needStack = avail < 920;
-    const isStacked = table.classList.contains("items-stacked");
-    if (isStacked === needStack) return;
-    table.classList.toggle("items-stacked", needStack);
-    if (needStack) closeItemNameExpand(null);
+  function syncItemsTableLayout() {
+    // CSS @media управляет stacked; здесь только закрываем float на узком экране
+    if (window.matchMedia && window.matchMedia("(max-width: 960px)").matches) {
+      closeItemNameExpand(null);
+    }
   }
 
   function syncAllItemsTablesLayout() {
-    document.querySelectorAll(".items-table").forEach(syncItemsTableLayout);
+    syncItemsTableLayout();
   }
 
   if (!window.__eklkItemsLayoutBound) {
     window.__eklkItemsLayoutBound = true;
-    let layoutTimer = null;
     let lastW = window.innerWidth;
-    const schedule = () => {
-      // игнор «ложных» resize от скрытия адресной строки (меняется только высота)
+    const onResize = () => {
       const w = window.innerWidth;
-      if (Math.abs(w - lastW) < 2 && layoutTimer) return;
+      if (Math.abs(w - lastW) < 2) return;
       lastW = w;
-      if (layoutTimer) clearTimeout(layoutTimer);
-      layoutTimer = setTimeout(syncAllItemsTablesLayout, 120);
+      syncItemsTableLayout();
     };
-    window.addEventListener("resize", schedule);
+    window.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", () => {
       lastW = 0;
-      schedule();
+      syncItemsTableLayout();
     });
-    if (typeof ResizeObserver !== "undefined") {
-      const ro = new ResizeObserver((entries) => {
-        // только если реально изменилась ширина обёртки
-        let changed = false;
-        entries.forEach((en) => {
-          const w = en.contentRect && en.contentRect.width;
-          if (w == null) return;
-          const prev = en.target.__eklkLastW;
-          if (prev == null || Math.abs(prev - w) >= 2) {
-            en.target.__eklkLastW = w;
-            changed = true;
-          }
-        });
-        if (changed) schedule();
-      });
-      const observeWraps = () => {
-        document.querySelectorAll(".items-table").forEach((t) => {
-          const w = t.parentElement;
-          if (w && !w.__eklkRo) {
-            w.__eklkRo = true;
-            ro.observe(w);
-          }
-        });
-      };
-      window.__eklkObserveItemWraps = observeWraps;
-      setTimeout(observeWraps, 0);
+    if (window.matchMedia) {
+      try {
+        window.matchMedia("(max-width: 960px)").addEventListener("change", syncItemsTableLayout);
+      } catch (e) {
+        try {
+          window.matchMedia("(max-width: 960px)").addListener(syncItemsTableLayout);
+        } catch (e2) { /* ignore */ }
+      }
     }
-    setTimeout(syncAllItemsTablesLayout, 0);
   }
 
   function bindItemTable(tbodyId, onChange) {
@@ -1235,11 +1208,7 @@
     });
     // initial constraint sync
     tb.querySelectorAll(".item-row").forEach(syncObjectOptionsForRow);
-    const table = tb.closest(".items-table") || tb.parentElement;
-    if (table) {
-      syncItemsTableLayout(table);
-      if (typeof window.__eklkObserveItemWraps === "function") window.__eklkObserveItemWraps();
-    }
+    syncItemsTableLayout();
   }
 
   function syncAgentBoxFromItems() {
