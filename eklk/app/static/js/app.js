@@ -1347,28 +1347,16 @@
 
   function renderResult(el, data) {
     if (!el) return;
-    el.classList.remove("hidden");
     const link = (data.invoice_payload && data.invoice_payload.link) || "";
-    const provider = (data.invoice_payload && data.invoice_payload.provider) || "";
-    // Компактный служебный блок (не UI ссылки)
-    let html = `<div class="result-box">
-      <span class="badge badge-invoice">${escHtml(data.kind || "—")}</span>
-      <div style="margin-top:8px"><b>uuid:</b> ${escHtml(data.uuid || "—")}</div>
-      <div><b>status:</b> ${escHtml(data.status || "—")}</div>
-      <div><b>external_id:</b> ${escHtml(data.external_id || "—")}</div>`;
-    if (data.error) {
+    // Служебный debug API под кнопкой не показываем; при ошибке — кратко
+    if (data && data.error) {
+      el.classList.remove("hidden");
       const errT = typeof data.error === "object" ? JSON.stringify(data.error) : String(data.error);
-      html += `<div class="mt-2" style="color:#fca5a5"><b>error:</b> ${escHtml(errT)}</div>`;
+      el.innerHTML = `<div class="alert alert-error">${escHtml(errT)}</div>`;
+    } else {
+      el.classList.add("hidden");
+      el.innerHTML = "";
     }
-    if (provider) html += `<p class="hint" style="margin-top:8px">Провайдер: ${escHtml(provider)}</p>`;
-    if (data.permalink) {
-      html += `<p class="mt-2"><a href="${escHtml(data.permalink)}" target="_blank" rel="noopener">Ссылка на предчек</a></p>`;
-    }
-    if (data.payload) {
-      html += `<p class="hint mt-2">ФД: ${escHtml(data.payload.fiscal_document_number ?? "—")} · ФП: ${escHtml(data.payload.fiscal_document_attribute ?? "—")} · сумма: ${escHtml(data.payload.total ?? "—")}</p>`;
-    }
-    html += `</div>`;
-    el.innerHTML = html;
     if (link) openPayLinkModal(link, data);
   }
 
@@ -1657,19 +1645,17 @@
         : String(report.error);
       html += `<div class="r-line r-error"><span>Ошибка</span><span>${escHtml(errT)}</span></div>`;
     }
-    const links = [];
-    if (payload.ofd_receipt_url) links.push({ label: "Ссылка на чек ОФД", href: payload.ofd_receipt_url });
-    if (report.permalink) links.push({ label: "Ссылка на предчек", href: report.permalink });
-    if (links.length) {
+    if (payload.ofd_receipt_url) {
+      html += `<div class="r-ofd-link"><a href="${escHtml(payload.ofd_receipt_url)}" target="_blank" rel="noopener">
+        <span class="r-ofd-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6V2z"/><path d="M15 2v4h4"/><path d="M9 12h6M9 16h6M9 8h3"/></svg></span>
+        <span>Ссылка на чек ОФД</span>
+      </a></div>`;
+    }
+    if (report.permalink) {
       html += `<div class="r-section-title">Дополнительно</div>`;
-      links.forEach((L) => {
-        html += `<div class="r-link-row"><a href="${escHtml(L.href)}" target="_blank" rel="noopener">${escHtml(L.label)} →</a></div>`;
-      });
+      html += `<div class="r-link-row"><a href="${escHtml(report.permalink)}" target="_blank" rel="noopener">Ссылка на предчек</a></div>`;
     }
     html += `<p class="hint mt-2">Полный состав появится после обработки на кассе — нажмите «Обновить».</p>`;
-    html += `<details class="r-json"><summary class="hint">Служебный JSON (report)</summary>
-      <div class="result-box">${escHtml(JSON.stringify(report || {}, null, 2))}</div>
-    </details>`;
     html += `</div>`;
     return html;
   }
@@ -2884,6 +2870,12 @@
     }
     html += `
     </div>`;
+    if (fiscalPayload.ofd_receipt_url) {
+      html += `<div class="r-ofd-link"><a href="${escHtml(fiscalPayload.ofd_receipt_url)}" target="_blank" rel="noopener">
+        <span class="r-ofd-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6V2z"/><path d="M15 2v4h4"/><path d="M9 12h6M9 16h6M9 8h3"/></svg></span>
+        <span>Ссылка на чек ОФД</span>
+      </a></div>`;
+    }
 
     html += `<div class="r-section-title">Организация</div>`;
     html += `<div class="r-line"><span>Магазин</span><span>${escHtml(summary?.store_name || company.payment_address || "—")}</span></div>`;
@@ -2997,26 +2989,14 @@
     }
 
     const links = [];
-    if (fiscalPayload.ofd_receipt_url) {
-      links.push({ label: "Ссылка на чек ОФД", href: fiscalPayload.ofd_receipt_url });
-    }
     if (fiscal && fiscal.permalink) {
       links.push({ label: "Ссылка на предчек", href: fiscal.permalink });
     }
     if (links.length) {
       html += `<div class="r-section-title">Дополнительно</div>`;
       links.forEach((L) => {
-        html += `<div class="r-link-row"><a href="${escHtml(L.href)}" target="_blank" rel="noopener">${escHtml(L.label)} →</a></div>`;
+        html += `<div class="r-link-row"><a href="${escHtml(L.href)}" target="_blank" rel="noopener">${escHtml(L.label)}</a></div>`;
       });
-    }
-
-    html += `<details class="r-json"><summary class="hint">Служебный JSON (Atol 5)</summary>
-      <div class="result-box">${escHtml(JSON.stringify(atol5 || {}, null, 2))}</div>
-    </details>`;
-    if (fiscal) {
-      html += `<details class="r-json"><summary class="hint">Служебный JSON (фискальный отчёт)</summary>
-        <div class="result-box">${escHtml(JSON.stringify(fiscal || {}, null, 2))}</div>
-      </details>`;
     }
 
     return html;
@@ -3379,7 +3359,7 @@
     const storeId = (tpl.qrPay && tpl.qrPay.storeId) || "—";
     const qrCell = link
       ? '<div class="tpl-qr-cell">' +
-          '<button type="button" class="btn btn-secondary btn-sm tpl-show-qr" data-link="' + escHtml(link) + '" data-name="' + escHtml(tpl.name || "") + '" title="Показать QR-код">Показать QR</button>' +
+          '<button type="button" class="btn btn-secondary btn-sm tpl-show-qr" data-link="' + escHtml(link) + '" data-name="' + escHtml(tpl.name || "") + '" title="Показать QR-код"><span class="tpl-qr-label">Показать QR</span><span class="tpl-qr-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h1v2h-1v-2zm-3 0h2v1h-2v-1zm0 3h1v1h-1v-1zm2 0h3v1h-1v2h-1v-2h-1v-1zm-2 2h1v3h-1v-3zm3 1h2v1h-2v-1zm0 2h3v1h-3v-1zm-5-3h1v1h-1v-1zm0 2h2v2h-2v-2z"/></svg></span></button>' +
         '</div>'
       : '<div class="tpl-qr-cell tpl-qr-empty">нет QR</div>';
     return (
