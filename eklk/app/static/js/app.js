@@ -920,8 +920,44 @@
   }
 
   function updateItemNameWarn(input) {
-    if (!input || !input.classList.contains("it-name")) return;
-    const warn = input.parentElement && input.parentElement.querySelector(".it-name-warn");
+    if (!input) return;
+    const isName = input.classList.contains("it-name") || input.classList.contains("it-name-wide");
+    if (!isName) return;
+    const root = input.closest("td") || input.parentElement;
+    const warns = root ? root.querySelectorAll(".it-name-warn") : [];
+    const row = input.closest("tr");
+    const itemRow = row && row.classList.contains("item-name-expand")
+      ? row.previousElementSibling
+      : row;
+    if (itemRow && itemRow.classList.contains("item-row")) {
+      const compact = itemRow.querySelector(".it-name");
+      const compactWarn = itemRow.querySelector(".it-name-warn");
+      if (compactWarn) warns.length ? null : null;
+      // collect both compact and expand warns
+      const all = [];
+      if (compactWarn) all.push(compactWarn);
+      const exp = itemRow.nextElementSibling;
+      if (exp && exp.classList.contains("item-name-expand")) {
+        const w = exp.querySelector(".it-name-warn");
+        if (w) all.push(w);
+      }
+      if (!all.length && warns.length) all.push(...warns);
+      const len = (input.value || "").length;
+      const msg = len >= 127
+        ? "По ФФД действует ограничение на длину строки, остальное будет обрезано при отправке на кассу"
+        : "";
+      all.forEach((warn) => {
+        if (msg) {
+          warn.textContent = msg;
+          warn.classList.remove("hidden");
+        } else {
+          warn.textContent = "";
+          warn.classList.add("hidden");
+        }
+      });
+      return;
+    }
+    const warn = root && root.querySelector(".it-name-warn");
     if (!warn) return;
     const len = (input.value || "").length;
     if (len >= 127) {
@@ -931,6 +967,67 @@
       warn.textContent = "";
       warn.classList.add("hidden");
     }
+  }
+
+  function closeItemNameExpand(exceptInput) {
+    document.querySelectorAll("tr.item-name-expand:not(.hidden)").forEach((exp) => {
+      const wide = exp.querySelector(".it-name-wide");
+      if (exceptInput && (wide === exceptInput || exp.contains(exceptInput))) return;
+      const itemRow = exp.previousElementSibling;
+      if (itemRow) {
+        const compact = itemRow.querySelector(".it-name");
+        if (compact && wide) compact.value = wide.value;
+      }
+      exp.classList.add("hidden");
+    });
+  }
+
+  function openItemNameExpand(compact, onChange) {
+    if (!compact) return;
+    const itemRow = compact.closest("tr.item-row");
+    if (!itemRow) return;
+    closeItemNameExpand(null);
+    let exp = itemRow.nextElementSibling;
+    if (!exp || !exp.classList.contains("item-name-expand")) {
+      exp = document.createElement("tr");
+      exp.className = "item-name-expand";
+      const cols = itemRow.children.length || 9;
+      exp.innerHTML =
+        '<td colspan="' + cols + '">' +
+          '<div class="it-name-expand-box">' +
+            '<label class="it-name-expand-label">Наименование</label>' +
+            '<input type="text" class="it-name-wide" maxlength="127" placeholder="Товар или услуга" />' +
+            '<span class="it-name-warn hidden"></span>' +
+          "</div>" +
+        "</td>";
+      itemRow.after(exp);
+    }
+    const wide = exp.querySelector(".it-name-wide");
+    if (!wide) return;
+    wide.value = compact.value || "";
+    exp.classList.remove("hidden");
+    updateItemNameWarn(wide);
+    wide.oninput = () => {
+      compact.value = wide.value;
+      updateItemNameWarn(wide);
+      updateItemNameWarn(compact);
+      onChange && onChange();
+    };
+    wide.onkeydown = (ev) => {
+      if (ev.key === "Escape") {
+        compact.value = wide.value;
+        exp.classList.add("hidden");
+        compact.focus();
+      }
+    };
+    // focus wide without re-opening loop
+    setTimeout(() => {
+      try {
+        wide.focus();
+        const len = wide.value.length;
+        wide.setSelectionRange(len, len);
+      } catch (e) { /* ignore */ }
+    }, 0);
   }
 
   function payRowHtml(fiscal = true) {
@@ -976,8 +1073,13 @@
           if (tbodyId === "p_items") syncPayAgentBoxFromItems();
         }
       };
+      if (!el.classList.contains("it-name")) {
+        el.addEventListener("focus", () => closeItemNameExpand(null));
+      }
       if (el.classList.contains("it-name")) {
         updateItemNameWarn(el);
+        el.addEventListener("focus", () => openItemNameExpand(el, onChange));
+        el.addEventListener("click", () => openItemNameExpand(el, onChange));
       }
       // количество: max 3 знака (тысячные); цена/сумма: max 2 (копейки)
       if (el.classList.contains("it-qty")) {
