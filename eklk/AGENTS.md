@@ -3,7 +3,7 @@
 Документ для ассистентов (Grok, Cursor, Claude, Codex и т.д.).  
 Цель: продолжить работу **без устных подсказок пользователя**, опираясь только на репозиторий.
 
-Ветки: **`exp`** (эксперименты), **`dev`** (разработка), **`main`** (стабильная).
+Ветки: **`exp`** / **`expbd`** (эксперименты), **`dev`** (разработка), **`main`** (стабильная).
 
 ---
 
@@ -150,13 +150,36 @@ UI раньше слал 1/2/14 — это **ошибка** относитель
 ## 5. UI / static
 
 - Логотип: `app/static/img/logo.png` (header + login). Без бейджа «ЛК».
+- Favicon: `app/static/img/favicon.svg` (с ecomkassa.ru) + apple-touch-icon `eklk-icon-256.png`.
 - Bitrix24 виджет (чат):  
   `https://cdn-ru.bitrix24.ru/b24444000/crm/site_button/loader_4_q8v7f4.js`  
   Подключать в конце `body`, высокий z-index (см. `app.css`).
 - Footer: ИП Носов А.С., support@ecomkassa.ru, ссылки на оферты/docs.
-- Cache-bust: query `?v=YYYYMMDD` на css/js/logo в `index.html`.
+- Cache-bust: query `?v=YYYYMMDD…` на css/js/logo в `index.html`.
+- Темы: light / dark / glass (`body[data-theme]`), переключатель в Настройках → Внешний вид.
 
-Вкладки `data-tab` / URL: `create` | `payment` | `orders` | `settings` (раздел status удалён). Клиентский роутинг: `/create`, `/payment`, `/orders`, `/settings`.
+### Вкладки / URL (клиентский роутинг)
+
+| `data-tab` / path | Название в UI | Примечание |
+|-------------------|---------------|------------|
+| `home` / `/` `/home` | **Главная** | Дашборд платежей/чеков (`sections/dashboard.js`) |
+| `create` / `/create` | Чек | Товарные позиции: адаптив portrait/stacked |
+| `payment` / `/payment` | Ссылка на оплату | Без полей URL успеха / вид оплаты в UI |
+| `templates` / `/templates` | Многоразовые ссылки | QR-кнопка, клик по карточке → edit |
+| `orders` / `/orders` | Список чеков | Деталка без служебного JSON; ОФД сверху |
+| `catalog` / `/catalog` | Каталог | `sections/catalog.js` |
+| `reports` / `/reports` | Отчёты | `sections/reports.js` |
+| `ai-cashier` / `/ai-cashier` | ИИ кассир | Inline iframe embed, без close-кнопки |
+| `settings` | Настройки | **Не в nav** — кнопка ⚙ слева от «Выйти» |
+
+Раздел status удалён.
+
+### Адаптив (важно)
+
+- **Portrait**: товарные позиции stacked (имя сверху); список чеков и каталог — карточки строк.
+- **Landscape mobile** (`max-height: ~560px`): список чеков list+detail в ряд; компактные таблицы.
+- ПК / zoom: если имя наезжает на цену → класс `items-stacked` (имя наверх).
+- Не раздувать страницу: `html/body { overflow-x: hidden }`, контейнеры `max-width: 100%`.
 
 
 ---
@@ -223,7 +246,7 @@ source .venv/bin/activate
 
 ## 8. Git
 
-- Эксперименты / текущая работа → `exp`
+- Эксперименты / текущая работа → `exp` / `expbd`
 - Разработка → `dev`
 - Релизы / стабильное → `main` (merge из dev)
 - Не коммитить `.venv/`, `.env` с секретами, `__pycache__`

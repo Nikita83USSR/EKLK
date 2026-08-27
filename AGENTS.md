@@ -3,7 +3,9 @@
 Документ для ассистентов (Grok, Cursor, Claude, Codex и т.д.).  
 Цель: продолжить работу **без устных подсказок пользователя**, опираясь только на репозиторий.
 
-Ветки: **`exp`** (эксперименты), **`dev`** (разработка), **`main`** (стабильная).
+Ветки: **`exp`** / **`expbd`** (эксперименты), **`dev`** (разработка), **`main`** (стабильная).
+
+Актуальный полный контекст: **`eklk/AGENTS.md`** (этот файл в корне может отставать).
 
 ---
 
@@ -156,7 +158,7 @@ UI раньше слал 1/2/14 — это **ошибка** относитель
 - Footer: ИП Носов А.С., support@ecomkassa.ru, ссылки на оферты/docs.
 - Cache-bust: query `?v=YYYYMMDD` на css/js/logo в `index.html`.
 
-Вкладки `data-tab` / URL: `create` | `payment` | `orders` | `settings` (раздел status удалён). Клиентский роутинг: `/create`, `/payment`, `/orders`, `/settings`.
+Вкладки: home (Главная), create, payment, templates, orders, catalog, reports, ai-cashier; settings — ⚙ у «Выйти». Подробности: `eklk/AGENTS.md` §5.
 
 
 ---
