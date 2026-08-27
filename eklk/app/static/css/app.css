@@ -1848,6 +1848,206 @@ body[data-theme="glass"] .modal-footer {
   }
 }
 
+/* Портрет: список чеков и каталог — без выезда за экран */
+@media (orientation: portrait) {
+  #tab-orders,
+  #tab-catalog {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  #tab-orders .orders-layout,
+  #tab-catalog .check-layout {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+    max-width: 100%;
+    min-width: 0;
+  }
+  #tab-orders .orders-list-pane,
+  #tab-orders .orders-detail-pane,
+  #tab-catalog .card {
+    min-width: 0;
+    max-width: 100%;
+  }
+  #tab-orders .orders-detail-pane {
+    position: static;
+    max-height: none;
+  }
+
+  /* фильтры чеков — в одну колонку */
+  #tab-orders .orders-filters .row {
+    grid-template-columns: 1fr !important;
+    gap: 10px;
+  }
+  #tab-orders .orders-filters .row > div {
+    max-width: none !important;
+    width: 100%;
+  }
+
+  /* список чеков — карточки, не широкая таблица */
+  #o_list {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  #o_list .orders-table {
+    min-width: 0 !important;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  #o_list .orders-table thead {
+    display: none;
+  }
+  #o_list .orders-table tbody {
+    display: block;
+    width: 100%;
+  }
+  #o_list .orders-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "id date"
+      "type status"
+      "total store"
+      "act act";
+    gap: 6px 10px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin: 0 0 10px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface, transparent);
+    cursor: pointer;
+  }
+  #o_list .orders-table tbody tr.active {
+    border-color: var(--primary, #22c55e);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary, #22c55e) 40%, transparent);
+  }
+  #o_list .orders-table tbody td {
+    display: block;
+    border: none !important;
+    padding: 0 !important;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  #o_list .orders-table tbody td:nth-child(1) { grid-area: id; font-weight: 600; }
+  #o_list .orders-table tbody td:nth-child(2) { grid-area: date; text-align: right; color: var(--muted); font-size: 0.8rem; }
+  #o_list .orders-table tbody td:nth-child(3) { grid-area: type; }
+  #o_list .orders-table tbody td:nth-child(4) { grid-area: status; text-align: right; }
+  #o_list .orders-table tbody td:nth-child(5) { grid-area: total; font-weight: 600; }
+  #o_list .orders-table tbody td:nth-child(6) { grid-area: store; text-align: right; font-size: 0.82rem; color: var(--muted); }
+  #o_list .orders-table tbody td:nth-child(7) { grid-area: act; }
+  #o_list .orders-table tbody td:nth-child(7) .btn {
+    width: 100%;
+    margin-top: 4px;
+  }
+  #o_list .orders-table tbody td:nth-child(1)::before,
+  #o_list .orders-table tbody td:nth-child(3)::before,
+  #o_list .orders-table tbody td:nth-child(5)::before,
+  #o_list .orders-table tbody td:nth-child(6)::before {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  #o_list .orders-table tbody td:nth-child(1)::before { content: "ID"; }
+  #o_list .orders-table tbody td:nth-child(3)::before { content: "Тип"; }
+  #o_list .orders-table tbody td:nth-child(5)::before { content: "Сумма"; }
+  #o_list .orders-table tbody td:nth-child(6)::before { content: "Магазин"; }
+
+  /* каталог — фильтры и кнопки */
+  #tab-catalog .orders-filters {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  #tab-catalog .orders-filters .input {
+    max-width: none !important;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  #tab-catalog .section-title > div {
+    width: 100%;
+  }
+  #tab-catalog .section-title .btn,
+  #tab-catalog .section-title label.btn {
+    flex: 1 1 auto;
+  }
+
+  /* каталог — карточки строк */
+  #tab-catalog .orders-table-wrap {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  #cat_table {
+    min-width: 0 !important;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  #cat_table thead {
+    display: none;
+  }
+  #cat_table tbody {
+    display: block;
+    width: 100%;
+  }
+  #cat_table tbody tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "check name name"
+      "sku price vat"
+      "po act act";
+    gap: 6px 10px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin: 0 0 10px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  #cat_table tbody td {
+    display: block;
+    border: none !important;
+    padding: 0 !important;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  #cat_table tbody td:nth-child(1) { grid-area: check; }
+  #cat_table tbody td:nth-child(2) { grid-area: name; font-weight: 600; }
+  #cat_table tbody td:nth-child(3) { grid-area: sku; font-size: 0.8rem; color: var(--muted); }
+  #cat_table tbody td:nth-child(4) { grid-area: price; text-align: right; font-weight: 600; }
+  #cat_table tbody td:nth-child(5) { grid-area: vat; text-align: right; font-size: 0.82rem; }
+  #cat_table tbody td:nth-child(6) { grid-area: po; font-size: 0.82rem; color: var(--muted); }
+  #cat_table tbody td:nth-child(7) { grid-area: act; }
+  #cat_table tbody td:nth-child(7) .btn {
+    width: 100%;
+  }
+  #cat_table tbody td:nth-child(2)::before,
+  #cat_table tbody td:nth-child(3)::before,
+  #cat_table tbody td:nth-child(4)::before {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  #cat_table tbody td:nth-child(2)::before { content: "Наименование"; }
+  #cat_table tbody td:nth-child(3)::before { content: "SKU"; }
+  #cat_table tbody td:nth-child(4)::before { content: "Цена"; }
+}
+
+
+
 
 
 .header-inner,
