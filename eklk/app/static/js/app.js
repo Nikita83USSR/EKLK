@@ -1012,8 +1012,9 @@
 
   function openItemNameExpand(compact, onChange) {
     if (!compact) return;
-    // На узком экране наименование уже на всю ширину — float не нужен
-    if (window.matchMedia && window.matchMedia("(max-width: 960px)").matches) return;
+    // Портрет / forced stacked — наименование уже на всю ширину
+    if (compact.closest(".items-table.items-stacked")) return;
+    if (window.matchMedia && window.matchMedia("(orientation: portrait)").matches) return;
     if (__nameFloatCompact === compact && __nameFloatEl && __nameFloatEl.classList.contains("is-open")) {
       const w = __nameFloatEl.querySelector(".it-name-wide");
       if (w) w.focus();
@@ -1109,11 +1110,44 @@
     </div>`;
   }
 
-  function syncItemsTableLayout() {
-    // CSS @media управляет stacked; здесь только закрываем float на узком экране
-    if (window.matchMedia && window.matchMedia("(max-width: 960px)").matches) {
-      closeItemNameExpand(null);
+  function nameOverlapsPrice(table) {
+    if (!table) return false;
+    // временно без stacked, чтобы замерить реальную таблицу
+    const forced = table.classList.contains("items-stacked");
+    if (forced) table.classList.remove("items-stacked");
+    const name = table.querySelector("tbody .it-name");
+    const price = table.querySelector("tbody .it-price");
+    let overlap = false;
+    if (name && price) {
+      const nr = name.getBoundingClientRect();
+      const pr = price.getBoundingClientRect();
+      // наезд по горизонтали и одна «линия» по вертикали
+      const sameRow = Math.abs(nr.top - pr.top) < 24;
+      overlap = sameRow && nr.right > pr.left + 1 && nr.left < pr.right - 1;
+      // ячейка имени уже, чем ~8 символов
+      if (!overlap) {
+        const eight = (parseFloat(getComputedStyle(name).fontSize) || 14) * 0.6 * 8;
+        overlap = nr.width > 0 && nr.width < eight + 8;
+      }
     }
+    if (forced) table.classList.add("items-stacked");
+    return overlap;
+  }
+
+  function syncItemsTableLayout() {
+    const isPortrait = window.matchMedia && window.matchMedia("(orientation: portrait)").matches;
+    document.querySelectorAll(".items-table").forEach((table) => {
+      // Landscape — не трогаем (как просил пользователь)
+      if (!isPortrait) {
+        table.classList.remove("items-stacked");
+        return;
+      }
+      // Portrait: CSS media уже stacked; класс — если имя наезжает на цену
+      // (на случай промежуточных ширин / zoom)
+      const need = nameOverlapsPrice(table);
+      table.classList.toggle("items-stacked", need);
+    });
+    if (isPortrait) closeItemNameExpand(null);
   }
 
   function syncAllItemsTablesLayout() {
@@ -1123,26 +1157,31 @@
   if (!window.__eklkItemsLayoutBound) {
     window.__eklkItemsLayoutBound = true;
     let lastW = window.innerWidth;
-    const onResize = () => {
+    let timer = null;
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(syncItemsTableLayout, 100);
+    };
+    window.addEventListener("resize", () => {
       const w = window.innerWidth;
       if (Math.abs(w - lastW) < 2) return;
       lastW = w;
-      syncItemsTableLayout();
-    };
-    window.addEventListener("resize", onResize);
+      schedule();
+    });
     window.addEventListener("orientationchange", () => {
       lastW = 0;
-      syncItemsTableLayout();
+      schedule();
     });
     if (window.matchMedia) {
       try {
-        window.matchMedia("(max-width: 960px)").addEventListener("change", syncItemsTableLayout);
+        window.matchMedia("(orientation: portrait)").addEventListener("change", schedule);
       } catch (e) {
         try {
-          window.matchMedia("(max-width: 960px)").addListener(syncItemsTableLayout);
+          window.matchMedia("(orientation: portrait)").addListener(schedule);
         } catch (e2) { /* ignore */ }
       }
     }
+    setTimeout(syncItemsTableLayout, 50);
   }
 
   function bindItemTable(tbodyId, onChange) {

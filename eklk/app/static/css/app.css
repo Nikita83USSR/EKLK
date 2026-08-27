@@ -175,8 +175,8 @@ input[type="checkbox"]:focus {
 .items-table td { padding: 6px 3px; vertical-align: top; }
 .items-table input, .items-table select { font-size: 0.82rem; padding: 7px 6px; }
 .items-table { table-layout: fixed; min-width: 920px; }
-@media (max-width: 960px) {
-  .items-table { min-width: 0; width: 100%; table-layout: auto; }
+@media (orientation: portrait) {
+  .items-table { min-width: 0 !important; width: 100%; table-layout: auto; }
 }
 .items-table-wrap {
   width: 100%;
@@ -220,38 +220,41 @@ input[type="checkbox"]:focus {
 body[data-theme="dark"] .items-table .it-name-warn,
 body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
 
-/* Stacked layout: mobile / narrow — подписи над своими полями */
-@media (max-width: 960px) {
-  .items-table thead {
-    display: none;
-  }
-  .items-table tbody {
-    display: block;
-    width: 100%;
-  }
+/* Stacked: только портрет (+ класс при наложении имени на цену). Landscape не трогаем. */
+@media (orientation: portrait) {
+  .items-table thead { display: none; }
+  .items-table tbody { display: block; width: 100%; max-width: 100%; }
+
   .items-table tbody tr.item-row {
     display: grid;
-    grid-template-columns: 100px 72px 56px 120px minmax(120px, 1fr) minmax(110px, 1fr) 40px 40px;
+    /* узкий портрет: 2 колонки, ничего не уезжает за край */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
-      "name name name name name name name name"
-      "price qty measure vat object method agent act";
-    column-gap: 6px;
-    row-gap: 8px;
+      "name name"
+      "price qty"
+      "measure vat"
+      "object object"
+      "method method"
+      "agent act";
+    column-gap: 8px;
+    row-gap: 10px;
     width: 100%;
+    max-width: 100%;
     box-sizing: border-box;
     margin: 0 0 14px;
     padding: 8px 0 12px;
     border-bottom: 1px solid var(--border);
     align-items: start;
-    overflow-x: auto;
+    overflow-x: hidden;
   }
+
   .items-table tbody tr.item-row > td {
     display: block;
     padding: 0;
     box-sizing: border-box;
-    width: auto !important;
+    width: 100% !important;
     min-width: 0 !important;
-    max-width: none !important;
+    max-width: 100% !important;
     border-bottom: none;
   }
   .items-table tbody tr.item-row > td:nth-child(1) { grid-area: name; }
@@ -263,7 +266,7 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
   .items-table tbody tr.item-row > td:nth-child(7) { grid-area: method; }
   .items-table tbody tr.item-row > td:nth-child(8) {
     grid-area: agent;
-    text-align: center;
+    text-align: left;
   }
   .items-table tbody tr.item-row > td:nth-child(9) { grid-area: act; }
 
@@ -288,27 +291,95 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
   .items-table tbody tr.item-row > td:nth-child(8)::before { content: "Агент"; }
   .items-table tbody tr.item-row > td:nth-child(9)::before { content: "\00a0"; }
 
-  .items-table tbody tr.item-row ~ tr.item-row > td::before {
-    display: none;
-  }
+  .items-table tbody tr.item-row ~ tr.item-row > td::before { display: none; }
 
-  .items-table .it-name {
+  .items-table .it-name,
+  .items-table .it-price,
+  .items-table .it-qty,
+  .items-table select {
     width: 100% !important;
     min-width: 0 !important;
     max-width: none !important;
+    box-sizing: border-box;
   }
-  .items-table .it-price {
-    width: 100%;
-    max-width: 100px;
-  }
-  .items-table .it-qty {
-    width: 100%;
-    max-width: 72px;
-  }
-  .items-table select {
-    width: 100%;
-    max-width: 100%;
-  }
+}
+
+/* Принудительный stacked (JS), если имя наезжает на цену даже вне portrait media */
+.items-table.items-stacked {
+  min-width: 0 !important;
+  width: 100%;
+  table-layout: auto;
+}
+.items-table.items-stacked thead { display: none; }
+.items-table.items-stacked tbody { display: block; width: 100%; max-width: 100%; }
+.items-table.items-stacked tbody tr.item-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "name name"
+    "price qty"
+    "measure vat"
+    "object object"
+    "method method"
+    "agent act";
+  column-gap: 8px;
+  row-gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 14px;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--border);
+  align-items: start;
+  overflow-x: hidden;
+}
+.items-table.items-stacked tbody tr.item-row > td {
+  display: block;
+  padding: 0;
+  box-sizing: border-box;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  border-bottom: none;
+}
+.items-table.items-stacked tbody tr.item-row > td:nth-child(1) { grid-area: name; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(2) { grid-area: price; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(3) { grid-area: qty; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(4) { grid-area: measure; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(5) { grid-area: vat; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(6) { grid-area: object; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(7) { grid-area: method; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(8) { grid-area: agent; text-align: left; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(9) { grid-area: act; }
+.items-table.items-stacked tbody tr.item-row > td::before {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--muted);
+  margin-bottom: 4px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.items-table.items-stacked tbody tr.item-row > td:nth-child(1)::before { content: "Наименование"; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(2)::before { content: "Цена, руб"; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(3)::before { content: "Количество"; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(4)::before { content: "Ед. изм."; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(5)::before { content: "НДС"; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(6)::before { content: "Предмет расчёта"; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(7)::before { content: "Признак расчёта"; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(8)::before { content: "Агент"; }
+.items-table.items-stacked tbody tr.item-row > td:nth-child(9)::before { content: "\00a0"; }
+.items-table.items-stacked tbody tr.item-row ~ tr.item-row > td::before { display: none; }
+.items-table.items-stacked .it-name,
+.items-table.items-stacked .it-price,
+.items-table.items-stacked .it-qty,
+.items-table.items-stacked select {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  box-sizing: border-box;
 }
 
 
