@@ -1007,7 +1007,15 @@
 
   function itemRowHtml() {
     return `<tr class="item-row">
-      <td><input class="it-name" placeholder="Товар или услуга" value="Товар" maxlength="127" /><span class="it-name-warn hidden"></span></td>
+      <td class="it-name-cell">
+        <div class="it-name-wrap">
+          <input class="it-name" placeholder="Товар или услуга" value="Товар" maxlength="127" autocomplete="off" />
+          <button type="button" class="it-cat-btn" title="Выбрать из каталога" aria-label="Выбрать из каталога">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="18" cy="17" r="3"/></svg>
+          </button>
+        </div>
+        <span class="it-name-warn hidden"></span>
+      </td>
       <td><input class="it-price" type="number" step="0.01" min="0.01" inputmode="decimal" value="1.00" /></td>
       <td><input class="it-qty" type="number" step="0.001" min="0.01" inputmode="decimal" value="1" /></td>
       <td><select class="it-measure">${MEASURE_OPTS}</select></td>
@@ -1018,6 +1026,147 @@
       <td><button type="button" class="btn btn-secondary btn-sm it-rm">🗑</button></td>
     </tr>`;
   }
+
+  const CAT_VAT_TO_FORM = {
+    VAT_NONE: "none", none: "none",
+    VAT_0PCT: "vat0", vat0: "vat0",
+    VAT_10PCT: "vat10", vat10: "vat10",
+    VAT_110PCT: "vat110", vat110: "vat110",
+    VAT_20PCT: "vat20", vat20: "vat20",
+    VAT_120PCT: "vat120", vat120: "vat120",
+    VAT_5PCT: "vat5", vat5: "vat5",
+    VAT_7PCT: "vat7", vat7: "vat7",
+    VAT_22PCT: "vat22", vat22: "vat22",
+  };
+  const CAT_PO_TO_FORM = {
+    COMMODITY: "1", commodity: "1",
+    SERVICE: "4", service: "4",
+    JOB: "3", job: "3",
+    PAYMENT: "10", payment: "10",
+    ANOTHER: "13", another: "13",
+  };
+
+  let __catSuggestEl = null;
+  let __catSuggestRow = null;
+  let __catSuggestTimer = null;
+  let __catSuggestSeq = 0;
+
+  function closeCatalogSuggest() {
+    if (__catSuggestEl && __catSuggestEl.parentNode) {
+      __catSuggestEl.parentNode.removeChild(__catSuggestEl);
+    }
+    __catSuggestEl = null;
+    __catSuggestRow = null;
+  }
+
+  function applyCatalogItemToRow(row, item, onChange) {
+    if (!row || !item) return;
+    const nameEl = row.querySelector(".it-name");
+    const priceEl = row.querySelector(".it-price");
+    const vatEl = row.querySelector(".it-vat");
+    const objEl = row.querySelector(".it-object");
+    if (nameEl && item.name) nameEl.value = String(item.name).slice(0, 127);
+    if (priceEl && item.price != null) priceEl.value = money(item.price);
+    const vatKey = item.vatType != null ? String(item.vatType) : "";
+    const vat = CAT_VAT_TO_FORM[vatKey] || CAT_VAT_TO_FORM[vatKey.toUpperCase()] || CAT_VAT_TO_FORM[vatKey.toLowerCase()];
+    if (vatEl && vat && [...vatEl.options].some((o) => o.value === vat)) vatEl.value = vat;
+    const poKey = item.paymentObject != null ? String(item.paymentObject) : "";
+    const po = CAT_PO_TO_FORM[poKey] || CAT_PO_TO_FORM[poKey.toUpperCase()] || CAT_PO_TO_FORM[poKey.toLowerCase()];
+    if (objEl && po) {
+      syncObjectOptionsForRow(row);
+      if ([...objEl.options].some((o) => o.value === po)) objEl.value = po;
+    }
+    updateItemNameWarn(nameEl);
+    if (onChange) onChange();
+    closeCatalogSuggest();
+  }
+
+  async function searchCatalogForRow(row, query, onChange) {
+    const q = (query || "").trim();
+    if (q.length < 1) {
+      closeCatalogSuggest();
+      return;
+    }
+    const seq = ++__catSuggestSeq;
+    try {
+      const qs = new URLSearchParams({ page: "1", size: "12", name: q === "." ? "" : q });
+      if (q === ".") qs.delete("name");
+      const data = await api("/catalog/items?" + qs.toString());
+      if (seq !== __catSuggestSeq) return;
+      const items = data.items || [];
+      showCatalogSuggest(row, items, onChange);
+    } catch (e) {
+      if (seq !== __catSuggestSeq) return;
+      showCatalogSuggest(row, [], onChange, e.message || "Ошибка поиска");
+    }
+  }
+
+  function showCatalogSuggest(row, items, onChange, errMsg) {
+    closeCatalogSuggest();
+    const cell = row.querySelector(".it-name-cell") || row.querySelector("td");
+    if (!cell) return;
+    const el = document.createElement("div");
+    el.className = "cat-suggest";
+    if (errMsg) {
+      el.innerHTML = `<div class="cat-suggest-empty">${escHtml(errMsg)}</div>`;
+    } else if (!items.length) {
+      el.innerHTML = `<div class="cat-suggest-empty">Ничего не найдено</div>`;
+    } else {
+      el.innerHTML = items
+        .map((it) => {
+          const price = it.price != null ? money(it.price) + " ₽" : "";
+          const sku = it.sku ? `<span class="cat-suggest-sku">${escHtml(it.sku)}</span>` : "";
+          return `<button type="button" class="cat-suggest-item" data-id="${it.itemId}">
+            <span class="cat-suggest-name">${escHtml(it.name || "")}</span>
+            <span class="cat-suggest-meta">${sku}${price ? " · " + price : ""}</span>
+          </button>`;
+        })
+        .join("");
+      el.querySelectorAll(".cat-suggest-item").forEach((btn) => {
+        btn.onclick = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const it = items.find((x) => String(x.itemId) === String(btn.dataset.id));
+          applyCatalogItemToRow(row, it, onChange);
+        };
+      });
+    }
+    cell.style.position = "relative";
+    cell.appendChild(el);
+    __catSuggestEl = el;
+    __catSuggestRow = row;
+  }
+
+  function bindCatalogPickOnRow(row, onChange) {
+    if (!row || row.dataset.catBound === "1") return;
+    row.dataset.catBound = "1";
+    const nameEl = row.querySelector(".it-name");
+    const pickBtn = row.querySelector(".it-cat-btn");
+    if (pickBtn) {
+      pickBtn.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const q = (nameEl && nameEl.value) || "";
+        const searchQ = !q || q === "Товар" ? "." : q;
+        searchCatalogForRow(row, searchQ, onChange);
+        if (nameEl) nameEl.focus();
+      };
+    }
+    if (nameEl) {
+      nameEl.addEventListener("input", () => {
+        if (__catSuggestTimer) clearTimeout(__catSuggestTimer);
+        const val = nameEl.value;
+        __catSuggestTimer = setTimeout(() => {
+          if (val && val !== "Товар") searchCatalogForRow(row, val, onChange);
+          else closeCatalogSuggest();
+        }, 280);
+      });
+      nameEl.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape") closeCatalogSuggest();
+      });
+    }
+  }
+
 
   function updateItemNameWarn(input) {
     if (!input) return;
@@ -1383,7 +1532,10 @@
       }
     });
     // initial constraint sync
-    tb.querySelectorAll(".item-row").forEach(syncObjectOptionsForRow);
+    tb.querySelectorAll(".item-row").forEach((row) => {
+      syncObjectOptionsForRow(row);
+      bindCatalogPickOnRow(row, onChange);
+    });
     syncItemsTableLayout();
   }
 
@@ -2209,6 +2361,13 @@
     $$(".nav button[data-tab]").forEach((b) => {
       b.classList.toggle("active", b.dataset.tab === tab);
     });
+    const payNav = $("#nav_payments");
+    const payBtn = $("#nav_payments_btn");
+    if (payNav && payBtn) {
+      const payActive = tab === "payment" || tab === "templates";
+      payNav.classList.toggle("is-active", payActive);
+      payBtn.classList.toggle("active", payActive);
+    }
     $$(".tab-panel").forEach((p) => p.classList.add("hidden"));
     const panel = $("#tab-" + tab);
     if (panel) panel.classList.remove("hidden");
@@ -2260,11 +2419,52 @@
   }
 
   $$(".nav button[data-tab]").forEach((btn) => {
+    // пункты внутри выпадающего «Платежи» обрабатываются отдельно
+    if (btn.closest("#nav_payments_menu")) return;
     btn.onclick = () => {
       const tab = btn.dataset.tab;
       if (!APP_TABS.includes(tab)) return;
       showTab(tab, true);
     };
+  });
+
+  (function bindPaymentsNav() {
+    const root = $("#nav_payments");
+    const btn = $("#nav_payments_btn");
+    const menu = $("#nav_payments_menu");
+    if (!root || !btn || !menu) return;
+    function closeMenu() {
+      menu.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+      root.classList.remove("is-open");
+    }
+    function openMenu() {
+      menu.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+      root.classList.add("is-open");
+    }
+    btn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (menu.hidden) openMenu();
+      else closeMenu();
+    };
+    menu.querySelectorAll("button[data-tab]").forEach((b) => {
+      b.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeMenu();
+        showTab(b.dataset.tab, true);
+      };
+    });
+    document.addEventListener("click", (e) => {
+      if (!root.contains(e.target)) closeMenu();
+    });
+  })();
+
+  document.addEventListener("click", (e) => {
+    if (e.target && (e.target.closest(".cat-suggest") || e.target.closest(".it-cat-btn") || e.target.closest(".it-name"))) return;
+    if (typeof closeCatalogSuggest === "function") closeCatalogSuggest();
   });
 
   window.addEventListener("popstate", (ev) => {

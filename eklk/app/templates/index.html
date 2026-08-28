@@ -46,8 +46,13 @@
           <!-- URL: /home /create /payment /templates /orders /settings (см. app.js route) -->
           <button type="button" data-tab="home">Главная</button>
           <button type="button" data-tab="create">Чек</button>
-          <button type="button" data-tab="payment">Ссылка на оплату</button>
-          <button type="button" data-tab="templates">Многоразовые ссылки</button>
+          <div class="nav-dropdown" id="nav_payments">
+            <button type="button" class="nav-dropdown-btn" id="nav_payments_btn" aria-expanded="false" aria-haspopup="true">Платежи ▾</button>
+            <div class="nav-dropdown-menu" id="nav_payments_menu" hidden>
+              <button type="button" data-tab="payment">Ссылка на оплату</button>
+              <button type="button" data-tab="templates">Многоразовые ссылки</button>
+            </div>
+          </div>
           <button type="button" data-tab="orders">Документы</button>
           <button type="button" data-tab="catalog">Каталог</button>
           <button type="button" data-tab="reports">Отчёты</button>
@@ -849,12 +854,18 @@
         <div class="check-layout">
           <div>
             <div class="card">
-              <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+              <div class="section-title orders-list-title">
                 <span>Каталог товаров</span>
-                <div style="display:flex;gap:8px;flex-wrap:wrap">
+              </div>
+              <div class="orders-toolbar">
+                <div class="orders-toolbar-row">
+                  <label class="orders-compact-toggle" title="Сжатый список">
+                    <input type="checkbox" id="cat_compact" />
+                    <span>Сжато</span>
+                  </label>
                   <button type="button" class="btn btn-sm btn-secondary" id="cat_refresh">Обновить</button>
                   <button type="button" class="btn btn-sm" id="cat_create">+ Товар</button>
-                  <label class="btn btn-sm btn-secondary" style="cursor:pointer;margin:0">
+                  <label class="btn btn-sm btn-secondary cat-import-label" style="cursor:pointer;margin:0">
                     Импорт CommerceML
                     <input type="file" id="cat_import" accept=".xml,text/xml,application/xml" hidden />
                   </label>
@@ -871,7 +882,13 @@
                 <button type="button" class="btn btn-sm btn-secondary" id="cat_bulk_delete" disabled>Удалить выбранные</button>
                 <button type="button" class="btn btn-sm btn-danger" id="cat_delete_all">Удалить все…</button>
               </div>
-              <div class="orders-table-wrap">
+              <div class="orders-table-wrap cat-table-wrap" id="cat_table_wrap">
+                <div id="cat_busy" class="cat-busy" aria-hidden="true">
+                  <div class="cat-busy-inner">
+                    <span class="cat-spinner" aria-hidden="true"></span>
+                    <span id="cat_busy_text">Подождите, каталог загружается…</span>
+                  </div>
+                </div>
                 <table class="orders-table" id="cat_table">
                   <thead>
                     <tr>

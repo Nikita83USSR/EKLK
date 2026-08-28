@@ -49,9 +49,34 @@
     return v.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  function setCatalogBusy(on, msg) {
+    loading = !!on;
+    const overlay = $("#cat_busy");
+    const text = $("#cat_busy_text");
+    if (overlay) {
+      overlay.classList.toggle("is-on", !!on);
+      overlay.setAttribute("aria-hidden", on ? "false" : "true");
+    }
+    if (text && msg) text.textContent = msg;
+    ["cat_refresh", "cat_create", "cat_search", "cat_bulk_delete", "cat_delete_all", "cat_prev", "cat_next"].forEach((id) => {
+      const el = $("#" + id);
+      if (el) el.disabled = !!on;
+    });
+    const impLabel = document.querySelector('label[for="cat_import"], label.cat-import-label');
+    const imp = $("#cat_import");
+    if (imp) imp.disabled = !!on;
+    if (impLabel) impLabel.classList.toggle("is-disabled", !!on);
+  }
+
+  function applyCatalogCompact(on) {
+    const wrap = $("#cat_table_wrap") || document.querySelector("#tab-catalog .orders-table-wrap");
+    if (wrap) wrap.classList.toggle("orders-compact", !!on);
+    try { localStorage.setItem("eklk_catalog_compact", on ? "1" : "0"); } catch (e) {}
+  }
+
   async function load() {
     if (loading) return;
-    loading = true;
+    setCatalogBusy(true, "Подождите, каталог загружается…");
     const tbody = $("#cat_tbody");
     if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="hint">Загрузка…</td></tr>`;
     const name = ($("#cat_q_name") && $("#cat_q_name").value.trim()) || "";
@@ -87,7 +112,6 @@
             </tr>`;
           })
           .join("");
-        // stash for edit
         window.__CAT_ITEMS = Object.fromEntries(items.map((i) => [String(i.itemId), i]));
       }
       const info = $("#cat_page_info");
@@ -98,7 +122,7 @@
       if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="hint">Ошибка: ${escapeHtml(e.message || e)}</td></tr>`;
       alert(e.message || String(e), "error");
     } finally {
-      loading = false;
+      setCatalogBusy(false);
     }
   }
 
@@ -279,6 +303,7 @@
       if (!file) return;
       const fd = new FormData();
       fd.append("file", file);
+      setCatalogBusy(true, "Подождите, идёт импорт каталога…");
       try {
         const headers = {};
         if (window.EKLK?.token) headers["Authorization"] = "Bearer " + window.EKLK.token;
@@ -305,9 +330,20 @@
         page = 1;
         await load();
       } catch (err) {
+        setCatalogBusy(false);
         alert(err.message || String(err), "error");
       }
     });
+
+    // Сжато
+    const compactCb = $("#cat_compact");
+    if (compactCb) {
+      let saved = false;
+      try { saved = localStorage.getItem("eklk_catalog_compact") === "1"; } catch (e) {}
+      compactCb.checked = saved;
+      applyCatalogCompact(saved);
+      compactCb.onchange = () => applyCatalogCompact(compactCb.checked);
+    }
   }
 
   let bound = false;

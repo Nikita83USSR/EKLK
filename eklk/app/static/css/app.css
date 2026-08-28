@@ -2773,3 +2773,180 @@ input.field-copied[type="checkbox"] {
   outline-offset: 2px;
   box-shadow: none;
 }
+
+
+/* ---- Каталог: busy overlay, выбор из каталога, меню Платежи ---- */
+.cat-table-wrap { position: relative; min-height: 120px; }
+.cat-busy {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  border-radius: 8px;
+}
+.cat-busy.is-on { display: flex; }
+body[data-theme="dark"] .cat-busy,
+body[data-theme="glass"] .cat-busy {
+  background: rgba(15, 22, 30, 0.72);
+}
+.cat-busy-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.88rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.cat-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: cat-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes cat-spin { to { transform: rotate(360deg); } }
+.cat-import-label.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Иконка выбора из каталога в строке позиции */
+.it-name-cell { position: relative; }
+.it-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.it-name-wrap .it-name {
+  flex: 1;
+  min-width: 0;
+}
+.it-cat-btn {
+  display: none;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface2, var(--surface));
+  color: var(--muted);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+}
+.it-cat-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.item-row:focus-within .it-cat-btn,
+.item-row:hover .it-cat-btn {
+  display: inline-flex;
+}
+
+.cat-suggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 40;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+  padding: 4px;
+}
+body[data-theme="glass"] .cat-suggest {
+  background: rgba(23, 33, 43, 0.95);
+  backdrop-filter: blur(12px);
+}
+.cat-suggest-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+.cat-suggest-item:hover {
+  background: rgba(46, 194, 126, 0.12);
+}
+.cat-suggest-name { font-weight: 500; }
+.cat-suggest-meta { font-size: 0.72rem; color: var(--muted); }
+.cat-suggest-sku { font-family: ui-monospace, monospace; }
+.cat-suggest-empty {
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+/* Nav: Платежи dropdown */
+.nav-dropdown {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.nav-dropdown-btn {
+  /* наследует стили .nav button */
+}
+.nav-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 220px;
+  z-index: 50;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+body[data-theme="glass"] .nav-dropdown-menu {
+  background: rgba(23, 33, 43, 0.94);
+  backdrop-filter: blur(14px);
+}
+.nav-dropdown-menu button {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.nav-dropdown-menu button:hover,
+.nav-dropdown-menu button.active {
+  background: rgba(46, 194, 126, 0.14);
+  color: var(--text);
+}
+.nav-dropdown.is-active > .nav-dropdown-btn,
+.nav-dropdown-btn.active {
+  /* active state already via .nav button.active if class applied */
+}
