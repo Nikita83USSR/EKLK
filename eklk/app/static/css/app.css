@@ -2995,3 +2995,44 @@ body[data-theme="glass"] .nav-dropdown-menu {
 .r-pay-link-row .btn {
   text-decoration: none;
 }
+
+.cat-busy-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 220px;
+  max-width: 360px;
+}
+.cat-busy-progress-wrap {
+  width: 100%;
+}
+.cat-busy-progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+.cat-busy-progress-fill {
+  height: 100%;
+  width: 30%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+.cat-busy-progress-fill.is-indeterminate {
+  width: 40%;
+  animation: cat-progress-slide 1.2s ease-in-out infinite;
+}
+@keyframes cat-progress-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(280%); }
+}
+.cat-busy-progress-label {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.cat-busy-stop.hidden { display: none !important; }
+.cat-busy-stop { align-self: flex-start; }

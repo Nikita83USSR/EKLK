@@ -49,15 +49,81 @@
     return v.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
-  function setCatalogBusy(on, msg) {
+  let busyTimer = null;
+  let busyStartedAt = 0;
+  let importAbort = null;
+
+  function clearBusyTimer() {
+    if (busyTimer) {
+      clearInterval(busyTimer);
+      busyTimer = null;
+    }
+  }
+
+  function setCatalogBusy(on, msg, opts) {
+    opts = opts || {};
     loading = !!on;
     const overlay = $("#cat_busy");
     const text = $("#cat_busy_text");
+    const stopBtn = $("#cat_busy_stop");
+    const progWrap = $("#cat_busy_progress_wrap");
+    const progFill = $("#cat_busy_progress_fill");
+    const progLabel = $("#cat_busy_progress_label");
     if (overlay) {
       overlay.classList.toggle("is-on", !!on);
       overlay.setAttribute("aria-hidden", on ? "false" : "true");
     }
     if (text && msg) text.textContent = msg;
+    if (stopBtn) {
+      const showStop = !!on && !!opts.cancellable;
+      stopBtn.classList.toggle("hidden", !showStop);
+      stopBtn.onclick = showStop && typeof opts.onStop === "function" ? opts.onStop : null;
+    }
+    if (progWrap) {
+      const showProg = !!on && !!opts.progress;
+      progWrap.hidden = !showProg;
+      if (showProg && progFill) {
+        if (opts.progress === "indeterminate") {
+          progFill.classList.add("is-indeterminate");
+          progFill.style.width = "40%";
+        } else {
+          progFill.classList.remove("is-indeterminate");
+          const pct = Math.max(0, Math.min(100, Number(opts.progress) || 0));
+          progFill.style.width = pct + "%";
+        }
+      }
+    }
+    if (progLabel) {
+      progLabel.textContent = opts.progressLabel || "";
+    }
+    if (on && opts.elapsed) {
+      busyStartedAt = Date.now();
+      clearBusyTimer();
+      const tick = () => {
+        const sec = Math.floor((Date.now() - busyStartedAt) / 1000);
+        const m = Math.floor(sec / 60);
+        const s = String(sec % 60).padStart(2, "0");
+        const base = msg || (text && text.textContent) || "Подождите…";
+        if (text) text.textContent = base.replace(/\s*·\s*\d+:\d{2}$/, "") + " · " + m + ":" + s;
+        if (progLabel && opts.progress === "indeterminate") {
+          progLabel.textContent = opts.progressLabel || "Идёт обработка на сервере…";
+        }
+      };
+      tick();
+      busyTimer = setInterval(tick, 1000);
+    } else if (!on) {
+      clearBusyTimer();
+      if (progFill) {
+        progFill.classList.remove("is-indeterminate");
+        progFill.style.width = "0%";
+      }
+      if (progLabel) progLabel.textContent = "";
+      if (progWrap) progWrap.hidden = true;
+      if (stopBtn) {
+        stopBtn.classList.add("hidden");
+        stopBtn.onclick = null;
+      }
+    }
     ["cat_refresh", "cat_create", "cat_search", "cat_bulk_delete", "cat_delete_all", "cat_prev", "cat_next"].forEach((id) => {
       const el = $("#" + id);
       if (el) el.disabled = !!on;
@@ -74,8 +140,9 @@
     try { localStorage.setItem("eklk_catalog_compact", on ? "1" : "0"); } catch (e) {}
   }
 
-  async function load() {
-    if (loading) return;
+  async function load(opts) {
+    opts = opts || {};
+    if (loading && !opts.force) return;
     setCatalogBusy(true, "Подождите, каталог загружается…");
     const tbody = $("#cat_tbody");
     if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="hint">Загрузка…</td></tr>`;
@@ -303,7 +370,26 @@
       if (!file) return;
       const fd = new FormData();
       fd.append("file", file);
-      setCatalogBusy(true, "Подождите, идёт импорт каталога…");
+
+      if (importAbort) {
+        try { importAbort.abort(); } catch (e) {}
+      }
+      importAbort = typeof AbortController !== "undefined" ? new AbortController() : null;
+
+      setCatalogBusy(true, "Подождите, идёт импорт каталога…", {
+        cancellable: true,
+        progress: "indeterminate",
+        progressLabel: "Разбор файла и создание позиций на сервере…",
+        elapsed: true,
+        onStop: () => {
+          if (importAbort) {
+            try { importAbort.abort(); } catch (e) {}
+          }
+          setCatalogBusy(false);
+          alert("Импорт остановлен. Уже созданные позиции остаются в каталоге.", "error");
+        },
+      });
+
       try {
         const headers = {};
         if (window.EKLK?.token) headers["Authorization"] = "Bearer " + window.EKLK.token;
@@ -311,11 +397,23 @@
           method: "POST",
           headers,
           body: fd,
+          signal: importAbort ? importAbort.signal : undefined,
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.detail || data.error || res.statusText);
+        if (!res.ok) {
+          const detail = data.detail;
+          const msg =
+            typeof detail === "string"
+              ? detail
+              : detail && detail.message
+                ? detail.message
+              : data.error || res.statusText;
+          throw new Error(msg || "Ошибка импорта");
+        }
         const r = data.report || data;
         const errList = (data.errors || []).slice(0, 8).join("\n");
+        // Сначала снимаем оверлей — иначе load() не стартует (loading=true)
+        setCatalogBusy(false);
         alert(
           `Импорт завершён\n` +
             `Всего в файле: ${r.total ?? data.total ?? "—"}\n` +
@@ -328,10 +426,18 @@
           (data.errors_count || (data.errors || []).length) ? "error" : "success"
         );
         page = 1;
-        await load();
+        await load({ force: true });
       } catch (err) {
+        if (err && (err.name === "AbortError" || /abort/i.test(String(err.message || "")))) {
+          // already handled by onStop or cancel
+          setCatalogBusy(false);
+          return;
+        }
         setCatalogBusy(false);
         alert(err.message || String(err), "error");
+      } finally {
+        importAbort = null;
+        setCatalogBusy(false);
       }
     });
 

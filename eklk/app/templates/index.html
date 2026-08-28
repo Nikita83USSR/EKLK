@@ -886,7 +886,14 @@
                 <div id="cat_busy" class="cat-busy" aria-hidden="true">
                   <div class="cat-busy-inner">
                     <span class="cat-spinner" aria-hidden="true"></span>
-                    <span id="cat_busy_text">Подождите, каталог загружается…</span>
+                    <div class="cat-busy-body">
+                      <span id="cat_busy_text">Подождите, каталог загружается…</span>
+                      <div class="cat-busy-progress-wrap" id="cat_busy_progress_wrap" hidden>
+                        <div class="cat-busy-progress-bar"><div class="cat-busy-progress-fill" id="cat_busy_progress_fill"></div></div>
+                        <span class="cat-busy-progress-label" id="cat_busy_progress_label"></span>
+                      </div>
+                      <button type="button" class="btn btn-sm btn-secondary cat-busy-stop hidden" id="cat_busy_stop">Остановить</button>
+                    </div>
                   </div>
                 </div>
                 <table class="orders-table" id="cat_table">
