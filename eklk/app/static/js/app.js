@@ -3475,6 +3475,55 @@
       .replace(/"/g, "&quot;");
   }
 
+
+  function extractPaymentLink(summary, fiscal) {
+    const raw = (summary && summary.raw) || {};
+    const inv =
+      (fiscal && fiscal.invoice_payload) ||
+      raw.invoice_payload ||
+      raw.invoicePayload ||
+      {};
+    const candidates = [
+      inv.link,
+      inv.url,
+      inv.paymentUrl,
+      inv.payment_url,
+      fiscal && fiscal.invoice_payload && fiscal.invoice_payload.link,
+      raw.paymentUrl,
+      raw.payment_url,
+      raw.payUrl,
+      raw.pay_url,
+      raw.link,
+      raw.paymentLink,
+      raw.invoiceLink,
+      fiscal && fiscal.permalink,
+      raw.permalink,
+    ];
+    for (const c of candidates) {
+      if (c && typeof c === "string" && /^https?:\/\//i.test(c.trim())) {
+        return c.trim();
+      }
+    }
+    return "";
+  }
+
+  function isInvoiceWaitingPayment(summary, fiscal) {
+    const st = String((summary && summary.status) || (fiscal && fiscal.status) || "")
+      .toLowerCase()
+      .trim();
+    const waitStatuses = ["wait", "waiting", "pending", "created", "new"];
+    if (!waitStatuses.includes(st)) return false;
+
+    const ot = String((summary && summary.order_type) || "").toUpperCase();
+    const kind = String((fiscal && fiscal.kind) || (summary && summary.raw && summary.raw.kind) || "").toUpperCase();
+    const typeLabel = orderTypeLabel(summary || {});
+    if (ot === "INVC" || ot.includes("INVOICE")) return true;
+    if (kind.includes("INVOICE") || kind.includes("INVC")) return true;
+    if (/сч[её]т|ссылка на оплату|invoice/i.test(typeLabel)) return true;
+    // fallback: wait + есть платёжная ссылка
+    return !!extractPaymentLink(summary, fiscal);
+  }
+
   function buildReceiptHtml(atol5, summary, fiscal, opts) {
     opts = opts || {};
     const receipt = extractAtolReceipt(atol5);
@@ -3487,8 +3536,13 @@
     const oid = summary && summary.order_id != null ? summary.order_id : ordersSelectedId;
 
     const isCorr = !!(summary && (summary.is_correction || (summary.raw && summary.raw.isCorrection)));
+    const isInvcDoc = (() => {
+      const ot = String((summary && summary.order_type) || "").toUpperCase();
+      const kind = String((fiscal && fiscal.kind) || "").toUpperCase();
+      return ot === "INVC" || ot.includes("INVOICE") || kind.includes("INVOICE");
+    })();
     let html = `<div class="r-head">
-      <div class="r-title">${isCorr ? "Чек коррекции" : "Кассовый чек"}</div>
+      <div class="r-title">${isCorr ? "Чек коррекции" : isInvcDoc ? "Счёт на оплату" : "Кассовый чек"}</div>
       <div class="r-meta">№ ${escHtml(summary?.order_id ?? "—")} · ${escHtml(orderTypeLabel(summary || {}))} · ${statusBadge(summary?.status || "")}</div>
       <div class="r-meta">${escHtml(formatDt(summary?.updated))}</div>
       ${(atol5 && atol5.external_id) ? `<div class="r-meta">Внешний ID: ${escHtml(atol5.external_id)}</div>` : (summary?.external_id ? `<div class="r-meta">Внешний ID: ${escHtml(summary.external_id)}</div>` : "")}`;
@@ -3500,11 +3554,27 @@
     }
     html += `
     </div>`;
-    if (fiscalPayload.ofd_receipt_url) {
+    const payLink = extractPaymentLink(summary, fiscal);
+    const invoiceWait = isInvoiceWaitingPayment(summary, fiscal);
+
+    if (invoiceWait && payLink) {
+      // Счёт на оплату в ожидании — вместо ОФД
+      html += `<div class="r-ofd-link r-pay-link-row">
+        <a class="btn btn-sm" href="${escHtml(payLink)}" target="_blank" rel="noopener" id="o_pay_open">Ссылка на оплату</a>
+        <button type="button" class="btn btn-sm btn-secondary" id="o_pay_copy" data-link="${escHtml(payLink)}">Скопировать</button>
+      </div>`;
+    } else if (fiscalPayload.ofd_receipt_url) {
       html += `<div class="r-ofd-link"><a href="${escHtml(fiscalPayload.ofd_receipt_url)}" target="_blank" rel="noopener">
         <span class="r-ofd-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6V2z"/><path d="M15 2v4h4"/><path d="M9 12h6M9 16h6M9 8h3"/></svg></span>
         <span>Ссылка на чек ОФД</span>
       </a></div>`;
+    } else if (invoiceWait && !payLink && fiscal && fiscal.permalink) {
+      // permalink как запасной вариант
+      const pl = String(fiscal.permalink);
+      html += `<div class="r-ofd-link r-pay-link-row">
+        <a class="btn btn-sm" href="${escHtml(pl)}" target="_blank" rel="noopener">Ссылка на оплату</a>
+        <button type="button" class="btn btn-sm btn-secondary" id="o_pay_copy" data-link="${escHtml(pl)}">Скопировать</button>
+      </div>`;
     }
 
     html += `<div class="r-section-title">Организация</div>`;
@@ -3619,7 +3689,7 @@
     }
 
     const links = [];
-    if (fiscal && fiscal.permalink) {
+    if (fiscal && fiscal.permalink && !(invoiceWait && payLink)) {
       links.push({ label: "Ссылка на предчек", href: fiscal.permalink });
     }
     if (links.length) {
@@ -3643,6 +3713,34 @@
     const editBtn = $("#o_detail_edit");
     if (editBtn) {
       editBtn.onclick = () => editOrderAsNew(editBtn.dataset.orderId || oid);
+    }
+    const copyBtn = $("#o_pay_copy");
+    if (copyBtn) {
+      copyBtn.onclick = async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const link = copyBtn.getAttribute("data-link") || "";
+        if (!link) return;
+        try {
+          await navigator.clipboard.writeText(link);
+          const prev = copyBtn.textContent;
+          copyBtn.textContent = "Скопировано";
+          setTimeout(() => { copyBtn.textContent = prev || "Скопировать"; }, 1500);
+          showAlert("Ссылка скопирована", "success");
+        } catch (e) {
+          try {
+            const ta = document.createElement("textarea");
+            ta.value = link;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+            showAlert("Ссылка скопирована", "success");
+          } catch (e2) {
+            showAlert("Не удалось скопировать — откройте ссылку вручную");
+          }
+        }
+      };
     }
   }
 

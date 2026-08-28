@@ -2981,3 +2981,14 @@ body[data-theme="glass"] .nav-dropdown-menu {
   right: 36px;
   top: calc(100% + 4px);
 }
+
+.r-pay-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+.r-pay-link-row .btn {
+  text-decoration: none;
+}
