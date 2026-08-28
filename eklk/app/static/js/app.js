@@ -2432,8 +2432,25 @@
       try { loadTemplates(); } catch (e) { console.warn(e); }
     }
     // CORE: hooks for section modules (do not expand core logic here)
-    if (tab === "catalog" && window.EKLK_CATALOG && typeof window.EKLK_CATALOG.onShow === "function") {
-      try { window.EKLK_CATALOG.onShow(); } catch (e) { console.warn(e); }
+    if (tab === "catalog") {
+      $$(".settings-tab").forEach((b) => {
+        b.classList.toggle("active", b.dataset.settingsTab === "catalog");
+      });
+      if (window.EKLK_CATALOG && typeof window.EKLK_CATALOG.onShow === "function") {
+        try { window.EKLK_CATALOG.onShow(); } catch (e) { console.warn(e); }
+      }
+    }
+    if (tab === "settings") {
+      // не оставляем «Каталог» активным, если открыли настройки без выбора
+      const any = document.querySelector(".settings-tab.active");
+      if (any && any.dataset.settingsTab === "catalog") {
+        $$(".settings-tab").forEach((b) => b.classList.remove("active"));
+        const org = document.querySelector('.settings-tab[data-settings-tab="org"]');
+        if (org) org.classList.add("active");
+        $("#settings-org") && $("#settings-org").classList.remove("hidden");
+        $("#settings-stores") && $("#settings-stores").classList.add("hidden");
+        $("#settings-appearance") && $("#settings-appearance").classList.add("hidden");
+      }
     }
     if (tab === "reports" && window.EKLK_REPORTS && typeof window.EKLK_REPORTS.onShow === "function") {
       try { window.EKLK_REPORTS.onShow(); } catch (e) { console.warn(e); }
@@ -3908,12 +3925,22 @@
   // Settings sub-tabs
   $$(".settings-tab").forEach((btn) => {
     btn.onclick = () => {
+      const name = btn.dataset.settingsTab;
+      // Каталог — отдельная панель (sections/catalog.js), не ломаем модуль
+      if (name === "catalog") {
+        $$(".settings-tab").forEach((b) => b.classList.toggle("active", b.dataset.settingsTab === "catalog"));
+        showTab("catalog", true);
+        return;
+      }
       $$(".settings-tab").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      const name = btn.dataset.settingsTab;
       $("#settings-org") && $("#settings-org").classList.toggle("hidden", name !== "org");
       $("#settings-stores") && $("#settings-stores").classList.toggle("hidden", name !== "stores");
       $("#settings-appearance") && $("#settings-appearance").classList.toggle("hidden", name !== "appearance");
+      // если были на каталоге — вернуться в настройки
+      if ($("#tab-settings") && $("#tab-settings").classList.contains("hidden")) {
+        showTab("settings", true);
+      }
     };
   });
 
