@@ -688,17 +688,30 @@ class EcomKassaClient:
     ) -> dict:
         """
         Запрос к catalog.ecomkassa.ru /api/v1/...
-        По успешному логу EcomKassa: только Accept + Content-Type, без Token/Basic.
+        Auth: HTTP Basic из CATALOG_BASIC_USER / CATALOG_BASIC_PASSWORD (сервисная учётка).
+        ИНН (taxId) в path задаёт вызывающий код — только из профиля организации пользователя.
         """
-        base = f"{self.CATALOG_BASE.rstrip('/')}/api/v1/{path.lstrip('/')}"
-        # path may already contain query string
+        from app.core.config import settings
+        base_host = (settings.catalog_base_url or self.CATALOG_BASE).rstrip("/")
+        base = f"{base_host}/api/v1/{path.lstrip('/')}"
         url = base
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
-        log_action("ecom_catalog", f"{method} {url.split('?')[0]}", level="debug")
-        resp = await self._client.request(method, url, json=json_body, headers=headers)
+        auth = None
+        user = (settings.catalog_basic_user or "").strip()
+        password = settings.catalog_basic_password or ""
+        if user:
+            auth = (user, password)
+        else:
+            log_action(
+                "ecom_catalog_auth_warn",
+                "CATALOG_BASIC_USER не задан — CRUD каталога может вернуть 401",
+                level="warning",
+            )
+        log_action("ecom_catalog", f"{method} {url.split('?')[0]} auth={'basic' if auth else 'none'}", level="debug")
+        resp = await self._client.request(method, url, json=json_body, headers=headers, auth=auth)
 
         if resp.status_code == 204:
             return {"errorCode": 0}

@@ -121,12 +121,51 @@ def _client_for(user: dict) -> EcomKassaClient:
     )
 
 
+def _normalize_inn(value: str | None) -> str:
+    """Только цифры ИНН — для сравнения без пробелов/мусора."""
+    if not value:
+        return ""
+    return "".join(ch for ch in str(value) if ch.isdigit())
+
+
 def _tax_id(user: dict) -> str:
+    """
+    ИНН только из профиля организации в сессии (загружается при login).
+    Клиентский taxId/ИНН из запроса не принимаем — защита от подмены чужого каталога.
+    """
     firm = user.get("firm") or {}
     inn = firm.get("taxIdentity") or firm.get("tax_identity") or firm.get("inn")
     if not inn:
-        raise HTTPException(status_code=400, detail="ИНН организации не найден в профиле. Обновите данные в Настройках.")
-    return str(inn).strip()
+        raise HTTPException(
+            status_code=400,
+            detail="ИНН организации не найден в профиле. Обновите данные в Настройках.",
+        )
+    digits = _normalize_inn(inn)
+    if len(digits) not in (10, 12):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Некорректный ИНН организации в профиле ({inn!r}). Обновите данные в Настройках.",
+        )
+    return digits
+
+
+def _reject_foreign_tax_id(user: dict, candidate: str | None) -> None:
+    """Если в теле/query передан taxId — он обязан совпасть с ИНН организации пользователя."""
+    if candidate is None or str(candidate).strip() == "":
+        return
+    firm_inn = _tax_id(user)
+    got = _normalize_inn(candidate)
+    if got and got != firm_inn:
+        log_action(
+            "catalog_tax_mismatch",
+            f"rejected taxId={got} firm={firm_inn}",
+            level="warning",
+            user_id=user.get("username"),
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="ИНН в запросе не совпадает с организацией текущего пользователя",
+        )
 
 
 def _map_item(raw: dict) -> CatalogItemOut:
@@ -231,6 +270,9 @@ async def list_items(
 async def create_item(body: CatalogItemIn, user: CurrentUser):
     client = _client_for(user)
     tax_id = _tax_id(user)
+    # taxId в path/body только из сессии; чужой ИНН отклоняем если когда-либо попадёт в payload
+    raw_extra = body.model_dump(exclude_none=True)
+    _reject_foreign_tax_id(user, raw_extra.get("taxId") or raw_extra.get("taxIdentity"))
     try:
         sku = (body.sku or "").strip()
         generated = False
@@ -293,6 +335,8 @@ async def create_item(body: CatalogItemIn, user: CurrentUser):
 async def update_item(item_id: int, body: CatalogItemIn, user: CurrentUser):
     client = _client_for(user)
     tax_id = _tax_id(user)
+    raw_extra = body.model_dump(exclude_none=True)
+    _reject_foreign_tax_id(user, raw_extra.get("taxId") or raw_extra.get("taxIdentity"))
     try:
         data = await client.catalog_update_item(
             tax_id,

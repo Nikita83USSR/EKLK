@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     # Без секрета используется action=issue_from_token (токен EcomKassa).
     iikassa_partner_secret: str = ""
 
+    # Catalog service (catalog.ecomkassa.ru) — HTTP Basic, одна сервисная учётка
+    catalog_base_url: str = "https://catalog.ecomkassa.ru"
+    catalog_basic_user: str = ""
+    catalog_basic_password: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:
