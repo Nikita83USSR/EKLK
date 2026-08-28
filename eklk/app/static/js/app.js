@@ -3476,33 +3476,34 @@
   }
 
 
+  /** Только invoice_payload.link (не permalink — это предчек). */
   function extractPaymentLink(summary, fiscal) {
     const raw = (summary && summary.raw) || {};
-    const inv =
-      (fiscal && fiscal.invoice_payload) ||
-      raw.invoice_payload ||
-      raw.invoicePayload ||
-      {};
-    const candidates = [
-      inv.link,
-      inv.url,
-      inv.paymentUrl,
-      inv.payment_url,
-      fiscal && fiscal.invoice_payload && fiscal.invoice_payload.link,
-      raw.paymentUrl,
-      raw.payment_url,
-      raw.payUrl,
-      raw.pay_url,
-      raw.link,
-      raw.paymentLink,
-      raw.invoiceLink,
-      fiscal && fiscal.permalink,
-      raw.permalink,
+    const sources = [
+      fiscal && fiscal.invoice_payload,
+      fiscal && fiscal.invoicePayload,
+      raw.invoice_payload,
+      raw.invoicePayload,
+      fiscal && fiscal.payload && fiscal.payload.invoice_payload,
+      fiscal && fiscal.payload && fiscal.payload.invoicePayload,
     ];
-    for (const c of candidates) {
-      if (c && typeof c === "string" && /^https?:\/\//i.test(c.trim())) {
-        return c.trim();
+    for (const inv of sources) {
+      if (!inv || typeof inv !== "object") continue;
+      const link = inv.link || inv.url || inv.paymentUrl || inv.payment_url;
+      if (link && typeof link === "string" && /^https?:\/\//i.test(link.trim())) {
+        return link.trim();
       }
+    }
+    // глубокий поиск invoice_payload в fiscal/raw
+    const bags = [fiscal, raw, fiscal && fiscal.payload].filter(Boolean);
+    for (const bag of bags) {
+      if (typeof bag !== "object") continue;
+      try {
+        const s = JSON.stringify(bag);
+        const m = s.match(/"invoice_payload"\s*:\s*\{[^}]*"link"\s*:\s*"([^"]+)"/i)
+          || s.match(/"invoicePayload"\s*:\s*\{[^}]*"link"\s*:\s*"([^"]+)"/i);
+        if (m && m[1] && /^https?:\/\//i.test(m[1])) return m[1];
+      } catch (e) {}
     }
     return "";
   }
@@ -3568,13 +3569,8 @@
         <span class="r-ofd-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17H6V2z"/><path d="M15 2v4h4"/><path d="M9 12h6M9 16h6M9 8h3"/></svg></span>
         <span>Ссылка на чек ОФД</span>
       </a></div>`;
-    } else if (invoiceWait && !payLink && fiscal && fiscal.permalink) {
-      // permalink как запасной вариант
-      const pl = String(fiscal.permalink);
-      html += `<div class="r-ofd-link r-pay-link-row">
-        <a class="btn btn-sm" href="${escHtml(pl)}" target="_blank" rel="noopener">Ссылка на оплату</a>
-        <button type="button" class="btn btn-sm btn-secondary" id="o_pay_copy" data-link="${escHtml(pl)}">Скопировать</button>
-      </div>`;
+    } else if (invoiceWait && !payLink) {
+      html += `<div class="r-ofd-link"><span class="hint">Ссылка на оплату (invoice_payload.link) в ответе кассы отсутствует</span></div>`;
     }
 
     html += `<div class="r-section-title">Организация</div>`;
