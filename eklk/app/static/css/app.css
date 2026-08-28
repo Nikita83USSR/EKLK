@@ -2329,7 +2329,20 @@ body[data-theme="glass"] .tpl-qr-cell {
   padding: 18px 20px;
   box-shadow: var(--shadow);
 }
-.dash-side { display: flex; flex-direction: column; gap: 12px; }
+.dash-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+}
+.dash-side > .dash-card {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+}
 .dash-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2441,8 +2454,18 @@ body[data-theme="glass"] .tpl-qr-cell {
 
 .dash-actions-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
+}
+@media (max-width: 960px) {
+  .dash-actions-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 520px) {
+  .dash-actions-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .dash-action {
   display: flex;
