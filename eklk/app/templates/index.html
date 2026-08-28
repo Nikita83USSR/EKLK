@@ -763,19 +763,16 @@
             <div class="card">
               <div class="section-title orders-list-title">
                 <span>Список чеков</span>
-                <div class="orders-title-actions">
-                  <label class="orders-compact-toggle" title="Максимально сжатый список">
-                    <input type="checkbox" id="o_compact" />
-                    <span>Отображать сжато</span>
-                  </label>
-                  <button type="button" class="btn btn-sm" id="o_refresh">Обновить</button>
-                </div>
               </div>
               <div class="orders-toolbar">
-                <div class="orders-toolbar-main">
-                  <div style="max-width:120px">
-                    <label>Лимит</label>
-                    <select id="o_limit">
+                <div class="orders-toolbar-row">
+                  <label class="orders-compact-toggle" title="Максимально сжатый список">
+                    <input type="checkbox" id="o_compact" />
+                    <span>Сжато</span>
+                  </label>
+                  <div class="orders-limit-inline">
+                    <label for="o_limit">Лимит</label>
+                    <select id="o_limit" class="orders-limit-select">
                       <option value="25" selected>25</option>
                       <option value="50">50</option>
                       <option value="100">100</option>
@@ -783,13 +780,12 @@
                       <option value="500">500</option>
                     </select>
                   </div>
-                  <div class="orders-toolbar-btns">
-                    <button type="button" class="btn btn-secondary btn-sm" id="o_filters_toggle" aria-expanded="false">Параметры поиска</button>
-                    <button type="button" class="btn btn-sm" id="o_search">Найти</button>
-                    <button type="button" class="btn btn-secondary btn-sm" id="o_reset">Сброс</button>
-                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm" id="o_filters_toggle" aria-expanded="false">Параметры поиска</button>
+                  <button type="button" class="btn btn-sm" id="o_search">Найти</button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="o_reset">Сброс</button>
+                  <button type="button" class="btn btn-sm" id="o_refresh">Обновить</button>
                 </div>
-                <div class="orders-filters hidden" id="o_filters_panel">
+                <div class="orders-filters" id="o_filters_panel" hidden>
                   <div class="row">
                     <div>
                       <label>Внешний ID</label>

@@ -2638,13 +2638,20 @@ body[data-theme="glass"] .it-name-float {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  margin-bottom: 10px;
 }
-.orders-title-actions {
+
+.orders-toolbar {
+  margin-bottom: 12px;
+}
+
+.orders-toolbar-row {
   display: flex;
   align-items: center;
-  gap: 12px;
   flex-wrap: wrap;
+  gap: 8px 10px;
 }
+
 .orders-compact-toggle {
   display: inline-flex;
   align-items: center;
@@ -2655,6 +2662,8 @@ body[data-theme="glass"] .it-name-float {
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
+  height: 32px;
+  padding: 0 4px;
 }
 .orders-compact-toggle input {
   margin: 0;
@@ -2663,27 +2672,67 @@ body[data-theme="glass"] .it-name-float {
 }
 .orders-compact-toggle:hover { color: var(--text); }
 
-.orders-toolbar {
-  margin-bottom: 12px;
-}
-.orders-toolbar-main {
-  display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 10px 14px;
-}
-.orders-toolbar-btns {
-  display: flex;
+.orders-limit-inline {
+  display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
+  height: 32px;
 }
+.orders-limit-inline label {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.orders-limit-select {
+  width: auto;
+  min-width: 72px;
+  height: 32px;
+  padding: 0 28px 0 10px;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.orders-toolbar-row .btn-sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+  line-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+/* Плавное выезжание параметров поиска */
 .orders-filters {
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  border-top: 1px solid transparent;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    max-height 0.28s ease,
+    opacity 0.22s ease,
+    margin-top 0.28s ease,
+    padding-top 0.28s ease,
+    border-color 0.22s ease;
+}
+.orders-filters.is-open {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid var(--border);
+  border-top-color: var(--border);
+  max-height: 320px;
+  opacity: 1;
 }
-.orders-filters.hidden { display: none !important; }
+.orders-filters[hidden] {
+  display: block !important; /* анимируем через max-height, не display */
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
 
 /* Сжатый список */
 .orders-table-wrap.orders-compact .orders-table {

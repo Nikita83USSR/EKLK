@@ -3460,21 +3460,50 @@
       compactCb.onchange = () => applyOrdersCompact(compactCb.checked);
     }
 
-    // Параметры поиска — панель
+    // Параметры поиска — плавное выезжание
     const filtersToggle = $("#o_filters_toggle");
     const filtersPanel = $("#o_filters_panel");
     if (filtersToggle && filtersPanel) {
+      function setFiltersOpen(open) {
+        filtersPanel.classList.toggle("is-open", open);
+        if (open) {
+          filtersPanel.removeAttribute("hidden");
+        } else {
+          // после анимации ставим hidden (не блокируем transition)
+          const onEnd = (ev) => {
+            if (ev.propertyName !== "max-height") return;
+            if (!filtersPanel.classList.contains("is-open")) {
+              filtersPanel.setAttribute("hidden", "");
+            }
+            filtersPanel.removeEventListener("transitionend", onEnd);
+          };
+          filtersPanel.addEventListener("transitionend", onEnd);
+          // fallback если transition не сработал
+          setTimeout(() => {
+            if (!filtersPanel.classList.contains("is-open")) {
+              filtersPanel.setAttribute("hidden", "");
+            }
+          }, 320);
+        }
+        filtersToggle.setAttribute("aria-expanded", open ? "true" : "false");
+        try {
+          localStorage.setItem("eklk_orders_filters_open", open ? "1" : "0");
+        } catch (e) {}
+      }
       let open = false;
       try { open = localStorage.getItem("eklk_orders_filters_open") === "1"; } catch (e) {}
-      filtersPanel.classList.toggle("hidden", !open);
-      filtersToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) {
+        filtersPanel.classList.add("is-open");
+        filtersPanel.removeAttribute("hidden");
+        filtersToggle.setAttribute("aria-expanded", "true");
+      } else {
+        filtersPanel.classList.remove("is-open");
+        filtersPanel.setAttribute("hidden", "");
+        filtersToggle.setAttribute("aria-expanded", "false");
+      }
       filtersToggle.onclick = () => {
-        const nowOpen = filtersPanel.classList.contains("hidden");
-        filtersPanel.classList.toggle("hidden", !nowOpen);
-        filtersToggle.setAttribute("aria-expanded", nowOpen ? "true" : "false");
-        try {
-          localStorage.setItem("eklk_orders_filters_open", nowOpen ? "1" : "0");
-        } catch (e) {}
+        const nowOpen = !filtersPanel.classList.contains("is-open");
+        setFiltersOpen(nowOpen);
       };
     }
 
