@@ -761,47 +761,18 @@
         <div class="orders-layout">
           <div class="orders-list-pane">
             <div class="card">
-              <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+              <div class="section-title orders-list-title">
                 <span>Список чеков</span>
-                <button type="button" class="btn btn-sm" id="o_refresh">Обновить</button>
-              </div>
-              <div class="orders-filters">
-                <div class="row">
-                  <div>
-                    <label>Внешний ID</label>
-                    <input id="o_ext" placeholder="external_id" />
-                  </div>
-                  <div>
-                    <label>Тип</label>
-                    <select id="o_types">
-                      <option value="">Все</option>
-                      <option value="VCHR">Чеки (VCHR)</option>
-                      <option value="INVC">Счета (INVC)</option>
-                      <option value="CORD">Курьерские (CORD)</option>
-                      <option value="VCHR,INVC">Чеки + счета</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label>Статус</label>
-                    <select id="o_status">
-                      <option value="">Все</option>
-                      <option value="done">Завершён</option>
-                      <option value="wait">Ожидает</option>
-                      <option value="paid">Фискализация</option>
-                      <option value="fail">Ошибка</option>
-                      <option value="canceled">Отменён</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label>С (UTC)</label>
-                    <input id="o_since" type="datetime-local" />
-                  </div>
-                  <div>
-                    <label>По (UTC)</label>
-                    <input id="o_until" type="datetime-local" />
-                  </div>
+                <div class="orders-title-actions">
+                  <label class="orders-compact-toggle" title="Максимально сжатый список">
+                    <input type="checkbox" id="o_compact" />
+                    <span>Отображать сжато</span>
+                  </label>
+                  <button type="button" class="btn btn-sm" id="o_refresh">Обновить</button>
                 </div>
-                <div class="row" style="align-items:end">
+              </div>
+              <div class="orders-toolbar">
+                <div class="orders-toolbar-main">
                   <div style="max-width:120px">
                     <label>Лимит</label>
                     <select id="o_limit">
@@ -812,9 +783,47 @@
                       <option value="500">500</option>
                     </select>
                   </div>
-                  <div>
-                    <button type="button" class="btn" id="o_search">Найти</button>
-                    <button type="button" class="btn btn-secondary" id="o_reset">Сброс</button>
+                  <div class="orders-toolbar-btns">
+                    <button type="button" class="btn btn-secondary btn-sm" id="o_filters_toggle" aria-expanded="false">Параметры поиска</button>
+                    <button type="button" class="btn btn-sm" id="o_search">Найти</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="o_reset">Сброс</button>
+                  </div>
+                </div>
+                <div class="orders-filters hidden" id="o_filters_panel">
+                  <div class="row">
+                    <div>
+                      <label>Внешний ID</label>
+                      <input id="o_ext" placeholder="external_id" />
+                    </div>
+                    <div>
+                      <label>Тип</label>
+                      <select id="o_types">
+                        <option value="">Все</option>
+                        <option value="VCHR">Чеки (VCHR)</option>
+                        <option value="INVC">Счета (INVC)</option>
+                        <option value="CORD">Курьерские (CORD)</option>
+                        <option value="VCHR,INVC">Чеки + счета</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label>Статус</label>
+                      <select id="o_status">
+                        <option value="">Все</option>
+                        <option value="done">Завершён</option>
+                        <option value="wait">Ожидает</option>
+                        <option value="paid">Фискализация</option>
+                        <option value="fail">Ошибка</option>
+                        <option value="canceled">Отменён</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label>С (UTC)</label>
+                      <input id="o_since" type="datetime-local" />
+                    </div>
+                    <div>
+                      <label>По (UTC)</label>
+                      <input id="o_until" type="datetime-local" />
+                    </div>
                   </div>
                 </div>
               </div>

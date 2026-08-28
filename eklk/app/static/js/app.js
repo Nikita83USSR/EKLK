@@ -616,6 +616,7 @@
         btn.onclick = () => {
           sourceDocumentId = null;
           sourceExternalId = null;
+          clearCopiedMarks();
           setCloneBanner();
         };
       }
@@ -646,31 +647,101 @@
     return map[s] || "full_payment";
   }
 
+
+  function clearCopiedMarks() {
+    document.querySelectorAll(".field-copied").forEach((el) => el.classList.remove("field-copied"));
+  }
+
+  /** Подсветка поля, заполненного из исходного чека (не дефолт). */
+  function markCopied(el) {
+    if (!el) return;
+    el.classList.add("field-copied");
+  }
+
+  /** Извлечь receipt/correction из atol-5 ответа. */
+  function extractAtolReceipt(atol5) {
+    if (!atol5 || typeof atol5 !== "object") return {};
+    if (atol5.receipt && typeof atol5.receipt === "object") return atol5.receipt;
+    if (atol5.correction && typeof atol5.correction === "object") return atol5.correction;
+    // иногда сам объект и есть чек
+    if (atol5.items || atol5.company || atol5.payments) return atol5;
+    return {};
+  }
+
+  /** dd.mm.yyyy или ISO → yyyy-mm-dd для input[type=date] */
+  function toDateInputValue(raw) {
+    if (!raw) return "";
+    const s = String(raw).trim();
+    const m1 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m1) return m1[1] + "-" + m1[2] + "-" + m1[3];
+    const m2 = s.match(/^(\d{1,2})[.](\d{1,2})[.](\d{4})/);
+    if (m2) {
+      const d = m2[1].padStart(2, "0");
+      const mo = m2[2].padStart(2, "0");
+      return m2[3] + "-" + mo + "-" + d;
+    }
+    return "";
+  }
+
   function fillCreateFormFromOrder(detail) {
+    clearCopiedMarks();
     const atol = detail.atol5 || {};
-    // Atol5 may be {receipt: {...}} or the receipt itself
-    const receipt = atol.receipt || atol;
+    // Atol5: обычный чек — receipt; коррекция — correction
+    const receipt = extractAtolReceipt(atol);
     const summary = detail.summary || {};
     sourceDocumentId = summary.order_id || ordersSelectedId;
     sourceExternalId = summary.external_id || null;
     lastExternalId = null; // force new id on submit
+
+    const CORR_OPS = ["sell_correction", "buy_correction", "sell_refund_correction", "buy_refund_correction"];
+    const ALL_OPS = ["sell", "sell_refund", "buy", "buy_refund"].concat(CORR_OPS);
 
     // Operation: sale -> sell, refund heuristics
     let op = "sell";
     if (summary.is_sale === false || /refund|возврат/i.test(String(summary.order_type || ""))) {
       op = "sell_refund";
     }
-    // atol operation
+    if (summary.is_correction === true || (summary.raw && summary.raw.isCorrection === true)) {
+      op = (summary.is_sale === false || op === "sell_refund") ? "sell_refund_correction" : "sell_correction";
+    }
+    // atol operation (включая *_correction)
     if (receipt.operation) {
       const o = String(receipt.operation).toLowerCase();
-      if (["sell", "sell_refund", "buy", "buy_refund"].includes(o)) op = o;
+      if (ALL_OPS.includes(o)) op = o;
     }
-    if ($("#c_operation")) $("#c_operation").value = op;
+    if ($("#c_operation")) {
+      $("#c_operation").value = op;
+      markCopied($("#c_operation"));
+    }
+    if (typeof syncCorrectionFields === "function") syncCorrectionFields();
+
+    // correction_info (если есть в исходном)
+    const ci = receipt.correction_info || atol.correction_info || {};
+    if (ci.type && $("#c_corr_type")) {
+      const t = String(ci.type).toLowerCase();
+      if (t === "self" || t === "instruction") {
+        $("#c_corr_type").value = t;
+        markCopied($("#c_corr_type"));
+      }
+    }
+    if ((ci.base_date || ci.baseDate) && $("#c_corr_date")) {
+      const dv = toDateInputValue(ci.base_date || ci.baseDate);
+      if (dv) {
+        $("#c_corr_date").value = dv;
+        markCopied($("#c_corr_date"));
+      }
+    }
+    if ((ci.base_number || ci.baseNumber) && $("#c_corr_number")) {
+      $("#c_corr_number").value = String(ci.base_number || ci.baseNumber);
+      markCopied($("#c_corr_number"));
+    }
+    if (typeof syncCorrectionFields === "function") syncCorrectionFields();
 
     // SNO
     const sno = (receipt.company && receipt.company.sno) || (firmData && firmData.tax_variant) || "osn";
     if ($("#c_sno") && [...$("#c_sno").options].some((o) => o.value === sno)) {
       $("#c_sno").value = sno;
+      if (receipt.company && receipt.company.sno) markCopied($("#c_sno"));
     }
 
     // Store
@@ -678,15 +749,23 @@
 
     // Client
     const client = receipt.client || {};
-    if ($("#c_email")) $("#c_email").value = client.email || "";
-    if ($("#c_phone")) $("#c_phone").value = client.phone || "";
+    if ($("#c_email") && client.email) {
+      $("#c_email").value = client.email;
+      markCopied($("#c_email"));
+    }
+    if ($("#c_phone") && client.phone) {
+      $("#c_phone").value = client.phone;
+      markCopied($("#c_phone"));
+    }
     if (client.name && $("#c_name")) {
       $("#c_extraBuyer") && $("#c_extraBuyer").classList.remove("hidden");
       $("#c_name").value = client.name;
+      markCopied($("#c_name"));
     }
     if (client.inn && $("#c_inn")) {
       $("#c_extraBuyer") && $("#c_extraBuyer").classList.remove("hidden");
       $("#c_inn").value = client.inn;
+      markCopied($("#c_inn"));
     }
 
     // Items
@@ -704,19 +783,29 @@
           const name = it.name || it.text || "Товар";
           const price = it.price != null ? it.price : 0;
           const qty = it.quantity != null ? it.quantity : 1;
-          row.querySelector(".it-name").value = name;
-          row.querySelector(".it-price").value = money(price);
-          row.querySelector(".it-qty").value = qty;
+          const nameEl = row.querySelector(".it-name");
+          const priceEl = row.querySelector(".it-price");
+          const qtyEl = row.querySelector(".it-qty");
+          if (nameEl) { nameEl.value = name; markCopied(nameEl); }
+          if (priceEl) { priceEl.value = money(price); markCopied(priceEl); }
+          if (qtyEl) { qtyEl.value = qty; markCopied(qtyEl); }
           const measEl = row.querySelector(".it-measure");
           if (measEl && it.measure != null) {
             const mv = String(it.measure);
-            if ([...measEl.options].some((o) => o.value === mv)) measEl.value = mv;
+            if ([...measEl.options].some((o) => o.value === mv)) {
+              measEl.value = mv;
+              markCopied(measEl);
+            }
           }
           const vat = mapAtolVat(it.vat || it.vat_type);
           const vatEl = row.querySelector(".it-vat");
-          if (vatEl && [...vatEl.options].some((o) => o.value === vat)) vatEl.value = vat;
+          if (vatEl && [...vatEl.options].some((o) => o.value === vat)) {
+            vatEl.value = vat;
+            markCopied(vatEl);
+          }
           const method = mapAtolMethod(it.payment_method);
-          row.querySelector(".it-method").value = method;
+          const methodEl = row.querySelector(".it-method");
+          if (methodEl) { methodEl.value = method; markCopied(methodEl); }
           // Сначала ограничиваем допустимые предметы, затем ставим значение
           syncObjectOptionsForRow(row);
           let obj = parseInt(it.payment_object, 10);
@@ -724,11 +813,13 @@
           const objEl = row.querySelector(".it-object");
           if (objEl && [...objEl.options].some((o) => parseInt(o.value, 10) === obj)) {
             objEl.value = String(obj);
+            markCopied(objEl);
           }
           // Агентская позиция
           const agentCb = row.querySelector(".it-agent");
           if (agentCb && (it.agent_info || it.supplier_info || it.is_agent)) {
             agentCb.checked = true;
+            markCopied(agentCb);
           }
         });
       }
@@ -744,28 +835,35 @@
       const si = agentSrc.supplier_info || {};
       if ($("#c_agent_type") && ai.type) {
         const tEl = $("#c_agent_type");
-        if ([...tEl.options].some((o) => o.value === ai.type)) tEl.value = ai.type;
+        if ([...tEl.options].some((o) => o.value === ai.type)) {
+          tEl.value = ai.type;
+          markCopied(tEl);
+        }
       }
-      if ($("#c_sup_name") && si.name) $("#c_sup_name").value = si.name;
-      if ($("#c_sup_inn") && si.inn) $("#c_sup_inn").value = String(si.inn);
+      if ($("#c_sup_name") && si.name) { $("#c_sup_name").value = si.name; markCopied($("#c_sup_name")); }
+      if ($("#c_sup_inn") && si.inn) { $("#c_sup_inn").value = String(si.inn); markCopied($("#c_sup_inn")); }
       if ($("#c_sup_phones") && si.phones) {
         $("#c_sup_phones").value = Array.isArray(si.phones) ? si.phones.join(", ") : String(si.phones);
+        markCopied($("#c_sup_phones"));
       }
       const pa = ai.paying_agent || {};
-      if ($("#c_pa_op") && pa.operation) $("#c_pa_op").value = pa.operation;
+      if ($("#c_pa_op") && pa.operation) { $("#c_pa_op").value = pa.operation; markCopied($("#c_pa_op")); }
       if ($("#c_pa_phones") && pa.phones) {
         $("#c_pa_phones").value = Array.isArray(pa.phones) ? pa.phones.join(", ") : String(pa.phones);
+        markCopied($("#c_pa_phones"));
       }
       const recv = ai.receive_payments_operator || {};
       if ($("#c_recv_phones") && recv.phones) {
         $("#c_recv_phones").value = Array.isArray(recv.phones) ? recv.phones.join(", ") : String(recv.phones);
+        markCopied($("#c_recv_phones"));
       }
       const mt = ai.money_transfer_operator || {};
-      if ($("#c_mt_name") && mt.name) $("#c_mt_name").value = mt.name;
-      if ($("#c_mt_addr") && mt.address) $("#c_mt_addr").value = mt.address;
-      if ($("#c_mt_inn") && mt.inn) $("#c_mt_inn").value = String(mt.inn);
+      if ($("#c_mt_name") && mt.name) { $("#c_mt_name").value = mt.name; markCopied($("#c_mt_name")); }
+      if ($("#c_mt_addr") && mt.address) { $("#c_mt_addr").value = mt.address; markCopied($("#c_mt_addr")); }
+      if ($("#c_mt_inn") && mt.inn) { $("#c_mt_inn").value = String(mt.inn); markCopied($("#c_mt_inn")); }
       if ($("#c_mt_phones") && mt.phones) {
         $("#c_mt_phones").value = Array.isArray(mt.phones) ? mt.phones.join(", ") : String(mt.phones);
+        markCopied($("#c_mt_phones"));
       }
       if (typeof syncAgentTypeFields === "function") syncAgentTypeFields();
     }
@@ -773,10 +871,10 @@
     // Доп. реквизит пользователя (1084)
     const aup = receipt.additional_user_props;
     if (aup && aup.name && aup.value) {
-      if ($("#c_addProp")) $("#c_addProp").checked = true;
+      if ($("#c_addProp")) { $("#c_addProp").checked = true; markCopied($("#c_addProp")); }
       if ($("#c_addPropBox")) $("#c_addPropBox").classList.remove("hidden");
-      if ($("#c_addPropName")) $("#c_addPropName").value = aup.name;
-      if ($("#c_addPropVal")) $("#c_addPropVal").value = aup.value;
+      if ($("#c_addPropName")) { $("#c_addPropName").value = aup.name; markCopied($("#c_addPropName")); }
+      if ($("#c_addPropVal")) { $("#c_addPropVal").value = aup.value; markCopied($("#c_addPropVal")); }
     }
 
     // Payments
@@ -797,8 +895,10 @@
           if (t === 15) t = 3;
           if (t === 16) t = 4;
           if (![0, 1, 2, 3, 4].includes(t)) t = 1;
-          row.querySelector(".pay-type").value = String(t);
-          row.querySelector(".pay-sum").value = money(p.sum != null ? p.sum : 0);
+          const payTypeEl = row.querySelector(".pay-type");
+          const paySumEl = row.querySelector(".pay-sum");
+          if (payTypeEl) { payTypeEl.value = String(t); markCopied(payTypeEl); }
+          if (paySumEl) { paySumEl.value = money(p.sum != null ? p.sum : 0); markCopied(paySumEl); }
         });
       }
       bindPays();
@@ -2576,6 +2676,7 @@
       lastExternalId = null;
       sourceDocumentId = null;
       sourceExternalId = null;
+      clearCopiedMarks();
       setCloneBanner();
     } catch (e) {
       console.error("create check failed", e);
@@ -3123,7 +3224,7 @@
 
   function buildReceiptHtml(atol5, summary, fiscal, opts) {
     opts = opts || {};
-    const receipt = (atol5 && atol5.receipt) || {};
+    const receipt = extractAtolReceipt(atol5);
     const company = receipt.company || {};
     const client = receipt.client || {};
     const items = receipt.items || [];
@@ -3313,6 +3414,14 @@
     }
   }
 
+  function applyOrdersCompact(on) {
+    const wrap = $("#o_list");
+    if (wrap) wrap.classList.toggle("orders-compact", !!on);
+    try {
+      localStorage.setItem("eklk_orders_compact", on ? "1" : "0");
+    } catch (e) {}
+  }
+
   function bindOrdersUI() {
     if ($("#o_search")) $("#o_search").onclick = () => { ordersOffset = 0; loadOrders(); };
     if ($("#o_refresh")) $("#o_refresh").onclick = () => loadOrders();
@@ -3340,6 +3449,35 @@
         loadOrders();
       };
     }
+
+    // «Отображать сжато»
+    const compactCb = $("#o_compact");
+    if (compactCb) {
+      let saved = false;
+      try { saved = localStorage.getItem("eklk_orders_compact") === "1"; } catch (e) {}
+      compactCb.checked = saved;
+      applyOrdersCompact(saved);
+      compactCb.onchange = () => applyOrdersCompact(compactCb.checked);
+    }
+
+    // Параметры поиска — панель
+    const filtersToggle = $("#o_filters_toggle");
+    const filtersPanel = $("#o_filters_panel");
+    if (filtersToggle && filtersPanel) {
+      let open = false;
+      try { open = localStorage.getItem("eklk_orders_filters_open") === "1"; } catch (e) {}
+      filtersPanel.classList.toggle("hidden", !open);
+      filtersToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      filtersToggle.onclick = () => {
+        const nowOpen = filtersPanel.classList.contains("hidden");
+        filtersPanel.classList.toggle("hidden", !nowOpen);
+        filtersToggle.setAttribute("aria-expanded", nowOpen ? "true" : "false");
+        try {
+          localStorage.setItem("eklk_orders_filters_open", nowOpen ? "1" : "0");
+        } catch (e) {}
+      };
+    }
+
     bindOrdersScrollZones();
   }
 
