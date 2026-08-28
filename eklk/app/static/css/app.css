@@ -2651,6 +2651,9 @@ body[data-theme="glass"] .it-name-float {
   flex-wrap: wrap;
   gap: 8px 10px;
 }
+.orders-compact-toggle--end {
+  margin-left: auto;
+}
 
 .orders-compact-toggle {
   display: inline-flex;

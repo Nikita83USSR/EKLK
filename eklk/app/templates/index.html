@@ -771,10 +771,6 @@
               </div>
               <div class="orders-toolbar">
                 <div class="orders-toolbar-row">
-                  <label class="orders-compact-toggle" title="Максимально сжатый список">
-                    <input type="checkbox" id="o_compact" />
-                    <span>Сжато</span>
-                  </label>
                   <div class="orders-limit-inline">
                     <label for="o_limit">Лимит</label>
                     <select id="o_limit" class="orders-limit-select">
@@ -786,9 +782,13 @@
                     </select>
                   </div>
                   <button type="button" class="btn btn-secondary btn-sm" id="o_filters_toggle" aria-expanded="false">Параметры поиска</button>
-                  <button type="button" class="btn btn-sm" id="o_search">Найти</button>
                   <button type="button" class="btn btn-secondary btn-sm" id="o_reset">Сброс</button>
                   <button type="button" class="btn btn-sm" id="o_refresh">Обновить</button>
+                  <button type="button" class="btn btn-sm" id="o_search">Найти</button>
+                  <label class="orders-compact-toggle orders-compact-toggle--end" title="Максимально сжатый список">
+                    <input type="checkbox" id="o_compact" />
+                    <span>Сжато</span>
+                  </label>
                 </div>
                 <div class="orders-filters" id="o_filters_panel" hidden>
                   <div class="row">
