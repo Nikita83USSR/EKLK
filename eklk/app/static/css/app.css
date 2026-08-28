@@ -877,11 +877,12 @@ body[data-theme="glass"] .aside-card {
   border: 1px solid rgba(120, 140, 160, 0.28);
 }
 
-/* Контрастные поля ввода / селекты (Safari: без системной отрисовки) */
-body[data-theme="dark"] input,
+/* Контрастные поля ввода / селекты (Safari: без системной отрисовки).
+   checkbox/radio исключаем — appearance:none убирает галочку в dark/glass. */
+body[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
 body[data-theme="dark"] select,
 body[data-theme="dark"] textarea,
-body[data-theme="glass"] input,
+body[data-theme="glass"] input:not([type="checkbox"]):not([type="radio"]),
 body[data-theme="glass"] select,
 body[data-theme="glass"] textarea {
   background: var(--input-bg) !important;
@@ -890,6 +891,35 @@ body[data-theme="glass"] textarea {
   color-scheme: dark;
   -webkit-appearance: none !important;
   appearance: none !important;
+}
+
+/* Чекбоксы: системный вид + accent в dark/glass */
+body[data-theme="dark"] input[type="checkbox"],
+body[data-theme="glass"] input[type="checkbox"] {
+  -webkit-appearance: checkbox !important;
+  appearance: auto !important;
+  width: 1.1em !important;
+  height: 1.1em !important;
+  min-width: 1.1em !important;
+  max-width: 1.1em !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color-scheme: dark;
+  accent-color: var(--accent);
+  cursor: pointer;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+body[data-theme="dark"] input[type="checkbox"]:focus,
+body[data-theme="glass"] input[type="checkbox"]:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: none !important;
+  border: none !important;
 }
 body[data-theme="dark"] select,
 body[data-theme="glass"] select {
@@ -932,9 +962,9 @@ body[data-theme="glass"] select.invalid {
   border-color: var(--danger) !important;
 }
 
-body[data-theme="dark"] .items-table input,
+body[data-theme="dark"] .items-table input:not([type="checkbox"]):not([type="radio"]),
 body[data-theme="dark"] .items-table select,
-body[data-theme="glass"] .items-table input,
+body[data-theme="glass"] .items-table input:not([type="checkbox"]):not([type="radio"]),
 body[data-theme="glass"] .items-table select {
   background: var(--input-bg) !important;
   color: var(--text) !important;
