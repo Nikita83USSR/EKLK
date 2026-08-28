@@ -1,11 +1,24 @@
-/* prevent mobile page overflow */
+/* prevent mobile page overflow without breaking position:sticky
+   (overflow-x: hidden on html/body disables sticky for header & detail pane) */
 html {
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 body {
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
+}
+@supports not (overflow-x: clip) {
+  html, body { overflow-x: hidden; }
+  /* fallback: fixed header if sticky still broken */
+  .header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+  }
+  #appScreen { padding-top: 72px; }
 }
 #appScreen,
 #appScreen > .container,
@@ -67,7 +80,15 @@ a { color: var(--primary); text-decoration: none; }
 .login-card { background: #fff; border-radius: 16px; padding: 40px; width: 100%; max-width: 420px; box-shadow: 0 25px 50px rgba(0,0,0,.35); }
 .login-card h1 { font-size: 1.5rem; margin-bottom: 6px; }
 .login-card .subtitle { color: var(--muted); margin-bottom: 24px; font-size: 0.9rem; }
-.header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 0; position: sticky; top: 0; z-index: 50; box-shadow: var(--shadow); }
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow);
+}
 .header-inner { width: 100%; max-width: none; margin: 0; padding: 0 5%; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; box-sizing: border-box; }
 .logo { font-weight: 700; font-size: 1.1rem; }
 .logo span { color: var(--accent); }
@@ -551,11 +572,11 @@ html.eklk-authed #appScreen { display: flex !important; }
    Список — страница; превью — отдельно при hover/клике. */
 .orders-detail-pane {
   position: sticky;
-  top: 70px;
+  top: 76px; /* под фиксированной/липкой шапкой */
   align-self: start;
   z-index: 5;
-  max-height: calc(100vh - 90px);
-  max-height: calc(100dvh - 90px);
+  max-height: calc(100vh - 96px);
+  max-height: calc(100dvh - 96px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;

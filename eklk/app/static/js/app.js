@@ -3715,6 +3715,25 @@
     return html;
   }
 
+
+  function focusOrdersDetailPane() {
+    const detail = document.querySelector("#tab-orders .orders-detail-pane");
+    if (!detail) return;
+    detail.scrollTop = 0;
+    const header = document.querySelector(".header");
+    const headerH = header ? header.offsetHeight : 76;
+    const rect = detail.getBoundingClientRect();
+    // Если превью ушло из зоны видимости (длинный список) — подтянуть к шапке
+    const need =
+      rect.top < headerH - 4 ||
+      rect.top > window.innerHeight * 0.55 ||
+      rect.bottom < headerH + 40;
+    if (need) {
+      const y = window.scrollY + rect.top - headerH - 8;
+      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+    }
+  }
+
   function renderReceipt(atol5, summary, fiscal) {
     const el = $("#o_detail");
     const ph = $("#o_detail_placeholder");
@@ -3755,6 +3774,8 @@
         }
       };
     }
+    // Показать превью чека без ручного скролла вверх по длинному списку
+    requestAnimationFrame(() => focusOrdersDetailPane());
   }
 
   async function openOrderDetail(orderId) {
