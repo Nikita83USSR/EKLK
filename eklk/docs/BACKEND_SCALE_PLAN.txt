@@ -1,326 +1,651 @@
 ================================================================================
-EKLK — план доработки backend под нагрузку (200–1000 пользователей)
+EKLK — BACKEND SCALE PLAN
 ================================================================================
-Дата: 2026-08-27
-Ветки: exp / expbd / dev
-Принцип: НЕ ломать текущую бизнес-логику (чеки, ссылки, возвраты, ФФД, СНО,
-магазины, каталог, отчёты, ИИ-кассир). Только инфраструктура сессий, I/O, конфиг.
+Дата: 2026-08-28
+Целевая ветка: exp (реализацию выполнять поэтапно через expbd → dev → main)
+Цель: подготовить backend EKLK к стабильной работе с сотнями одновременных
+пользователей и горизонтальному запуску в 2–4+ worker/process без изменения
+бизнес-контрактов текущего ЛК.
 
-Статус документа: план. Реализация — поэтапно, с проверкой login / F5 / create
-check / orders / select-store после каждого этапа.
+СТАТУС: ПЛАН РЕАЛИЗАЦИИ
 
-
---------------------------------------------------------------------------------
-0. ЦЕЛЬ И ОГРАНИЧЕНИЯ
---------------------------------------------------------------------------------
-
-Цель:
-  - стабильная работа при одновременной работе сотен операторов;
-  - возможность 2+ worker’ов uvicorn/gunicorn без «Сессия истекла»;
-  - меньше риска утечек сокетов и database is locked;
-  - без изменения контрактов API для фронта (URL, JSON, JWT в Authorization).
-
-Не делаем в этом плане:
-  - рефакторинг app.js / переписывание форм чека;
-  - смена протокола EcomKassa / полей ФФД;
-  - обязательный отказ от прокси-модели (ЛК остаётся тонким слоем).
-
-Правило совместимости:
-  - фронт продолжает слать Bearer JWT как сейчас;
-  - /api/v1/* пути и тела запросов не менять без крайней нужды;
-  - при недоступности Redis/БД — предсказуемый fallback (как сейчас degraded
-    для settings), а не 500 на весь ЛК.
-
-
---------------------------------------------------------------------------------
-1. ТЕКУЩЕЕ СОСТОЯНИЕ (кратко)
---------------------------------------------------------------------------------
-
-  - SESSIONS: dict в RAM (login → password, group_code, firm, selected_store_id)
-  - JWT HS256, subject = login; без записи в SESSIONS API отвечает 401
-  - На каждый запрос к Ecom: новый EcomKassaClient + httpx.AsyncClient
-  - Settings: SQLite (user_settings / firm_settings), при сбое — degraded
-  - Запуск: один uvicorn, часто с --reload
-
-Риски: multi-worker, рестарт, plaintext password в RAM, сокеты, SQLite lock,
-упор в upstream app.ecomkassa.ru.
-
-
---------------------------------------------------------------------------------
-2. ЭТАПЫ (порядок важен)
---------------------------------------------------------------------------------
-
-Этап A — прод-конфиг (1–2 часа, без смены логики)
-Этап B — общий httpx-клиент (lifespan)
-Этап C — сессии во внешнем store (Redis), совместимый API get_session/save_session
-Этап D — не хранить пароль в сессии (ecom token + refresh)
-Этап E — БД settings → PostgreSQL (или оставить SQLite при малой записи)
-Этап F — лимиты и защита (rate limit, upstream concurrency)
-Этап G — наблюдаемость (логи/метрики без секретов)
-
-Каждый этап = отдельный PR/коммит в expbd → проверка → dev.
-
+ВАЖНО: этот документ является рабочим планом. Не пытаться реализовать всю
+задачу одним большим изменением в production. Допускается ОДИН большой
+промпт для AI-агента только как оркестратор этапов: агент обязан сначала
+проанализировать код, затем выполнить этапы последовательно, запускать тесты
+после каждого этапа и останавливать работу при регрессии. Предпочтительный
+вариант — 5–7 отдельных промптов/PR, потому что этапы C/D затрагивают
+авторизацию и сессионную модель и требуют независимого отката.
 
 ================================================================================
-ЭТАП A. Продакшен-конфиг
+1. РЕЗУЛЬТАТ, КОТОРЫЙ ДОЛЖЕН ПОЛУЧИТЬСЯ
 ================================================================================
 
-Файлы: .env / .env.example, app/core/config.py, start-eklk.sh, README
+После завершения плана:
 
-A1. Обязательные переменные на проде:
-    SECRET_KEY          — длинная случайная строка (≥32), НЕ дефолт из репо
+- приложение работает без --reload в production;
+- 2–4 worker/process используют единое состояние пользовательских сессий;
+- restart одного worker не выбивает пользователя из ЛК;
+- login → F5 → select-store → create check → orders работают между worker'ами;
+- HTTP-соединения к EcomKassa переиспользуются, а не создаются на каждый
+  запрос;
+- пароль пользователя не хранится открытым текстом в Redis/session store;
+- настройки имеют устойчивое хранилище и не зависят от памяти worker'а;
+- есть rate limit для login и тяжёлых операций;
+- есть ограничение исходящей конкуренции к EcomKassa;
+- health/logging/metrics позволяют понять, где находится узкое место;
+- существующие URL, JSON-контракты фронта, Bearer JWT и бизнес-логика чеков
+  не меняются без доказанной необходимости.
+
+Не является целью:
+- переписать app.js;
+- перейти на новый frontend framework;
+- менять Atol Online v5 / ФФД / СНО / payments.type;
+- менять бизнес-логику чеков, возвратов, ссылок, каталога, отчётов;
+- превращать EKLK в самостоятельную систему хранения всех заказов.
+
+================================================================================
+2. ЧТО УЖЕ ЕСТЬ И ГДЕ РИСК
+================================================================================
+
+По текущему коду ветки exp:
+
+- FastAPI backend;
+- app/core/deps.py содержит SESSIONS = dict в RAM;
+- session хранит login, password, group_code, firm, selected_store_id;
+- JWT проверяется, но после рестарта/на другом worker session может отсутствовать;
+- app/clients/ecomkassa.py создаёт собственный httpx.AsyncClient в каждом
+  экземпляре EcomKassaClient;
+- token EcomKassa сейчас кэшируется только внутри экземпляра клиента;
+- settings используют отдельное хранилище, которое должно оставаться
+  совместимым с текущим degraded-поведением;
+- frontend app.js — стабильное монолитное ядро и не должен участвовать в
+  масштабировании, кроме точечного критического изменения.
+
+Главные проблемы масштабирования:
+
+1) RAM sessions → multi-worker/restart ломают авторизацию.
+2) plaintext password в session → повышенный ущерб при дампе памяти/Redis.
+3) AsyncClient на экземпляр → лишние TCP/TLS соединения и риск роста FD.
+4) отсутствие централизованного лимита исходящих запросов → можно перегрузить
+   app.ecomkassa.ru быстрее, чем пользовательский UI успеет это заметить.
+5) SQLite при активной записи → потенциальные database is locked.
+6) отсутствие нормальной наблюдаемости → трудно отличить проблему EKLK от
+   проблемы upstream EcomKassa.
+
+================================================================================
+3. РЕШЕНИЕ: НЕ ОДИН "БОЛЬШОЙ РЕФАКТОРИНГ", А ПОСЛЕДОВАТЕЛЬНЫЕ ЭТАПЫ
+================================================================================
+
+Этап A — production config и безопасный запуск
+Этап B — shared HTTP client / connection pooling
+Этап C — абстракция session store + Redis
+Этап D — убрать plaintext password из session
+Этап E — PostgreSQL для settings (при необходимости/сразу для production)
+Этап F — rate limit + upstream concurrency + timeouts
+Этап G — logging / metrics / health
+Этап H — нагрузочное и регрессионное тестирование
+
+Рекомендуемые PR:
+
+PR-1: A+B
+PR-2: C
+PR-3: D
+PR-4: E
+PR-5: F
+PR-6: G+H
+
+Если после A+B проект стабилен, PR-1 можно выполнить одним промптом.
+C и D обязательно разделить.
+
+================================================================================
+4. ЭТАП A — PRODUCTION CONFIG
+================================================================================
+
+Файлы:
+- eklk/app/core/config.py
+- eklk/.env.example
+- eklk/start-eklk.sh
+- eklk/README.md
+
+Сделать:
+
+A1. Проверить/добавить:
     DEBUG=false
     LOG_LEVEL=INFO
-    ACCESS_TOKEN_EXPIRE_MINUTES — по политике (сейчас 480)
+    SECRET_KEY=<обязательная длинная случайная строка>
+    ACCESS_TOKEN_EXPIRE_MINUTES=<политика срока жизни>
 
-A2. Запуск без --reload:
+A2. Production запуск:
     uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
-    (workers > 1 только после этапа C)
 
-A3. Проверка:
-    - login / logout / F5
-    - создание чека, список чеков
-    - в логах нет паролей
+A3. Не использовать --reload в production.
 
-Критерий готовности: один worker, стабильный secret, debug выключен.
+A4. Не выводить password/token в логах, exception message и debug response.
 
+A5. Документировать различия dev / production.
 
-================================================================================
-ЭТАП B. Общий HTTP-клиент к EcomKassa
-================================================================================
+Проверка:
+- login;
+- logout;
+- F5;
+- выбор магазина;
+- create check;
+- orders search;
+- settings;
+- health.
 
-Цель: не открывать AsyncClient на каждый API-запрос; не менять сигнатуры
-роутеров.
-
-B1. В app/main.py lifespan:
-      - создать httpx.AsyncClient(timeout=..., limits=httpx.Limits(...))
-      - сохранить в app.state.http / module-level get_http_client()
-      - на shutdown: await client.aclose()
-
-B2. EcomKassaClient:
-      - принимать optional client= или брать shared client
-      - НЕ создавать новый AsyncClient в __init__, если передан shared
-      - методы get_token / create_check / search_orders — без изменения
-        внешней семантики
-
-B3. _client_for(user) в routers:
-      - по-прежнему передаёт login, password, group_code
-      - внутри использует shared httpx
-
-B4. Проверка:
-      - login, firm profile, create check, orders search, catalog, reports
-      - длительный прогон (сотни запросов) — рост FD не линейный
-
-Откат: вернуть создание AsyncClient в EcomKassaClient — логика чеков та же.
-
-Критерий: один пул соединений на процесс.
-
+Acceptance:
+- один worker стабилен;
+- секреты отсутствуют в логах;
+- контракт API не изменён.
 
 ================================================================================
-ЭТАП C. Сессии вне RAM (Redis) — ключ к multi-worker
+5. ЭТАП B — SHARED HTTPX CLIENT
 ================================================================================
 
-Цель: SESSIONS доступны всем worker’ам; интерфейс deps.py сохранить.
+Файлы:
+- eklk/app/main.py
+- eklk/app/clients/ecomkassa.py
+- при необходимости routers, только точечно.
 
-C1. Абстракция (минимальная):
-      save_session(login, password, group_code=..., firm=...)
-      get_session(login) -> dict | None
-      update_session_store(login, store_id)
-      clear_session(login)
+Сделать:
 
-    Реализации:
-      - MemorySessionStore  (текущее поведение, default)
-      - RedisSessionStore   (SESSION_BACKEND=redis)
+B1. Создать один httpx.AsyncClient на process через FastAPI lifespan.
 
-C2. Redis:
-    ключ: eklk:session:{login}
-    TTL: согласовать с ACCESS_TOKEN_EXPIRE_MINUTES (например + небольшой запас)
-    value: JSON {login, password?, group_code, firm, selected_store_id, ...}
+B2. Настроить httpx.Limits с разумными пределами max_connections и
+    max_keepalive_connections.
 
-C3. Конфиг:
+B3. Настроить единый timeout, ориентировочно 30 секунд, без бесконечных
+    запросов.
+
+B4. Передавать shared client в EcomKassaClient вместо создания нового
+    AsyncClient внутри каждого экземпляра.
+
+B5. На shutdown выполнять await client.aclose().
+
+B6. Не менять публичную семантику get_token/create_sell/create_refund/
+    get_report/search_orders/get_order/catalog/reports.
+
+B7. Если требуется сохранить совместимость с существующим кодом, допускается
+    временный optional client=...; старый путь не должен оставаться скрытым
+    источником утечки ресурсов в production.
+
+Проверка:
+- login + firm;
+- create check;
+- payment/invoice;
+- orders;
+- catalog;
+- reports;
+- длительный прогон 300–1000 запросов.
+
+Acceptance:
+- AsyncClient не создаётся на каждый request/client instance;
+- соединения переиспользуются;
+- FD/socket count не растёт линейно с числом запросов.
+
+================================================================================
+6. ЭТАП C — REDIS SESSION STORE
+================================================================================
+
+Это КЛЮЧЕВОЙ этап для multi-worker.
+
+Файлы:
+- eklk/app/core/deps.py
+- новый service/module session store;
+- eklk/app/core/config.py
+- requirements.txt
+- .env.example
+- тесты.
+
+Архитектура:
+
+SessionStore interface:
+    save_session(...)
+    get_session(login)
+    update_session_store(login, store_id)
+    clear_session(login)
+
+Реализации:
+    MemorySessionStore — dev/fallback
+    RedisSessionStore — production
+
+Конфигурация:
     SESSION_BACKEND=memory|redis
     REDIS_URL=redis://...
 
-C4. Поведение при недоступности Redis:
-    вариант 1 (предпочтительный на старте): fallback в memory + warning в лог
-    вариант 2 (строгий прод): 503 на login с понятным сообщением
+Redis key:
+    eklk:session:{login}
 
-C5. Проверка:
-    - 2 worker’а uvicorn: login на одном, API на другом — без «Сессия истекла»
-    - select-store виден с обоих worker’ов
-    - logout / clear_session
-    - F5, повторный вход
+TTL:
+    не меньше срока жизни JWT, с небольшим запасом.
 
-Важно: формат JWT и заголовок Authorization не менять.
+ВАЖНО:
+На этапе C допускается временно сохранить password для совместимости.
+Его удаление — отдельный этап D. Не смешивать две рискованные миграции.
 
-Критерий: workers≥2 работают с одной «логикой сессии».
+Failure policy:
+- dev/fallback: memory + warning;
+- production рекомендуется fail-fast/503 при невозможности создать
+  авторизованную session, если иначе пользователь может получить непредсказуем
+  state split между worker'ами.
 
+Проверка:
+1. Запустить два worker.
+2. Login.
+3. Несколько раз F5.
+4. Сделать запросы так, чтобы они попадали в разные worker.
+5. select-store на worker A.
+6. create check / orders на worker B.
+7. logout.
 
-================================================================================
-ЭТАП D. Убрать plaintext password из сессии (после C)
-================================================================================
-
-Сейчас password нужен, чтобы на каждый запрос получать token EcomKassa.
-
-D1. В сессии хранить:
-      - ecom_token
-      - ecom_token_expires_at (если API отдаёт / эвристика)
-      - login, group_code, firm, selected_store_id
-    Password — только в момент login, не писать в Redis (или шифровать
-    ключом SECRET_KEY, если без password refresh невозможен).
-
-D2. EcomKassaClient:
-      - режим «уже есть token» без login/pass на каждый вызов
-      - при 401 от Ecom — один refresh:
-          если есть secure password blob → getToken снова
-          иначе → 401 клиенту ЛК «войдите снова»
-
-D3. Не менять:
-      - тела create check / payment / orders для фронта
-      - выбор group_code = storeId
-
-D4. Проверка:
-    - полный сценарий чека и ссылки
-    - истечение ecom token (симуляция) → refresh или корректный re-login
-    - в Redis/логах нет пароля открытым текстом
-
-Критерий: компрометация дампа Redis не раскрывает пароли пользователей.
-
+Acceptance:
+- session едина для всех worker;
+- restart одного worker не выбивает session;
+- selected_store_id синхронизирован;
+- JWT остаётся Bearer JWT в том же формате.
 
 ================================================================================
-ЭТАП E. Settings DB
+7. ЭТАП D — УБРАТЬ PLAINTEXT PASSWORD ИЗ SESSION
 ================================================================================
 
-E1. При росте записи настроек:
+Это самый чувствительный этап. Делать только после C.
+
+Цель session:
+    login
+    ecom_token
+    ecom_token_expires_at (если возможно определить)
+    group_code
+    selected_store_id
+    firm
+
+Password не должен храниться в Redis открытым текстом.
+
+Алгоритм:
+
+D1. Login:
+    credentials → getToken → сохранить ecom_token → password выбросить.
+
+D2. Обычные Ecom-запросы используют сохранённый ecom_token.
+
+D3. Если EcomKassa отвечает 401:
+    - выполнить ОДИН refresh/re-auth, если есть безопасный способ;
+    - иначе вернуть контролируемый 401 «войдите снова».
+
+D4. Не допускать бесконечного refresh loop.
+
+D5. Не писать token/password в logs.
+
+D6. Проверить race condition при одновременном refresh одного пользователя:
+    нужен lock/atomic strategy, чтобы 20 параллельных запросов не делали
+    20 getToken.
+
+Если для refresh обязательно нужен password, выбрать один из вариантов:
+1) короткоживущий encrypted secret, зашифрованный ключом приложения;
+2) другой поддерживаемый механизм EcomKassa;
+3) принудительный повторный login.
+
+Не изобретать собственный криптографический протокол.
+
+Acceptance:
+- Redis dump не содержит password в открытом виде;
+- token используется повторно;
+- 401 корректно обрабатывается;
+- параллельный refresh не создаёт storm запросов.
+
+================================================================================
+8. ЭТАП E — SETTINGS DB / POSTGRESQL
+================================================================================
+
+Не менять API настроек.
+
+Цель: исключить SQLite locking на production при заметной записи.
+
+Вариант production:
     DATABASE_URL=postgresql+asyncpg://...
 
-E2. Миграции: сохранить схему user_settings / firm_settings (JSON prefs).
-    SQLite оставить для dev (.env.example).
+SQLite:
+    оставить для dev/test.
 
-E3. Не менять контракт:
-    GET/PUT /api/v1/auth/settings
-    degraded: true при сбое — как сейчас
+Сохранить существующие сущности:
+- user_settings
+- firm_settings
+- JSON preferences, если они используются сейчас.
 
-E4. Проверка: тема, select-store persistence, degraded при выключенной БД.
+Сохранить degraded-поведение:
+- проблема БД не должна превращать весь ЛК в 500;
+- GET/PUT /api/v1/auth/settings остаются совместимыми.
 
-Критерий: нет массовых "database is locked" на проде.
+Проверка:
+- theme light/dark/glass;
+- настройки организации;
+- выбранный магазин;
+- параллельные PUT;
+- отключение БД → ожидаемый degraded response.
 
-
-================================================================================
-ЭТАП F. Лимиты и защита
-================================================================================
-
-F1. Rate limit (например slowapi / middleware):
-    - POST /api/v1/auth/login  — жёсткий лимит с IP
-    - тяжёлые POST (create check, payment) — мягкий лимит с user id
-
-F2. Ограничить параллельные исходящие запросы к EcomKassa
-    (asyncio.Semaphore на процесс, например 50–100).
-
-F3. Таймауты: оставить разумные (30s), не бесконечные; единый read timeout.
-
-F4. Проверка: при бурсте login — 429, остальные пользователи работают.
-
-Не блокировать легитимный UI (F5, навигация по вкладкам).
-
+Решение «делать сразу или позже»:
+- до ~50–100 активных пользователей SQLite может оставаться допустимым,
+  если запись редкая;
+- для production 200+ и нескольких worker предпочтителен PostgreSQL.
 
 ================================================================================
-ЭТАП G. Наблюдаемость
+9. ЭТАП F — RATE LIMIT + UPSTREAM PROTECTION
 ================================================================================
 
-G1. Структурные логи без password / token:
-    request_id, login (hash или id), path, status, upstream_ms
+F1. Login:
+    жёсткий rate limit по IP.
 
-G2. Метрики (простой /metrics или логи-агрегация):
-    - 401 session miss
-    - upstream errors / latency
-    - redis errors
-    - active sessions count (приблизительно)
+F2. Create check/payment:
+    мягкий rate limit по authenticated user/session.
 
-G3. Health:
-    GET /health — уже есть; расширить: redis=ok|skip, db=ok|degraded
+F3. Исходящие запросы к EcomKassa:
+    asyncio.Semaphore на process.
+    Начальное значение подобрать тестом, например 50–100, не считать это
+    магической константой.
 
+F4. Таймауты едины и конечны.
 
-================================================================================
-3. ЧТО НЕ ТРОГАТЬ (чтобы не сломать логику)
-================================================================================
+F5. Не ставить настолько агрессивные лимиты, чтобы обычная навигация,
+    F5 и работа нескольких вкладок блокировались.
 
-  - app/static/js/app.js — кроме необходимости сменить base URL (не требуется)
-  - маппинг payments[].type, agent tags, ФФД поля
-  - routers: смысл create check / refund / payment-types / orders search
-  - group_code = storeId из профиля фирмы
-  - клиентский роутинг вкладок
-  - форматы ответов, на которые завязан renderResult / список чеков
-
-Любое изменение deps.get_current_user — сохранять поля:
-  username, password|token, group_code, selected_store_id, firm
-  (password может стать optional после этапа D, тогда client обязан уметь token)
-
+Acceptance:
+- burst login получает 429;
+- один проблемный пользователь не забивает весь upstream pool;
+- остальные пользователи продолжают работать.
 
 ================================================================================
-4. РЕКОМЕНДУЕМЫЙ ПОРЯДОК ВНЕДРЕНИЯ НА ПРОД
+10. ЭТАП G — OBSERVABILITY
 ================================================================================
 
-  1) Этап A на текущем одном сервере
-  2) Этап B (httpx) — снижение риска по сокетам
-  3) Поднять Redis → Этап C → включить --workers 2..4
-  4) Этап D (без пароля в store)
-  5) Этап E при росте settings или сразу на Postgres
-  6) Этап F/G по мере появления трафика
+Логи должны позволять ответить:
+- какой request;
+- какой endpoint;
+- сколько занял EKLK;
+- сколько занял upstream;
+- сколько было 401/429/5xx;
+- Redis/DB доступны или нет.
 
-Ориентир по пользователям:
-  - до ~50–100 активных операторов, 1 worker: A+B достаточно
-  - 200+ online / несколько worker’ов: C обязателен
-  - 1000 concurrent active: C+D+E+F, контроль лимитов upstream
+Добавить:
+- request_id;
+- безопасный user identifier (не password/token);
+- path;
+- status;
+- upstream_ms;
+- redis/db errors.
 
+Метрики минимум:
+- auth/session miss;
+- upstream latency;
+- upstream errors;
+- Redis errors;
+- DB errors;
+- active sessions приблизительно;
+- 429 count.
 
-================================================================================
-5. ОЦЕНКА ОБЪЁМА (грубо)
-================================================================================
+Health:
+    GET /health
 
-  A  — 0.5–1 день (конфиг, документация, проверка)
-  B  — 1 день
-  C  — 2–3 дня (store + тесты multi-worker)
-  D  — 2–4 дня (осторожно с refresh token)
-  E  — 1–2 дня
-  F  — 1–2 дня
-  G  — 1–2 дня
+Расширить без поломки существующего ответа:
+    app=ok
+    redis=ok|skip|degraded
+    db=ok|degraded
 
-Итого до «уверенного» масштаба: порядка 1.5–2 недель аккуратной работы
-с регрессионными прогонами сценариев ЛК.
-
-
-================================================================================
-6. ЧЕК-ЛИСТ РЕГРЕССИИ ПОСЛЕ КАЖДОГО ЭТАПА
-================================================================================
-
-  [ ] login / logout / login снова
-  [ ] F5 на каждой вкладке (home, create, payment, templates, orders, catalog,
-      reports, ai-cashier, settings)
-  [ ] выбор магазина, создание чека, возврат (sell_refund)
-  [ ] ссылка на оплату, многоразовая ссылка
-  [ ] список чеков → деталка → ссылка ОФД
-  [ ] каталог CRUD (выборочно)
-  [ ] отчёт за период
-  [ ] смена темы light/dark/glass
-  [ ] (после C) второй worker / имитация другого процесса
-
+Не отдавать секреты и внутренние connection strings.
 
 ================================================================================
-7. СВЯЗАННЫЕ ФАЙЛЫ (ориентир)
+11. ЭТАП H — LOAD + REGRESSION TESTS
 ================================================================================
 
-  app/core/deps.py          — сессии, get_current_user
-  app/core/security.py      — JWT
-  app/core/config.py        — settings
-  app/clients/ecomkassa.py  — HTTP к EcomKassa
-  app/main.py               — lifespan, health
-  app/db.py                 — engine
-  app/services/settings_service.py
-  app/routers/auth.py       — login, save_session
-  .env.example, start-eklk.sh, eklk/AGENTS.md
+До объявления готовности обязательны два класса тестов.
 
+A. Регрессия бизнес-функций:
+
+[ ] login/logout/login
+[ ] F5 на home
+[ ] create check
+[ ] sell_refund
+[ ] payment/invoice
+[ ] templates
+[ ] orders search
+[ ] order detail
+[ ] catalog
+[ ] reports
+[ ] settings
+[ ] select-store
+[ ] themes
+[ ] ai-cashier
+
+B. Масштабирование:
+
+[ ] 1 worker baseline
+[ ] 2 workers
+[ ] 4 workers
+[ ] restart worker
+[ ] Redis restart/failure
+[ ] DB failure/degraded
+[ ] 100 concurrent users
+[ ] 200 concurrent users
+[ ] 500 concurrent requests/users — если тестовый стенд позволяет
+[ ] burst login
+[ ] burst create check
+[ ] длительный soak test
+
+ВАЖНО:
+Нагрузочные тесты create check не должны бесконтрольно отправлять реальные
+фискальные операции. Использовать sandbox/mock/stub или специально
+предназначенный тестовый контур EcomKassa.
+
+Метрики успеха:
+- нет session-miss при нормальной работе Redis;
+- нет необъяснимого роста open sockets/FD;
+- нет database is locked на production DB;
+- upstream saturation виден в метриках;
+- ошибки одного пользователя не каскадируют на остальных;
+- API latency остаётся предсказуемой при росте concurrency.
 
 ================================================================================
-Конец плана
+12. ЧТО НЕ ТРОГАТЬ
+================================================================================
+
+ЖЁСТКО НЕ МЕНЯТЬ без отдельной задачи:
+
+- eklk/app/static/js/app.js — стабильное ядро;
+- payments[].type;
+- payment_method/payment_object;
+- agent/supplier payload;
+- ФФД 1.1/1.2;
+- Atol Online v5;
+- group_code = storeId;
+- API paths /api/v1/*;
+- JSON response contracts фронта;
+- client-side routing;
+- catalog/reports business logic.
+
+Любое изменение get_current_user должно сохранить логический набор данных,
+который используют routers:
+    username
+    email/full_name при необходимости
+    group_code
+    selected_store_id
+    firm
+    credential/token mechanism
+
+================================================================================
+13. ПРАВИЛА ДЛЯ AI-АГЕНТА
+================================================================================
+
+Если задачу выполняет Cursor / Claude Code / Codex / другой AI-агент:
+
+1. Сначала прочитать:
+   - eklk/AGENTS.md
+   - eklk/README.md
+   - этот файл
+   - deps.py
+   - security.py
+   - config.py
+   - main.py
+   - ecomkassa.py
+   - auth.py
+   - settings_service.py
+   - db.py
+   - requirements.txt
+
+2. До изменения кода составить краткую карту зависимостей.
+
+3. Не делать blind rewrite файлов.
+
+4. Один этап = один логически законченный commit/PR.
+
+5. После каждого этапа:
+   - unit tests;
+   - import/compile check;
+   - API smoke tests;
+   - regression checklist;
+   - git diff review.
+
+6. Если тесты обнаружили регрессию — НЕ переходить к следующему этапу.
+
+7. Перед миграцией C/D сделать rollback plan.
+
+8. Никогда не коммитить:
+   - .env;
+   - credentials;
+   - Redis dumps;
+   - tokens;
+   - passwords;
+   - production secrets.
+
+9. Не добавлять новую зависимость без проверки необходимости и совместимости
+   с текущим requirements.txt.
+
+10. При неоднозначности между «масштабировать» и «переписать» выбирать
+    минимальное изменение, сохраняющее текущую бизнес-логику.
+
+================================================================================
+14. МОЖНО ЛИ СДЕЛАТЬ ОДНИМ ПРОМПТОМ?
+================================================================================
+
+Технически — ДА, но только как master prompt для автономного агента.
+Практически для production — НЕ РЕКОМЕНДУЕТСЯ делать одной непрерывной
+генерацией без остановок.
+
+Причины:
+- C меняет модель хранения session;
+- D меняет credential lifecycle;
+- E меняет БД;
+- F меняет поведение при высокой нагрузке;
+- ошибки C/D трудно локализовать, если всё смешать;
+- большой diff сложнее ревьюить и откатывать.
+
+Оптимальный режим:
+
+PROMPT 1: A+B — конфиг + shared HTTP client
+PROMPT 2: C — Redis session store
+PROMPT 3: D — token lifecycle / убрать password
+PROMPT 4: E — PostgreSQL settings
+PROMPT 5: F — rate limits + upstream semaphore
+PROMPT 6: G+H — observability + load/regression tests
+
+Если AI хорошо умеет выполнять долгие задачи, можно дать master prompt,
+но в нём прямо потребовать остановку после каждого этапа и подтверждение
+тестов перед переходом дальше.
+
+================================================================================
+15. MASTER PROMPT — ЕСЛИ ХОЧЕМ ЗАПУСТИТЬ ВСЁ КАК ОДНУ ЗАДАЧУ
+================================================================================
+
+Ты Senior Backend/DevOps engineer. Работаешь с существующим production-like
+проектом EKLK. Не переписывай проект с нуля. Твоя задача — последовательно
+реализовать eklk/docs/BACKEND_SCALE_PLAN.txt.
+
+ОБЯЗАТЕЛЬНО:
+1. Сначала прочитай AGENTS.md, README.md и все файлы, перечисленные в разделе 13.
+2. Составь карту зависимостей и текущий baseline.
+3. Реализуй этапы строго A → B → C → D → E → F → G → H.
+4. После каждого этапа запускай тесты и smoke/regression checks.
+5. Не переходи к следующему этапу при failing tests.
+6. Каждый этап оформляй отдельным commit.
+7. Не изменяй бизнес-логику чеков, ФФД, payments.type, storeId/group_code
+   и frontend app.js без крайней необходимости.
+8. Сохраняй совместимость /api/v1/* и Bearer JWT.
+9. Не коммить секреты.
+10. Для C сначала введи SessionStore abstraction, затем Redis.
+11. Для D не храни plaintext password в Redis; предусмотрь безопасный
+    token refresh или контролируемый re-login.
+12. Для B используй lifespan/shared httpx.AsyncClient и корректный shutdown.
+13. Для F не перегружай upstream EcomKassa: semaphore + rate limits + timeout.
+14. Для H используй sandbox/mock для массовых фискальных тестов.
+15. В финале покажи:
+    - список изменённых файлов;
+    - архитектуру после изменений;
+    - результаты тестов;
+    - результаты load test;
+    - известные ограничения;
+    - инструкции production deploy;
+    - rollback для каждого инфраструктурного этапа.
+
+Критерий готовности: текущий функционал EKLK работает так же, но backend
+может безопасно работать в нескольких worker/process и имеет внешний
+session store, connection pooling, защиту upstream и наблюдаемость.
+
+================================================================================
+16. РЕКОМЕНДУЕМАЯ ПОСЛЕДОВАТЕЛЬНОСТЬ DEPLOY
+================================================================================
+
+1. Backup текущей production конфигурации.
+2. A+B на одном worker.
+3. Smoke + regression.
+4. Поднять Redis.
+5. C и проверить 2 worker.
+6. D и проверить token lifecycle.
+7. E PostgreSQL (если выбран production path).
+8. F rate limits/concurrency.
+9. G observability.
+10. H load/soak tests.
+11. Только после успешного стенда → dev → main.
+
+Для первого production rollout не переходить сразу на 4–8 workers.
+Начать с 2, проверить latency/errors, затем увеличивать.
+
+================================================================================
+17. ОЦЕНКА ОБЪЁМА
+================================================================================
+
+A+B: 0.5–1.5 дня
+C:   2–3 дня
+D:   2–4 дня
+E:   1–2 дня
+F:   1–2 дня
+G:   1–2 дня
+H:   1–3 дня
+
+Ориентир: 1.5–3 недели аккуратной production-разработки с тестами.
+AI может существенно сократить время написания кода, но не должен сокращать
+время проверки C/D и нагрузочных сценариев.
+
+================================================================================
+18. ФИНАЛЬНЫЙ CHECKLIST
+================================================================================
+
+[ ] A production config
+[ ] B shared httpx client
+[ ] C Redis sessions
+[ ] D no plaintext password in session
+[ ] E PostgreSQL/settings strategy
+[ ] F rate limits + semaphore + timeouts
+[ ] G logs + metrics + health
+[ ] H regression + load + soak
+[ ] 2 workers verified
+[ ] worker restart verified
+[ ] Redis failure policy verified
+[ ] DB failure/degraded verified
+[ ] no secrets in git/logs
+[ ] app.js unchanged except emergency bugfix
+[ ] API contracts unchanged
+[ ] production deploy documented
+[ ] rollback documented
+
+================================================================================
+Конец BACKEND_SCALE_PLAN
 ================================================================================
