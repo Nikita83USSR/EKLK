@@ -1066,6 +1066,13 @@
     const vatEl = row.querySelector(".it-vat");
     const objEl = row.querySelector(".it-object");
     if (nameEl && item.name) nameEl.value = String(item.name).slice(0, 127);
+    if (__nameFloatEl && __nameFloatCompact && row.contains(__nameFloatCompact)) {
+      const wide = __nameFloatEl.querySelector(".it-name-wide");
+      if (wide && item.name) {
+        wide.value = String(item.name).slice(0, 127);
+        updateItemNameWarn(wide);
+      }
+    }
     if (priceEl && item.price != null) priceEl.value = money(item.price);
     const vatKey = item.vatType != null ? String(item.vatType) : "";
     const vat = CAT_VAT_TO_FORM[vatKey] || CAT_VAT_TO_FORM[vatKey.toUpperCase()] || CAT_VAT_TO_FORM[vatKey.toLowerCase()];
@@ -1103,8 +1110,15 @@
 
   function showCatalogSuggest(row, items, onChange, errMsg) {
     closeCatalogSuggest();
-    const cell = row.querySelector(".it-name-cell") || row.querySelector("td");
-    if (!cell) return;
+    // если открыт float для этой строки — подсказки внутри float
+    let host = null;
+    if (__nameFloatEl && __nameFloatCompact && row.contains(__nameFloatCompact)) {
+      host = __nameFloatEl;
+      __nameFloatEl.style.position = __nameFloatEl.style.position || "fixed";
+    } else {
+      host = row.querySelector(".it-name-cell") || row.querySelector("td");
+    }
+    if (!host) return;
     const el = document.createElement("div");
     el.className = "cat-suggest";
     if (errMsg) {
@@ -1131,8 +1145,10 @@
         };
       });
     }
-    cell.style.position = "relative";
-    cell.appendChild(el);
+    if (host !== __nameFloatEl) {
+      host.style.position = "relative";
+    }
+    host.appendChild(el);
     __catSuggestEl = el;
     __catSuggestRow = row;
   }
@@ -1146,10 +1162,13 @@
       pickBtn.onclick = (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
+        if (nameEl) {
+          openItemNameExpand(nameEl, onChange);
+        }
         const q = (nameEl && nameEl.value) || "";
         const searchQ = !q || q === "Товар" ? "." : q;
-        searchCatalogForRow(row, searchQ, onChange);
-        if (nameEl) nameEl.focus();
+        // после открытия float — поиск (suggest сядет в float)
+        setTimeout(() => searchCatalogForRow(row, searchQ, onChange), 40);
       };
     }
     if (nameEl) {
@@ -1222,6 +1241,7 @@
   }
 
   function closeItemNameExpand(exceptInput) {
+    if (!exceptInput) closeCatalogSuggest();
     // legacy table rows (если остались)
     document.querySelectorAll("tr.item-name-expand:not(.hidden)").forEach((exp) => {
       const wide = exp.querySelector(".it-name-wide");
@@ -1274,7 +1294,10 @@
     const box = document.createElement("div");
     box.className = "it-name-float";
     box.innerHTML =
-      '<input type="text" class="it-name-wide" maxlength="127" placeholder="Товар или услуга" />' +
+      '<input type="text" class="it-name-wide" maxlength="127" placeholder="Товар или услуга" autocomplete="off" />' +
+      '<button type="button" class="it-cat-btn" title="Выбрать из каталога" aria-label="Выбрать из каталога">' +
+      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="18" cy="17" r="3"/></svg>' +
+      '</button>' +
       '<span class="it-name-warn hidden"></span>';
     document.body.appendChild(box);
 
@@ -1283,15 +1306,35 @@
     __nameFloatOnChange = onChange;
 
     const wide = box.querySelector(".it-name-wide");
+    const floatCatBtn = box.querySelector(".it-cat-btn");
     wide.value = compact.value || "";
     updateItemNameWarn(wide);
+
+    const row = compact.closest("tr.item-row");
 
     wide.oninput = () => {
       compact.value = wide.value;
       updateItemNameWarn(wide);
       updateItemNameWarn(compact);
       onChange && onChange();
+      if (__catSuggestTimer) clearTimeout(__catSuggestTimer);
+      const val = wide.value;
+      __catSuggestTimer = setTimeout(() => {
+        if (row && val && val !== "Товар") searchCatalogForRow(row, val, onChange);
+        else closeCatalogSuggest();
+      }, 280);
     };
+
+    if (floatCatBtn && row) {
+      floatCatBtn.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const q = (wide.value || "").trim();
+        const searchQ = !q || q === "Товар" ? "." : q;
+        searchCatalogForRow(row, searchQ, onChange);
+        try { wide.focus(); } catch (e) {}
+      };
+    }
 
     const saveAndClose = () => {
       compact.value = wide.value;
@@ -1332,7 +1375,14 @@
       (ev) => {
         const t = ev.target;
         if (!t) return;
-        if (t.closest && t.closest(".it-name-float, tr.item-name-expand, input.it-name")) return;
+        if (
+          t.closest &&
+          t.closest(
+            ".it-name-float, tr.item-name-expand, input.it-name, .it-cat-btn, .cat-suggest"
+          )
+        )
+          return;
+        closeCatalogSuggest();
         closeItemNameExpand(null);
       },
       true
@@ -2433,6 +2483,9 @@
     const btn = $("#nav_payments_btn");
     const menu = $("#nav_payments_menu");
     if (!root || !btn || !menu) return;
+    menu.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    root.classList.remove("is-open");
     function closeMenu() {
       menu.hidden = true;
       btn.setAttribute("aria-expanded", "false");

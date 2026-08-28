@@ -2926,6 +2926,9 @@ body[data-theme="glass"] .cat-suggest {
   flex-direction: column;
   gap: 2px;
 }
+.nav-dropdown-menu[hidden] {
+  display: none !important;
+}
 body[data-theme="glass"] .nav-dropdown-menu {
   background: rgba(23, 33, 43, 0.94);
   backdrop-filter: blur(14px);
@@ -2949,4 +2952,32 @@ body[data-theme="glass"] .nav-dropdown-menu {
 .nav-dropdown.is-active > .nav-dropdown-btn,
 .nav-dropdown-btn.active {
   /* active state already via .nav button.active if class applied */
+}
+
+.catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* Плавающее имя + выбор из каталога */
+.it-name-float {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.it-name-float .it-name-wide {
+  flex: 1;
+  min-width: 0;
+}
+.it-name-float .it-cat-btn {
+  display: inline-flex;
+  margin-top: 2px;
+}
+.it-name-float .cat-suggest {
+  left: 0;
+  right: 36px;
+  top: calc(100% + 4px);
 }
