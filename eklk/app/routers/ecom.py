@@ -10,7 +10,9 @@ import uuid as uuid_lib
 from fastapi import APIRouter, HTTPException
 
 from app.clients.ecomkassa import EcomKassaClient, EcomKassaError, to_rubles
+from app.core.config import settings
 from app.core.deps import CurrentUser, update_session_store
+from app.core.rate_limit import allow as rate_allow
 from app.schemas.checks import CreateCheckRequest, CreateRefundRequest, CheckResponse
 from app.utils.logger import log_action
 
@@ -72,6 +74,8 @@ async def payment_types(user: CurrentUser):
 
 @router.post("/checks", response_model=CheckResponse)
 async def create_check(body: CreateCheckRequest, user: CurrentUser):
+    if not rate_allow(f"write:{user['username']}", settings.rate_limit_write_per_minute, 60):
+        raise HTTPException(status_code=429, detail="Слишком много операций. Подождите минуту.")
     """Create SALE check or payment invoice (if payments.type is provider id like 103)."""
     group = _resolve_group(user, body.group_code)
     client = _client_for(user, group)
@@ -163,6 +167,8 @@ async def get_check(uuid: str, user: CurrentUser):
 
 @router.post("/refunds", response_model=CheckResponse)
 async def create_refund(body: CreateRefundRequest, user: CurrentUser):
+    if not rate_allow(f"write:{user['username']}", settings.rate_limit_write_per_minute, 60):
+        raise HTTPException(status_code=429, detail="Слишком много операций. Подождите минуту.")
     group = _resolve_group(user, body.group_code)
     client = _client_for(user, group)
     try:

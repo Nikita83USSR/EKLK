@@ -12,6 +12,7 @@ from app.clients.ecomkassa import set_shared_http_client
 from app.core.config import settings
 from app.db import init_db
 from app.services.session_store import get_session_store
+from app.core.upstream_limit import get_upstream_semaphore
 from app.utils.logger import logger, log_action
 from app.routers import auth, ecom, orders, catalog, reports, dashboard, settings as settings_router, ai_cashier
 from app.routers import templates as templates_router
@@ -44,6 +45,7 @@ async def lifespan(app: FastAPI):
         f"timeout={settings.http_timeout_seconds}s)"
     )
     get_session_store()  # init memory/redis session backend
+    get_upstream_semaphore()  # per-worker outbound concurrency
     try:
         await init_db()
         logger.info("Database ready (user_settings / firm_settings)")

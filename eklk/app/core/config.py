@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     session_backend: str = "memory"
     redis_url: str = "redis://127.0.0.1:6379/0"
 
+    # Stage F: upstream concurrency + rate limits
+    upstream_max_concurrent: int = 80  # per worker process
+    rate_limit_login_per_minute: int = 10  # per IP
+    rate_limit_write_per_minute: int = 60  # checks/refunds per user
+
     # ИИ-кассир (iikassa.ru) — partner-embed
     iikassa_embed_url: str = "https://functions.poehali.dev/10219b97-9c66-4c02-b8a3-939f2d6e06c6"
     iikassa_partner_id: str = "widget"  # как в официальном widget.js (opts.partnerId || "widget")

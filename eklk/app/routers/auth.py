@@ -3,7 +3,7 @@ Login via EcomKassa credentials only — no local users.
 After login loads firm profile (organization + stores).
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Request
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.core.config import settings
@@ -26,17 +26,26 @@ from app.schemas.auth import (
 )
 from app.services import settings_service as settings_svc
 from app.utils.logger import log_action
+from app.core.rate_limit import allow as rate_allow, client_ip
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: LoginRequest):
+async def login(data: LoginRequest, request: Request):
     """
     Логин = учётная запись EcomKassa (email + пароль).
     Проверяем через getToken; затем загружаем профиль фирмы и магазины.
     """
+    ip = client_ip(request)
+    if not rate_allow(f"login:{ip}", settings.rate_limit_login_per_minute, 60):
+        log_action("rate_limit", f"login blocked ip={ip}", level="warning")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Слишком много попыток входа. Подождите минуту.",
+        )
+
     # Регистр логина сохраняем — EcomKassa чувствителен к case (не .lower())
     login_name = data.username.strip()
     password = data.password
@@ -86,8 +95,8 @@ async def login(data: LoginRequest):
 
 
 @router.post("/login/form", response_model=TokenResponse)
-async def login_form(form: OAuth2PasswordRequestForm = Depends()):
-    return await login(LoginRequest(username=form.username, password=form.password))
+async def login_form(request: Request, form: OAuth2PasswordRequestForm = Depends()):
+    return await login(LoginRequest(username=form.username, password=form.password), request)
 
 
 @router.get("/me", response_model=UserOut)

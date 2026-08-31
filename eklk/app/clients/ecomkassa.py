@@ -13,6 +13,7 @@ from typing import Any, Optional
 import httpx
 
 from app.core.config import settings
+from app.core.upstream_limit import get_upstream_semaphore
 from app.utils.logger import log_action, logger
 
 # Process-wide shared httpx client (set in FastAPI lifespan). One per worker.
@@ -187,6 +188,11 @@ class EcomKassaClient:
     def _mobile_url(self, path: str) -> str:
         return f"{self.base_url}/api/mobile/v1/{path.lstrip('/')}"
 
+    async def _http(self, method: str, url: str, **kwargs):
+        """All upstream HTTP goes through per-worker semaphore."""
+        async with get_upstream_semaphore():
+            return await self._client.request(method, url, **kwargs)
+
     async def close(self) -> None:
         # Only close if this instance created the client (not the shared one).
         if self._owns_client:
@@ -197,7 +203,8 @@ class EcomKassaClient:
             return self._token
         url = self._url("getToken")
         log_action("ecom_auth", f"Requesting token from {url}")
-        resp = await self._client.post(
+        resp = await self._http(
+            "POST",
             url,
             json={"login": self.login, "pass": self.password},
             headers={"Content-Type": "application/json; charset=utf-8"},
@@ -221,7 +228,8 @@ class EcomKassaClient:
         token = await self.get_token()
         url = self._mobile_url("profile/firm")
         log_action("ecom_firm", f"GET {url}")
-        resp = await self._client.get(
+        resp = await self._http(
+            "GET",
             url,
             headers={
                 "Content-Type": "application/json; charset=utf-8",
@@ -270,7 +278,7 @@ class EcomKassaClient:
         }
         url = self._mobile_url(path)
         log_action("ecom_mobile", f"{method} {url}", level="debug")
-        resp = await self._client.request(method, url, json=json_body, headers=headers)
+        resp = await self._http(method, url, json=json_body, headers=headers)
 
         if resp.status_code == 401 and retry_auth:
             log_action("ecom_auth", "Token expired (mobile), refreshing", level="warning")
@@ -361,7 +369,7 @@ class EcomKassaClient:
         url = self._url(path, version=version)
         log_action("ecom_request", f"{method} {url}", level="debug")
 
-        resp = await self._client.request(method, url, json=json_body, headers=headers)
+        resp = await self._http(method, url, json=json_body, headers=headers)
 
         if resp.status_code == 401 and retry_auth:
             log_action("ecom_auth", "Token expired, refreshing", level="warning")
@@ -742,7 +750,7 @@ class EcomKassaClient:
                 level="warning",
             )
         log_action("ecom_catalog", f"{method} {url.split('?')[0]} auth={'basic' if auth else 'none'}", level="debug")
-        resp = await self._client.request(method, url, json=json_body, headers=headers, auth=auth)
+        resp = await self._http(method, url, json=json_body, headers=headers, auth=auth)
 
         if resp.status_code == 204:
             return {"errorCode": 0}

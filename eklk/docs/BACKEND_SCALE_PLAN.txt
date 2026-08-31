@@ -8,7 +8,7 @@ EKLK — BACKEND SCALE PLAN
 бизнес-контрактов текущего ЛК.
 
 СТАТУС: В РАБОТЕ (см. SCALE_PROGRESS.md)
-Прогресс: A ✅  B ✅  C ✅  D ✅  E ✅  |  NEXT: F
+Прогресс: A ✅  B ✅  C ✅  D ✅  E ✅  F ✅  |  NEXT: G
 Файл прогресса: eklk/docs/SCALE_PROGRESS.md
 
 ВАЖНО: этот документ является рабочим планом. Не пытаться реализовать всю
