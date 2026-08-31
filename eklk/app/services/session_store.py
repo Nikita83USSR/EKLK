@@ -8,7 +8,7 @@ Backends:
 Key: eklk:session:{login}
 TTL: ACCESS_TOKEN_EXPIRE_MINUTES + 30 min (slightly longer than JWT).
 
-Stage C: password may still be stored (removed/encrypted in stage D).
+Stage D: password and ecom_token are encrypted at rest (Fernet via SECRET_KEY).
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ import logging
 from typing import Any, Optional, Protocol
 
 from app.core.config import settings
+from app.services.session_crypto import open_session_for_use, seal_session_for_storage
 
 logger = logging.getLogger("eklk.session")
 
@@ -49,6 +50,11 @@ def _merge_session(
     firm: Optional[dict],
     ecom_token: Optional[str],
 ) -> dict[str, Any]:
+    """
+    Build session payload in *plaintext* form (for in-process use).
+    Callers must seal_session_for_storage before persisting.
+    prev is expected to be already opened (plaintext) or empty.
+    """
     selected = prev.get("selected_store_id")
     stores = (firm or {}).get("stores") or prev.get("firm", {}).get("stores") or []
     if selected is not None and stores:
@@ -66,7 +72,6 @@ def _merge_session(
         "firm": firm if firm is not None else prev.get("firm"),
         "selected_store_id": selected if selected is not None else group_code,
     }
-    # preserve report_history and ecom_token unless explicitly replaced
     if "report_history" in prev:
         data["report_history"] = prev["report_history"]
     tok = ecom_token if ecom_token is not None else prev.get("ecom_token")
@@ -77,6 +82,7 @@ def _merge_session(
 
 class MemorySessionStore:
     def __init__(self) -> None:
+        # Stored sealed (encrypted secrets)
         self._data: dict[str, dict[str, Any]] = {}
 
     def save(
@@ -87,24 +93,32 @@ class MemorySessionStore:
         firm: Optional[dict] = None,
         ecom_token: Optional[str] = None,
     ) -> None:
-        prev = self._data.get(login) or {}
-        self._data[login] = _merge_session(prev, login, password, group_code, firm, ecom_token)
+        prev = open_session_for_use(self._data[login]) if login in self._data else {}
+        if prev is None:
+            prev = {}
+        merged = _merge_session(prev, login, password, group_code, firm, ecom_token)
+        self._data[login] = seal_session_for_storage(merged)
 
     def get(self, login: str) -> Optional[dict[str, Any]]:
-        return self._data.get(login)
+        raw = self._data.get(login)
+        if not raw:
+            return None
+        return open_session_for_use(raw)
 
     def update_store(self, login: str, store_id: str | int) -> None:
-        session = self._data.get(login)
+        session = self.get(login)
         if not session:
             return
         session["selected_store_id"] = store_id
         session["group_code"] = str(store_id)
+        self._data[login] = seal_session_for_storage(session)
 
     def update_fields(self, login: str, **fields: Any) -> None:
-        session = self._data.get(login)
+        session = self.get(login)
         if not session:
             return
         session.update(fields)
+        self._data[login] = seal_session_for_storage(session)
 
     def clear(self, login: str) -> None:
         self._data.pop(login, None)
@@ -116,11 +130,18 @@ class RedisSessionStore:
 
         self._r = redis.from_url(url, decode_responses=True)
         self._ttl = max(60, int(ttl_seconds))
-        # fail fast if Redis is down
         self._r.ping()
 
     def _key(self, login: str) -> str:
         return f"eklk:session:{login}"
+
+    def _write(self, login: str, plain_session: dict[str, Any]) -> None:
+        sealed = seal_session_for_storage(plain_session)
+        self._r.set(
+            self._key(login),
+            json.dumps(sealed, ensure_ascii=False, default=str),
+            ex=self._ttl,
+        )
 
     def save(
         self,
@@ -131,8 +152,8 @@ class RedisSessionStore:
         ecom_token: Optional[str] = None,
     ) -> None:
         prev = self.get(login) or {}
-        data = _merge_session(prev, login, password, group_code, firm, ecom_token)
-        self._r.set(self._key(login), json.dumps(data, ensure_ascii=False, default=str), ex=self._ttl)
+        merged = _merge_session(prev, login, password, group_code, firm, ecom_token)
+        self._write(login, merged)
 
     def get(self, login: str) -> Optional[dict[str, Any]]:
         raw = self._r.get(self._key(login))
@@ -143,9 +164,13 @@ class RedisSessionStore:
         except json.JSONDecodeError:
             logger.warning("Corrupt session JSON for login=%s", login)
             return None
-        # sliding TTL: touch on read so active users stay logged in
+        opened = open_session_for_use(data)
+        if opened is None:
+            # undecryptable password → drop session
+            self.clear(login)
+            return None
         self._r.expire(self._key(login), self._ttl)
-        return data
+        return opened
 
     def update_store(self, login: str, store_id: str | int) -> None:
         session = self.get(login)
@@ -153,14 +178,14 @@ class RedisSessionStore:
             return
         session["selected_store_id"] = store_id
         session["group_code"] = str(store_id)
-        self._r.set(self._key(login), json.dumps(session, ensure_ascii=False, default=str), ex=self._ttl)
+        self._write(login, session)
 
     def update_fields(self, login: str, **fields: Any) -> None:
         session = self.get(login)
         if not session:
             return
         session.update(fields)
-        self._r.set(self._key(login), json.dumps(session, ensure_ascii=False, default=str), ex=self._ttl)
+        self._write(login, session)
 
     def clear(self, login: str) -> None:
         self._r.delete(self._key(login))
@@ -180,7 +205,7 @@ def get_session_store() -> SessionStore:
     if backend == "redis":
         try:
             _store = RedisSessionStore(settings.redis_url, ttl_seconds=ttl)
-            logger.info("Session store: redis (%s), ttl=%ss", settings.redis_url, ttl)
+            logger.info("Session store: redis (%s), ttl=%ss (secrets encrypted at rest)", settings.redis_url, ttl)
             return _store
         except Exception as e:
             logger.error(
@@ -192,7 +217,7 @@ def get_session_store() -> SessionStore:
             return _store
 
     _store = MemorySessionStore()
-    logger.info("Session store: memory (single-process only)")
+    logger.info("Session store: memory (secrets encrypted at rest; single-process only)")
     return _store
 
 

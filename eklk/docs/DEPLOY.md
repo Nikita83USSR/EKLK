@@ -215,6 +215,8 @@ grep -E "Session store|Shared HTTP|ERROR|Traceback" /tmp/eklk.log
 
 При `SESSION_BACKEND=redis` и недоступном Redis приложение **стартует с fallback на memory** и пишет ERROR в лог. При 2 workers сессии снова разъедутся — Redis обязателен для production.
 
+Поля `password` и `ecom_token` в Redis хранятся **зашифрованными** (Fernet от `SECRET_KEY`). Смена `SECRET_KEY` требует повторного входа всех пользователей.
+
 ---
 
 ## 4. Процессы и порты

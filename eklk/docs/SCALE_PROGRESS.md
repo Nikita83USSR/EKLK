@@ -17,8 +17,8 @@ PostgreSQL **не** внедрять. Frontend `app.js` **не** перепис�
 | **A** | Production config, 2 workers | ✅ **DONE** | `6a79bda` | `start-eklk.sh` → `--workers 2`, без `--reload` |
 | **B** | Shared httpx.AsyncClient | ✅ **DONE** | `6a79bda` | Один client на worker через lifespan |
 | **C** | Redis session store | ✅ **DONE** | `7c39b46` | `SESSION_BACKEND=redis`, dual memory\|redis |
-| **D** | Убрать plaintext password из session | ⬜ **NEXT** | — | Вариант **A**: шифровать password (Fernet/AES от SECRET_KEY) |
-| **E** | SQLite WAL / busy_timeout | ⬜ TODO | — | Настройки; без PostgreSQL |
+| **D** | Убрать plaintext password из session | ✅ **DONE** | (this commit) | Fernet от SECRET_KEY; password+ecom_token at rest |
+| **E** | SQLite WAL / busy_timeout | ⬜ **NEXT** | — | Настройки; без PostgreSQL |
 | **F** | Rate limit + upstream Semaphore | ⬜ TODO | — | Login по IP; create-check мягко; Semaphore ~50–100/worker |
 | **G** | Logging / metrics / health ready | ⬜ TODO | — | live + ready; без логов secrets |
 | **H** | Load + regression tests | ⬜ TODO | — | Mock EcomKassa; RSS двух worker |
@@ -54,17 +54,18 @@ PostgreSQL **не** внедрять. Frontend `app.js` **не** перепис�
 
 **Риск дублей чеков/платежей из‑за 2 workers:** нет (один HTTP-запрос → один worker → один upstream).
 
-**Остаётся после C:** в Redis password пока **plaintext** (до этапа D).
+**После D:** password и ecom_token в Redis только как `eklk1:` + Fernet ciphertext.
+Смена `SECRET_KEY` инвалидирует сессии (нужен re-login).
 
 ---
 
 ## С чего начать новую сессию агента
 
 1. Ветка **`exp`**, прочитать этот файл и `BACKEND_SCALE_PLAN.txt`.
-2. Следующая работа: **этап D** (шифровать password в session store).
+2. Следующая работа: **этап E** (SQLite WAL / busy_timeout).
 3. Не менять API-контракты, ФФД, бизнес-логику чеков.
-4. После D: commit + push `exp`, проверка на VPS: Redis dump без открытого password, login/me/select-store/check.
-5. Дальше E → F → G → H по плану.
+4. После E: commit + push `exp`, проверка settings под 2 workers.
+5. Дальше F → G → H по плану.
 
 ### Ключевые файлы этапа D
 
@@ -77,6 +78,7 @@ PostgreSQL **не** внедрять. Frontend `app.js` **не** перепис�
 
 - A/B: `start-eklk.sh`, `app/main.py` lifespan, `app/clients/ecomkassa.py`, `app/core/config.py`
 - C: `app/services/session_store.py`, `app/core/deps.py`, `requirements.txt` (`redis`)
+- D: `app/services/session_crypto.py`, sealed password/ecom_token in store
 - Deploy: `docs/DEPLOY.md`
 
 ---
