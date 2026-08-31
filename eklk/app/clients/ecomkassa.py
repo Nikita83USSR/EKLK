@@ -14,6 +14,7 @@ import httpx
 
 from app.core.config import settings
 from app.core.upstream_limit import get_upstream_semaphore
+from app.core import metrics as app_metrics
 from app.utils.logger import log_action, logger
 
 # Process-wide shared httpx client (set in FastAPI lifespan). One per worker.
@@ -191,7 +192,14 @@ class EcomKassaClient:
     async def _http(self, method: str, url: str, **kwargs):
         """All upstream HTTP goes through per-worker semaphore."""
         async with get_upstream_semaphore():
-            return await self._client.request(method, url, **kwargs)
+            t0 = app_metrics.upstream_begin()
+            try:
+                resp = await self._client.request(method, url, **kwargs)
+                app_metrics.upstream_end(t0, error=resp.status_code >= 500)
+                return resp
+            except Exception:
+                app_metrics.upstream_end(t0, error=True)
+                raise
 
     async def close(self) -> None:
         # Only close if this instance created the client (not the shared one).

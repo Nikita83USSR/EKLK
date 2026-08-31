@@ -235,6 +235,12 @@ Backup SQLite: копируйте `eklk.db` **и** при наличии `eklk.d
 pkill -f "uvicorn app.main"
 ```
 
+Логи: файл **`eklk/run.log`** (stdout/stderr uvicorn + FileHandler приложения).
+```bash
+tail -f /var/www/WEBROOT/EKLK/eklk/run.log
+```
+
+
 Проверка worker’ов:
 
 ```bash

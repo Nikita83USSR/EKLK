@@ -17,6 +17,7 @@ fi
 echo "=============================================="
 echo "  EKLK (production) — http://0.0.0.0:8000"
 echo "  workers=2  (без --reload)"
+echo "  log: $(pwd)/run.log"
 echo "  Остановка: Ctrl+C"
 echo "=============================================="
 
@@ -25,4 +26,6 @@ echo "=============================================="
 
 # Production: ровно 2 worker, без --reload.
 # Сессии: SESSION_BACKEND=redis в .env (см. docs/DEPLOY.md).
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+# Все логи приложения + uvicorn → run.log (app also writes via FileHandler).
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 \
+  >> run.log 2>&1

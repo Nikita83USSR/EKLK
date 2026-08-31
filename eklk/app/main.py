@@ -14,6 +14,9 @@ from app.db import init_db
 from app.services.session_store import get_session_store
 from app.core.upstream_limit import get_upstream_semaphore
 from app.utils.logger import logger, log_action
+from app.core import metrics as app_metrics
+import time
+import os
 from app.routers import auth, ecom, orders, catalog, reports, dashboard, settings as settings_router, ai_cashier
 from app.routers import templates as templates_router
 
@@ -75,6 +78,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    t0 = time.perf_counter()
+    response = await call_next(request)
+    ms = (time.perf_counter() - t0) * 1000.0
+    app_metrics.add_request_latency(ms)
+    if response.status_code == 429:
+        app_metrics.inc("http_429")
+    elif response.status_code == 401:
+        app_metrics.inc("http_401")
+    elif response.status_code >= 500:
+        app_metrics.inc("http_5xx")
+    if ms >= 2000 and not request.url.path.startswith(("/static", "/health")):
+        logger.info(
+            f"slow request {request.method} {request.url.path} {ms:.0f}ms status={response.status_code}",
+            extra={"action": "slow_request", "worker": app_metrics.worker_id()},
+        )
+    return response
+
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(settings_router.router, prefix="/api/v1")
 app.include_router(ai_cashier.router, prefix="/api/v1")
@@ -110,8 +133,57 @@ async def spa_section(request: Request):
 
 
 @app.get("/health")
-async def health():
-    return {"status": "ok", "service": settings.app_name, "version": settings.app_version}
+@app.get("/health/live")
+async def health_live():
+    """Liveness: process is up."""
+    return {
+        "status": "ok",
+        "service": settings.app_name,
+        "version": settings.app_version,
+        "worker": app_metrics.worker_id(),
+    }
+
+
+@app.get("/health/ready")
+async def health_ready():
+    """Readiness: Redis (if configured) + SQLite reachable."""
+    from app.db import db_available, engine
+    from app.core.config import settings as cfg
+    import redis
+
+    checks = {"sqlite": bool(db_available), "redis": None}
+    detail = {}
+    ok = True
+    if (cfg.session_backend or "").lower() == "redis":
+        try:
+            r = redis.from_url(cfg.redis_url, decode_responses=True, socket_connect_timeout=1)
+            r.ping()
+            checks["redis"] = True
+        except Exception as e:
+            checks["redis"] = False
+            detail["redis"] = str(e)[:200]
+            ok = False
+    else:
+        checks["redis"] = "skipped"
+    if not db_available:
+        ok = False
+        detail["sqlite"] = "unavailable"
+    status_code = 200 if ok else 503
+    body = {
+        "status": "ok" if ok else "degraded",
+        "service": settings.app_name,
+        "version": settings.app_version,
+        "worker": app_metrics.worker_id(),
+        "checks": checks,
+        "detail": detail or None,
+    }
+    return JSONResponse(status_code=status_code, content=body)
+
+
+@app.get("/metrics")
+async def metrics_endpoint():
+    """Per-worker counters (not Prometheus format — simple JSON)."""
+    return app_metrics.snapshot()
 
 
 @app.exception_handler(Exception)

@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite+aiosqlite:///./eklk.db"
     log_level: str = "DEBUG"
+    log_file: str = "run.log"  # all workers append here
 
     # Shared httpx client limits (one AsyncClient per worker process)
     http_max_connections: int = 100

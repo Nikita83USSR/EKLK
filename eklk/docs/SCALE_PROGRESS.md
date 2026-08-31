@@ -19,9 +19,9 @@ PostgreSQL **не** внедрять. Frontend `app.js` **не** перепис�
 | **C** | Redis session store | ✅ **DONE** | `7c39b46` | `SESSION_BACKEND=redis`, dual memory\|redis |
 | **D** | Убрать plaintext password из session | ✅ **DONE** | `d2a8684` | Fernet от SECRET_KEY; password+ecom_token at rest |
 | **E** | SQLite WAL / busy_timeout | ✅ **DONE** | `b8e3b87` | WAL, busy_timeout=30s, NullPool |
-| **F** | Rate limit + upstream Semaphore | ✅ **DONE** | (this commit) | login 10/min IP; write 60/min user; sem 80/worker |
-| **G** | Logging / metrics / health ready | ⬜ **NEXT** | — | live + ready; без логов secrets |
-| **H** | Load + regression tests | ⬜ TODO | — | Mock EcomKassa; RSS двух worker |
+| **F** | Rate limit + upstream Semaphore | ✅ **DONE** | `8ba45cd` | login 10/min IP; write 60/min user; sem 80/worker |
+| **G** | Logging / metrics / health ready | ✅ **DONE** | (this commit) | run.log, /health/ready, /metrics |
+| **H** | Load + regression tests | ⬜ **NEXT** | — | Mock EcomKassa; RSS двух worker |
 
 Документация деплоя: `86b0025` (`docs/DEPLOY.md`).
 
@@ -62,7 +62,7 @@ PostgreSQL **не** внедрять. Frontend `app.js` **не** перепис�
 ## С чего начать новую сессию агента
 
 1. Ветка **`exp`**, прочитать этот файл и `BACKEND_SCALE_PLAN.txt`.
-2. Следующая работа: **этап G** (logging / metrics / health ready).
+2. Следующая работа: **этап H** (load + regression tests).
 3. Не менять API-контракты, ФФД, бизнес-логику чеков.
 4. После F: commit + push `exp`, проверка 429 на burst login.
 5. Дальше G → H по плану.
@@ -81,6 +81,7 @@ PostgreSQL **не** внедрять. Frontend `app.js` **не** перепис�
 - D: `app/services/session_crypto.py`, sealed password/ecom_token in store
 - E: `app/db.py` — WAL, busy_timeout, NullPool
 - F: `app/core/rate_limit.py`, `upstream_limit.py`; auth/ecom limits
+- G: `run.log`, `app/core/metrics.py`, `/health/live|ready`, `/metrics`
 - Deploy: `docs/DEPLOY.md`
 
 ---
