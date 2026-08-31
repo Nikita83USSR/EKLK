@@ -21,7 +21,7 @@ PostgreSQL **не** внедрять. Frontend `app.js` **не** перепис�
 | **E** | SQLite WAL / busy_timeout | ✅ **DONE** | `b8e3b87` | WAL, busy_timeout=30s, NullPool |
 | **F** | Rate limit + upstream Semaphore | ✅ **DONE** | `8ba45cd` | login 10/min IP; write 60/min user; sem 80/worker |
 | **G** | Logging / metrics / health ready | ✅ **DONE** | (this commit) | run.log, /health/ready, /metrics |
-| **H** | Load + regression tests | ⬜ **NEXT** | — | Mock EcomKassa; RSS двух worker |
+| **H** | Load + regression tests | 🚫 **СНЯТ** | — | Тестирование на проде в реальных боевых условиях |
 
 Документация деплоя: `86b0025` (`docs/DEPLOY.md`).
 
@@ -59,13 +59,20 @@ PostgreSQL **не** внедрять. Frontend `app.js` **не** перепис�
 
 ---
 
+## Статус плана (закрыт)
+
+**BACKEND_SCALE_PLAN.txt реализован (этапы A–G ✅).**  
+Этап **H снят**: нагрузочное/регрессионное тестирование будет проходить **на проде в реальных боевых условиях**.
+
+ИИ-агентам **не нужно** перечитывать `BACKEND_SCALE_PLAN.txt` и этот файл как активный backlog масштабирования — план выполнен.
+
+---
+
 ## С чего начать новую сессию агента
 
-1. Ветка **`exp`**, прочитать этот файл и `BACKEND_SCALE_PLAN.txt`.
-2. Следующая работа: **этап H** (load + regression tests).
-3. Не менять API-контракты, ФФД, бизнес-логику чеков.
-4. После F: commit + push `exp`, проверка 429 на burst login.
-5. Дальше G → H по плану.
+1. Ветка **`exp`**. План масштабирования backend (A–G) **закрыт** — эти файлы не читать как TODO.
+2. Не менять API-контракты, ФФД, бизнес-логику чеков.
+3. Дальнейшие задачи — по отдельным запросам (не по этому scale-плану).
 
 ### Ключевые файлы этапа D
 
