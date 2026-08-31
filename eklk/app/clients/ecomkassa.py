@@ -15,6 +15,19 @@ import httpx
 from app.core.config import settings
 from app.utils.logger import log_action, logger
 
+# Process-wide shared httpx client (set in FastAPI lifespan). One per worker.
+_shared_http_client: httpx.AsyncClient | None = None
+
+
+def set_shared_http_client(client: httpx.AsyncClient | None) -> None:
+    """Called from app lifespan: set on startup, clear on shutdown."""
+    global _shared_http_client
+    _shared_http_client = client
+
+
+def get_shared_http_client() -> httpx.AsyncClient | None:
+    return _shared_http_client
+
 
 class EcomKassaError(Exception):
     def __init__(self, message: str, code: int | str | None = None, raw: Any = None):
@@ -142,6 +155,7 @@ class EcomKassaClient:
         group_code: str | None = None,
         base_url: str | None = None,
         api_version: str = "v5",
+        http_client: httpx.AsyncClient | None = None,
     ):
         self.login = login or settings.ecomkassa_login
         self.password = password or settings.ecomkassa_password
@@ -149,7 +163,22 @@ class EcomKassaClient:
         self.base_url = (base_url or settings.ecomkassa_base_url).rstrip("/")
         self.api_version = api_version or settings.ecomkassa_api_version
         self._token: str | None = None
-        self._client = httpx.AsyncClient(timeout=30.0)
+        # Prefer explicit client → process shared client → own client (tests/scripts).
+        if http_client is not None:
+            self._client = http_client
+            self._owns_client = False
+        elif _shared_http_client is not None:
+            self._client = _shared_http_client
+            self._owns_client = False
+        else:
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(settings.http_timeout_seconds),
+                limits=httpx.Limits(
+                    max_connections=settings.http_max_connections,
+                    max_keepalive_connections=settings.http_max_keepalive_connections,
+                ),
+            )
+            self._owns_client = True
 
     def _url(self, path: str, version: str | None = None) -> str:
         ver = version or self.api_version
@@ -159,7 +188,9 @@ class EcomKassaClient:
         return f"{self.base_url}/api/mobile/v1/{path.lstrip('/')}"
 
     async def close(self) -> None:
-        await self._client.aclose()
+        # Only close if this instance created the client (not the shared one).
+        if self._owns_client:
+            await self._client.aclose()
 
     async def get_token(self, force: bool = False) -> str:
         if self._token and not force:

@@ -15,11 +15,15 @@ else
 fi
 
 echo "=============================================="
-echo "  EKLK — http://127.0.0.1:8000"
+echo "  EKLK (production) — http://0.0.0.0:8000"
+echo "  workers=2  (без --reload)"
 echo "  Остановка: Ctrl+C"
 echo "=============================================="
 
 # Открыть браузер через пару секунд после старта (если есть)
 ( sleep 2; xdg-open "http://127.0.0.1:8000" >/dev/null 2>&1 || true ) &
 
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# Production: ровно 2 worker, без --reload.
+# Session store пока in-memory (этап C — Redis); до C F5/запросы
+# могут попадать на другой worker и давать «Сессия истекла».
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2

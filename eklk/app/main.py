@@ -1,12 +1,14 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.clients.ecomkassa import set_shared_http_client
 from app.core.config import settings
 from app.db import init_db
 from app.utils.logger import logger, log_action
@@ -20,7 +22,26 @@ BASE_DIR = Path(__file__).resolve().parent
 async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.info(f"{settings.app_name} v{settings.app_version} starting")
-    logger.info(f"API backend (фискальный шлюз EcomKassa): {settings.ecomkassa_base_url} | protocol={settings.ecomkassa_api_version} | default_group={settings.ecomkassa_group_code}")
+    logger.info(
+        f"API backend (фискальный шлюз EcomKassa): {settings.ecomkassa_base_url} | "
+        f"protocol={settings.ecomkassa_api_version} | default_group={settings.ecomkassa_group_code}"
+    )
+    # One shared httpx.AsyncClient per worker process (connection pooling).
+    http_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(settings.http_timeout_seconds),
+        limits=httpx.Limits(
+            max_connections=settings.http_max_connections,
+            max_keepalive_connections=settings.http_max_keepalive_connections,
+        ),
+    )
+    app.state.http_client = http_client
+    set_shared_http_client(http_client)
+    logger.info(
+        "Shared HTTP client ready "
+        f"(max_connections={settings.http_max_connections}, "
+        f"keepalive={settings.http_max_keepalive_connections}, "
+        f"timeout={settings.http_timeout_seconds}s)"
+    )
     try:
         await init_db()
         logger.info("Database ready (user_settings / firm_settings)")
@@ -30,6 +51,9 @@ async def lifespan(app: FastAPI):
     log_action("startup", "Application started")
     yield
     log_action("shutdown", "Application stopped")
+    set_shared_http_client(None)
+    await http_client.aclose()
+    logger.info("Shared HTTP client closed")
 
 
 app = FastAPI(

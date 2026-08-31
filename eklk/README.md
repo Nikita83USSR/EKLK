@@ -32,12 +32,17 @@ cd eklk
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env               # при необходимости
-./start-eklk.sh                    # или: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+cp .env.example .env               # обязательно задайте SECRET_KEY в production
+./start-eklk.sh                    # production: 2 workers, без --reload
+# dev (1 process + hot reload):
+#   uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Открыть: **http://127.0.0.1:8000**  
 Swagger: **http://127.0.0.1:8000/docs**
+
+> Production (`start-eklk.sh`): `--workers 2`. Пока session store in-memory (этап C — Redis),
+> запросы с разных worker могут отвечать «Сессия истекла» после F5 — это ожидаемо до Redis.
 
 ### XFCE-ярлык
 

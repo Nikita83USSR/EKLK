@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     app_name: str = "EKLK"
     app_version: str = "1.0.0"
+    # Production: set DEBUG=false and LOG_LEVEL=INFO in .env
     debug: bool = True
     secret_key: str = Field(default="dev-secret-change-in-production-min-32-chars!!")
     access_token_expire_minutes: int = 480
@@ -21,6 +22,11 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite+aiosqlite:///./eklk.db"
     log_level: str = "DEBUG"
+
+    # Shared httpx client limits (one AsyncClient per worker process)
+    http_max_connections: int = 100
+    http_max_keepalive_connections: int = 20
+    http_timeout_seconds: float = 30.0
 
     # ИИ-кассир (iikassa.ru) — partner-embed
     iikassa_embed_url: str = "https://functions.poehali.dev/10219b97-9c66-4c02-b8a3-939f2d6e06c6"
