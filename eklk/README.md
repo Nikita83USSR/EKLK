@@ -42,6 +42,7 @@ cp .env.example .env               # обязательно задайте SECRE
 Swagger: **http://127.0.0.1:8000/docs**
 
 Деплой на VPS (git, Redis, `.env`, nginx/systemd): **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+Прогресс масштабирования backend: **[docs/SCALE_PROGRESS.md](docs/SCALE_PROGRESS.md)**.
 
 > Production (`start-eklk.sh`): `--workers 2`, сессии в **Redis** (`SESSION_BACKEND=redis`).
 
