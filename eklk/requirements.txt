@@ -11,3 +11,4 @@ jinja2==3.1.4
 email-validator==2.2.0
 aiosqlite==0.20.0
 sqlalchemy[asyncio]==2.0.36
+redis==5.2.1

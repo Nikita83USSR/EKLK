@@ -1,6 +1,6 @@
 """
 Auth depends on EcomKassa credentials — no local users.
-Session stores password + firm profile in memory for subsequent API calls.
+Session stores password + firm profile (memory or Redis) for subsequent API calls.
 """
 
 from __future__ import annotations
@@ -10,12 +10,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from app.core.security import decode_access_token
+from app.services.session_store import get_session_store
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
-
-# login -> {password, group_code, firm, selected_store_id}
-# In-memory; for multi-worker deploy use Redis later.
-SESSIONS: dict[str, dict[str, Any]] = {}
 
 
 def save_session(
@@ -23,42 +20,25 @@ def save_session(
     password: str,
     group_code: str = "990",
     firm: Optional[dict] = None,
+    ecom_token: Optional[str] = None,
 ) -> None:
-    prev = SESSIONS.get(login) or {}
-    selected = prev.get("selected_store_id")
-    stores = (firm or {}).get("stores") or prev.get("firm", {}).get("stores") or []
-    # keep previous selection if still valid
-    if selected is not None:
-        ids = {str(s.get("storeId")) for s in stores}
-        if str(selected) not in ids:
-            selected = None
-    if selected is None and stores:
-        selected = stores[0].get("storeId")
-    if selected is not None:
-        group_code = str(selected)
-    SESSIONS[login] = {
-        "login": login,
-        "password": password,
-        "group_code": str(group_code),
-        "firm": firm or prev.get("firm"),
-        "selected_store_id": selected if selected is not None else group_code,
-    }
+    get_session_store().save(login, password, group_code=group_code, firm=firm, ecom_token=ecom_token)
 
 
 def update_session_store(login: str, store_id: str | int) -> None:
-    session = SESSIONS.get(login)
-    if not session:
-        return
-    session["selected_store_id"] = store_id
-    session["group_code"] = str(store_id)
+    get_session_store().update_store(login, store_id)
 
 
 def get_session(login: str) -> Optional[dict[str, Any]]:
-    return SESSIONS.get(login)
+    return get_session_store().get(login)
 
 
 def clear_session(login: str) -> None:
-    SESSIONS.pop(login, None)
+    get_session_store().clear(login)
+
+
+def update_session_fields(login: str, **fields: Any) -> None:
+    get_session_store().update_fields(login, **fields)
 
 
 async def get_current_user(token: Annotated[Optional[str], Depends(oauth2_scheme)]) -> dict:
@@ -98,6 +78,7 @@ async def get_current_user(token: Annotated[Optional[str], Depends(oauth2_scheme
         "group_code": str(session.get("group_code", "990")),
         "selected_store_id": session.get("selected_store_id"),
         "firm": session.get("firm"),
+        "ecom_token": session.get("ecom_token"),
     }
 
 

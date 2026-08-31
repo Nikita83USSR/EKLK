@@ -43,8 +43,9 @@ async def login(data: LoginRequest):
 
     client = EcomKassaClient(login=login_name, password=password)
     firm_payload = None
+    ecom_token = None
     try:
-        await client.get_token(force=True)
+        ecom_token = await client.get_token(force=True)
         try:
             firm_payload = await client.get_firm_profile()
         except EcomKassaError as e:
@@ -68,7 +69,7 @@ async def login(data: LoginRequest):
     default_store = stores[0].get("storeId") if stores else settings.ecomkassa_group_code
     group_code = str(default_store)
 
-    save_session(login_name, password, group_code=group_code, firm=firm_payload)
+    save_session(login_name, password, group_code=group_code, firm=firm_payload, ecom_token=ecom_token)
     token = create_access_token(login_name, extra={"username": login_name, "role": "operator"})
     firm_out = firm_from_payload(firm_payload)
     log_action(

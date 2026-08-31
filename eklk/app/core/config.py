@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     http_max_keepalive_connections: int = 20
     http_timeout_seconds: float = 30.0
 
+    # Session store: memory (dev) | redis (multi-worker production)
+    session_backend: str = "memory"
+    redis_url: str = "redis://127.0.0.1:6379/0"
+
     # ИИ-кассир (iikassa.ru) — partner-embed
     iikassa_embed_url: str = "https://functions.poehali.dev/10219b97-9c66-4c02-b8a3-939f2d6e06c6"
     iikassa_partner_id: str = "widget"  # как в официальном widget.js (opts.partnerId || "widget")

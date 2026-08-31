@@ -16,7 +16,7 @@ from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Query
 
 from app.clients.ecomkassa import EcomKassaClient, EcomKassaError
-from app.core.deps import CurrentUser, get_session, SESSIONS
+from app.core.deps import CurrentUser, get_session, update_session_fields
 from app.schemas.reports import ReportPoint, ReportResponse, ReportHistoryItem
 from app.utils.logger import log_action
 
@@ -250,10 +250,10 @@ def _to_response(
 
 
 def _push_history(login: str, report_type: str, params: dict, resp: ReportResponse) -> None:
-    session = SESSIONS.get(login)
+    session = get_session(login)
     if not session:
         return
-    hist = session.setdefault("report_history", [])
+    hist = list(session.get("report_history") or [])
     item = {
         "id": str(uuid.uuid4())[:8],
         "reportType": report_type,
@@ -272,7 +272,7 @@ def _push_history(login: str, report_type: str, params: dict, resp: ReportRespon
     }
     hist.insert(0, item)
     # keep last 30
-    session["report_history"] = hist[:30]
+    update_session_fields(login, report_history=hist[:30])
 
 
 @router.get("/daily", response_model=ReportResponse)
@@ -417,7 +417,6 @@ async def report_history(user: CurrentUser):
 
 @router.delete("/history")
 async def clear_report_history(user: CurrentUser):
-    session = SESSIONS.get(user["username"])
-    if session:
-        session["report_history"] = []
+    if get_session(user["username"]):
+        update_session_fields(user["username"], report_history=[])
     return {"ok": True}
