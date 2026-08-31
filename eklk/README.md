@@ -41,8 +41,9 @@ cp .env.example .env               # обязательно задайте SECRE
 Открыть: **http://127.0.0.1:8000**  
 Swagger: **http://127.0.0.1:8000/docs**
 
-> Production (`start-eklk.sh`): `--workers 2`. Пока session store in-memory (этап C — Redis),
-> запросы с разных worker могут отвечать «Сессия истекла» после F5 — это ожидаемо до Redis.
+Деплой на VPS (git, Redis, `.env`, nginx/systemd): **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+
+> Production (`start-eklk.sh`): `--workers 2`, сессии в **Redis** (`SESSION_BACKEND=redis`).
 
 ### XFCE-ярлык
 
