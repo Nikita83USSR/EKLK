@@ -1,12 +1,20 @@
-"""Async SQLAlchemy engine / session. SQLite by default (DATABASE_URL)."""
+"""Async SQLAlchemy engine / session. SQLite by default (DATABASE_URL).
+
+Stage E: WAL + busy_timeout for safe concurrent access from 2 uvicorn workers.
+Each worker uses its own connections (NullPool for SQLite — no shared pool
+across processes). Transactions stay short in settings_service (no network I/O
+inside SQLite transactions).
+"""
 
 from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 
@@ -17,11 +25,18 @@ class Base(DeclarativeBase):
     pass
 
 
+def _is_sqlite(url: str) -> bool:
+    return url.startswith("sqlite")
+
+
 def _engine_kwargs(url: str) -> dict:
     kw: dict = {"echo": False}
-    if url.startswith("sqlite"):
-        # check_same_thread for sqlite; timeout reduces "database is locked" under load
-        kw["connect_args"] = {"check_same_thread": False, "timeout": 15}
+    if _is_sqlite(url):
+        # timeout: seconds wait on locked DB (SQLite Python API)
+        kw["connect_args"] = {"check_same_thread": False, "timeout": 30}
+        # NullPool: no connection reuse across checkouts — correct for multi-process
+        # SQLite (each worker process must not share pooled connections).
+        kw["poolclass"] = NullPool
     return kw
 
 
@@ -32,6 +47,24 @@ SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=
 db_available: bool = True
 
 
+def _apply_sqlite_pragmas(dbapi_conn, _connection_record) -> None:
+    """WAL + busy_timeout on every new SQLite connection (per worker process)."""
+    try:
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")  # ms
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+    except Exception as e:
+        logger.warning("SQLite PRAGMA setup failed: %s", e)
+
+
+if _is_sqlite(settings.database_url):
+    # aiosqlite: listen on the sync engine underlying the async engine
+    event.listen(engine.sync_engine, "connect", _apply_sqlite_pragmas)
+
+
 async def init_db() -> None:
     """Create tables if missing. Never aborts application startup on failure."""
     global db_available
@@ -40,8 +73,17 @@ async def init_db() -> None:
 
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            if _is_sqlite(settings.database_url):
+                # Confirm WAL once at startup (logged for ops)
+                mode = await conn.exec_driver_sql("PRAGMA journal_mode")
+                row = mode.fetchone()
+                logger.info(
+                    "Database schema ready (sqlite journal_mode=%s, busy_timeout=30000ms)",
+                    row[0] if row else "?",
+                )
+            else:
+                logger.info("Database schema ready")
         db_available = True
-        logger.info("Database schema ready")
     except Exception as e:
         db_available = False
         logger.error(

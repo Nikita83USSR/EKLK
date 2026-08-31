@@ -193,6 +193,8 @@ grep -E "Session store|Shared HTTP|ERROR|Traceback" /tmp/eklk.log
 
 **Важно:** `.env` и `eklk.db` в git не коммитятся — после `pull` они остаются на сервере.
 
+Backup SQLite: копируйте `eklk.db` **и** при наличии `eklk.db-wal` / `eklk.db-shm` (или сделайте `sqlite3 eklk.db "PRAGMA wal_checkpoint(TRUNCATE);"` перед копией только `.db`).
+
 ---
 
 ## 3. Переменные окружения (справочник)
@@ -225,7 +227,7 @@ grep -E "Session store|Shared HTTP|ERROR|Traceback" /tmp/eklk.log
 |-----|-----|
 | EKLK HTTP | `0.0.0.0:8000` (uvicorn, 2 worker) |
 | Redis | `127.0.0.1:6379` |
-| SQLite | `eklk/eklk.db` (рядом с приложением) |
+| SQLite | `eklk/eklk.db` (+ `eklk.db-wal`, `eklk.db-shm` при WAL) |
 
 Остановка:
 
