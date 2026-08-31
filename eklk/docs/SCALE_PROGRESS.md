@@ -21,7 +21,7 @@ PostgreSQL **не** внедрять. Frontend `app.js` **не** перепис�
 | **E** | SQLite WAL / busy_timeout | ✅ **DONE** | `b8e3b87` | WAL, busy_timeout=30s, NullPool |
 | **F** | Rate limit + upstream Semaphore | ✅ **DONE** | `8ba45cd` | login 10/min IP; write 60/min user; sem 80/worker |
 | **G** | Logging / metrics / health ready | ✅ **DONE** | (this commit) | run.log, /health/ready, /metrics |
-| **H** | Load + regression tests | 🚫 **СНЯТ** | — | Тестирование на проде в реальных боевых условиях |
+| **H** | Load + regression tests  — | Тестирование на проде в реальных боевых условиях |
 
 Документация деплоя: `86b0025` (`docs/DEPLOY.md`).
 
