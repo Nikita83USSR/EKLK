@@ -26,6 +26,7 @@ echo "=============================================="
 
 # Production: ровно 2 worker, без --reload.
 # Сессии: SESSION_BACKEND=redis в .env (см. docs/DEPLOY.md).
-# Все логи приложения + uvicorn → run.log (app also writes via FileHandler).
+# App logs → FileHandler(run.log). Uvicorn bootstrap lines → same file via redirect.
+# logger.py skips StreamHandler when stdout is not a TTY → no duplicate app lines.
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 \
   >> run.log 2>&1

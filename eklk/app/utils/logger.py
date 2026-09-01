@@ -52,12 +52,7 @@ def setup_logging() -> logging.Logger:
     level = getattr(logging, settings.log_level.upper(), logging.DEBUG)
     root.setLevel(level)
 
-    h = logging.StreamHandler(sys.stdout)
-    h.setLevel(level)
-    h.setFormatter(ColoredFormatter())
-    root.addHandler(h)
-
-    # Single shared run.log (all workers append)
+    # Shared run.log for all workers (primary sink in production).
     log_path = Path(settings.log_file)
     if not log_path.is_absolute():
         # relative to process CWD (eklk/ when started via start-eklk.sh)
@@ -69,8 +64,17 @@ def setup_logging() -> logging.Logger:
         fh.setFormatter(PlainFormatter())
         root.addHandler(fh)
     except Exception as e:
-        # stdout still works
+        # Fall back to stdout if file cannot be opened
         logging.getLogger("eklk").warning("Cannot open log file %s: %s", log_path, e)
+
+    # Console only when interactive (TTY). Avoids duplicate lines when
+    # start-eklk.sh redirects stdout/stderr into the same run.log.
+    # (Do not gate on settings.debug — redirected stdout must stay file-only.)
+    if sys.stdout.isatty():
+        h = logging.StreamHandler(sys.stdout)
+        h.setLevel(level)
+        h.setFormatter(ColoredFormatter())
+        root.addHandler(h)
 
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
