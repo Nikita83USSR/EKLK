@@ -5,6 +5,7 @@ FFD 1.1 / 1.2 compatible.
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP, ROUND_UP
@@ -19,6 +20,75 @@ from app.utils.logger import log_action, logger
 
 # Process-wide shared httpx client (set in FastAPI lifespan). One per worker.
 _shared_http_client: httpx.AsyncClient | None = None
+
+_SENSITIVE_HEADER_KEYS = {"token", "authorization", "x-partner-secret", "cookie"}
+_SENSITIVE_BODY_KEYS = {
+    "pass",
+    "password",
+    "ecomkassa_password",
+    "token",
+    "access_token",
+    "ecom_token",
+    "ecomkassa_token",
+    "secret",
+    "authorization",
+}
+
+
+def _truncate(s: str, max_len: int) -> str:
+    if max_len <= 0 or len(s) <= max_len:
+        return s
+    return s[:max_len] + f"…[truncated {len(s) - max_len} chars]"
+
+
+def _mask_headers(headers: dict | None) -> dict:
+    if not headers:
+        return {}
+    out: dict[str, Any] = {}
+    for k, v in headers.items():
+        if not settings.log_upstream_secrets and str(k).lower() in _SENSITIVE_HEADER_KEYS:
+            vs = str(v)
+            out[k] = (vs[:8] + f"…(len={len(vs)})") if len(vs) > 12 else "***"
+        else:
+            out[k] = v
+    return out
+
+
+def _mask_body(obj: Any) -> Any:
+    if not settings.log_upstream_secrets and isinstance(obj, dict):
+        out: dict[str, Any] = {}
+        for k, v in obj.items():
+            if str(k).lower() in _SENSITIVE_BODY_KEYS:
+                if v is None:
+                    out[k] = None
+                else:
+                    vs = str(v)
+                    out[k] = (vs[:8] + f"…(len={len(vs)})") if len(vs) > 12 else "***"
+            else:
+                out[k] = _mask_body(v)
+        return out
+    if isinstance(obj, list):
+        return [_mask_body(x) for x in obj]
+    return obj
+
+
+def _body_for_log(kwargs: dict) -> str:
+    if "json" in kwargs and kwargs["json"] is not None:
+        try:
+            return _truncate(
+                json.dumps(_mask_body(kwargs["json"]), ensure_ascii=False, default=str),
+                settings.log_upstream_max_body,
+            )
+        except Exception:
+            return "<json encode error>"
+    if "content" in kwargs and kwargs["content"] is not None:
+        raw = kwargs["content"]
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8", errors="replace")
+        return _truncate(str(raw), settings.log_upstream_max_body)
+    if "data" in kwargs and kwargs["data"] is not None:
+        return _truncate(str(_mask_body(kwargs["data"])), settings.log_upstream_max_body)
+    return ""
 
 
 def set_shared_http_client(client: httpx.AsyncClient | None) -> None:
@@ -193,12 +263,43 @@ class EcomKassaClient:
         """All upstream HTTP goes through per-worker semaphore."""
         async with get_upstream_semaphore():
             t0 = app_metrics.upstream_begin()
+            req_headers = kwargs.get("headers") or {}
+            if settings.log_upstream_full:
+                logger.info(
+                    "UPSTREAM REQ %s %s | headers=%s | body=%s",
+                    method,
+                    url,
+                    _mask_headers(dict(req_headers)),
+                    _body_for_log(kwargs),
+                    extra={"action": "upstream_req"},
+                )
             try:
                 resp = await self._client.request(method, url, **kwargs)
                 app_metrics.upstream_end(t0, error=resp.status_code >= 500)
+                if settings.log_upstream_full:
+                    try:
+                        text = resp.text
+                    except Exception:
+                        text = "<no body>"
+                    logger.info(
+                        "UPSTREAM RESP %s %s → %s | body=%s",
+                        method,
+                        url,
+                        resp.status_code,
+                        _truncate(text, settings.log_upstream_max_body),
+                        extra={"action": "upstream_resp"},
+                    )
                 return resp
-            except Exception:
+            except Exception as e:
                 app_metrics.upstream_end(t0, error=True)
+                if settings.log_upstream_full:
+                    logger.error(
+                        "UPSTREAM FAIL %s %s | error=%s",
+                        method,
+                        url,
+                        e,
+                        extra={"action": "upstream_fail"},
+                    )
                 raise
 
     async def close(self) -> None:

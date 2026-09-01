@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     log_level: str = "DEBUG"
     log_file: str = "run.log"  # all workers append here
 
+    # Full upstream (EcomKassa) request/response dump into run.log
+    # LOG_UPSTREAM_SECRETS=true writes Token/password as-is — only for short debug sessions
+    log_upstream_full: bool = False
+    log_upstream_secrets: bool = False
+    log_upstream_max_body: int = 8000
+
     # Shared httpx client limits (one AsyncClient per worker process)
     http_max_connections: int = 100
     http_max_keepalive_connections: int = 20
