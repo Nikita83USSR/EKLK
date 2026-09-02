@@ -4162,18 +4162,19 @@
   }
 
 
-  // Settings sub-tabs
+  // Settings sub-tabs (в «Настройках» и дубль сверху в «Каталоге»)
   $$(".settings-tab").forEach((btn) => {
     btn.onclick = () => {
       const name = btn.dataset.settingsTab;
-      // Каталог — отдельная панель (sections/catalog.js), не ломаем модуль
+      // Подсветка на всех копиях меню
+      $$(".settings-tab").forEach((b) => {
+        b.classList.toggle("active", b.dataset.settingsTab === name);
+      });
+      // Каталог — отдельная панель (sections/catalog.js)
       if (name === "catalog") {
-        $$(".settings-tab").forEach((b) => b.classList.toggle("active", b.dataset.settingsTab === "catalog"));
         showTab("catalog", true);
         return;
       }
-      $$(".settings-tab").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
       $("#settings-org") && $("#settings-org").classList.toggle("hidden", name !== "org");
       $("#settings-stores") && $("#settings-stores").classList.toggle("hidden", name !== "stores");
       $("#settings-integrations") && $("#settings-integrations").classList.toggle("hidden", name !== "integrations");
