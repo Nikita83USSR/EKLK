@@ -336,7 +336,8 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
   .items-table tbody tr.item-row:first-child > td:nth-child(8)::before { display: block; content: "Аг."; }
   .items-table tbody tr.item-row:first-child > td:nth-child(9)::before { display: block; content: "\00a0"; }
 
-  .items-table tbody tr.item-row ~ tr.item-row > td::before { display: none; }
+  /* подпись «Наименование» оставляем на каждой позиции */
+  .items-table tbody tr.item-row ~ tr.item-row > td:not(:nth-child(1))::before { display: none; }
 
   .items-table .it-name,
   .items-table .it-price,
