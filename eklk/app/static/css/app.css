@@ -283,7 +283,7 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
     padding: 6px 0 10px;
     border-bottom: 1px solid var(--border);
     align-items: end;
-    overflow-x: auto;
+    overflow: visible;
   }
 
   .items-table tbody tr.item-row > td {
@@ -382,7 +382,7 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
   padding: 6px 0 10px;
   border-bottom: 1px solid var(--border);
   align-items: end;
-  overflow-x: auto;
+  overflow: visible;
 }
 .items-table.items-stacked tbody tr.item-row > td {
   display: block;
@@ -2981,7 +2981,7 @@ body[data-theme="glass"] .cat-busy {
   left: 0;
   right: 0;
   top: calc(100% + 4px);
-  z-index: 40;
+  z-index: 1200;
   max-height: 240px;
   overflow-y: auto;
   background: var(--surface);

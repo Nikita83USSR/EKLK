@@ -1220,17 +1220,40 @@
     }
   }
 
+  function positionCatSuggestPortal(el, anchor) {
+    if (!el || !anchor) return;
+    const r = anchor.getBoundingClientRect();
+    const pad = 8;
+    const width = Math.min(Math.max(r.width, 280), window.innerWidth - pad * 2);
+    let left = r.left;
+    if (left + width > window.innerWidth - pad) left = window.innerWidth - pad - width;
+    if (left < pad) left = pad;
+    let top = r.bottom + 4;
+    // если снизу мало места — открыть вверх
+    const estH = Math.min(240, (el.scrollHeight || 180));
+    if (top + estH > window.innerHeight - pad && r.top > estH + pad) {
+      top = Math.max(pad, r.top - estH - 4);
+    }
+    el.style.position = "fixed";
+    el.style.left = left + "px";
+    el.style.top = top + "px";
+    el.style.width = width + "px";
+    el.style.right = "auto";
+    el.style.zIndex = "1200";
+  }
+
+  function syncCatSuggestPortal() {
+    if (!__catSuggestEl || __catSuggestEl.dataset.portal !== "1" || !__catSuggestRow) return;
+    const anchor =
+      __catSuggestRow.querySelector(".it-name-wrap") ||
+      __catSuggestRow.querySelector(".it-name") ||
+      __catSuggestRow.querySelector(".it-cat-btn") ||
+      __catSuggestRow;
+    positionCatSuggestPortal(__catSuggestEl, anchor);
+  }
+
   function showCatalogSuggest(row, items, onChange, errMsg) {
     closeCatalogSuggest();
-    // если открыт float для этой строки — подсказки внутри float
-    let host = null;
-    if (__nameFloatEl && __nameFloatCompact && row.contains(__nameFloatCompact)) {
-      host = __nameFloatEl;
-      __nameFloatEl.style.position = __nameFloatEl.style.position || "fixed";
-    } else {
-      host = row.querySelector(".it-name-cell") || row.querySelector("td");
-    }
-    if (!host) return;
     const el = document.createElement("div");
     el.className = "cat-suggest";
     if (errMsg) {
@@ -1257,10 +1280,24 @@
         };
       });
     }
-    if (host !== __nameFloatEl) {
-      host.style.position = "relative";
+
+    // Float (расширенное имя) — список внутри float
+    if (__nameFloatEl && __nameFloatCompact && row.contains(__nameFloatCompact)) {
+      __nameFloatEl.style.position = __nameFloatEl.style.position || "fixed";
+      __nameFloatEl.appendChild(el);
+    } else {
+      // Stacked / обычная ячейка: portal на body, иначе overflow строки обрезает dropdown
+      document.body.appendChild(el);
+      el.dataset.portal = "1";
+      const anchor =
+        row.querySelector(".it-name-wrap") ||
+        row.querySelector(".it-name") ||
+        row.querySelector(".it-cat-btn") ||
+        row;
+      positionCatSuggestPortal(el, anchor);
+      // после layout уточнить высоту (открытие вверх)
+      requestAnimationFrame(() => positionCatSuggestPortal(el, anchor));
     }
-    host.appendChild(el);
     __catSuggestEl = el;
     __catSuggestRow = row;
   }
@@ -1499,8 +1536,14 @@
       },
       true
     );
-    window.addEventListener("resize", () => syncNameFloatPosition());
-    window.addEventListener("scroll", () => syncNameFloatPosition(), true);
+    window.addEventListener("resize", () => {
+      syncNameFloatPosition();
+      syncCatSuggestPortal();
+    });
+    window.addEventListener("scroll", () => {
+      syncNameFloatPosition();
+      syncCatSuggestPortal();
+    }, true);
   }
 
   function payRowHtml(fiscal = true) {
