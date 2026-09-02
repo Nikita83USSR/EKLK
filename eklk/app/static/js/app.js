@@ -3926,7 +3926,17 @@
     if (ph) ph.classList.add("hidden");
     el.classList.remove("hidden");
     const oid = summary && summary.order_id != null ? summary.order_id : ordersSelectedId;
-    el.innerHTML = buildReceiptHtml(atol5, summary, fiscal, { hideEdit: false });
+    el.innerHTML =
+      `<button type="button" class="r-detail-close" id="o_detail_close" title="Закрыть" aria-label="Закрыть">×</button>` +
+      buildReceiptHtml(atol5, summary, fiscal, { hideEdit: false });
+    const closeBtn = $("#o_detail_close");
+    if (closeBtn) {
+      closeBtn.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        clearOrderSelection();
+      };
+    }
     const editBtn = $("#o_detail_edit");
     if (editBtn) {
       editBtn.onclick = () => editOrderAsNew(editBtn.dataset.orderId || oid);
@@ -3992,7 +4002,31 @@
     } catch (e) {}
   }
 
+  if (!window.__eklkOrdersOutsideBound) {
+    window.__eklkOrdersOutsideBound = true;
+    document.addEventListener("click", (e) => {
+      if (!ordersSelectedId) return;
+      const tab = $("#tab-orders");
+      if (!tab || tab.classList.contains("hidden")) return;
+      const t = e.target;
+      if (!t || !t.closest) return;
+      // функциональные зоны: список, превью, фильтры, пагинация, навигация, формы
+      if (
+        t.closest(
+          "#o_list tr[data-order-id], #o_detail, #o_detail_card, #o_detail_close, " +
+            ".orders-filters, .orders-toolbar, .orders-pager, " +
+            "a, button, input, select, textarea, label, " +
+            ".header, .nav, .modal, .cat-suggest, .it-name-float, .login-wrap"
+        )
+      ) {
+        return;
+      }
+      clearOrderSelection();
+    });
+  }
+
   function bindOrdersUI() {
+
     if ($("#o_search")) $("#o_search").onclick = () => { ordersOffset = 0; loadOrders(); };
     if ($("#o_refresh")) $("#o_refresh").onclick = () => loadOrders();
     if ($("#o_reset")) {

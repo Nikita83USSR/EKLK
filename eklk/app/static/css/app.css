@@ -692,6 +692,33 @@ html.eklk-authed #appScreen { display: flex !important; }
 .receipt-view .r-json summary {
   cursor: pointer;
 }
+#o_detail.receipt-view {
+  position: relative;
+}
+.r-detail-close {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.r-detail-close:hover {
+  color: var(--text);
+  background: var(--surface2, rgba(0, 0, 0, 0.06));
+}
+
 .receipt-view .r-head {
   text-align: center;
   margin-bottom: 12px;
