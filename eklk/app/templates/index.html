@@ -16,7 +16,7 @@
     })();
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260827ui19" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260902links1" />
 </head>
 <body>
   <div id="loginScreen" class="login-wrap">
@@ -33,6 +33,11 @@
         <input type="password" id="loginPass" autocomplete="current-password" required />
         <button type="submit" class="btn btn-block" style="margin-top:16px">Войти</button>
       </form>
+      <div class="login-links">
+        <a href="https://app.ecomkassa.ru/signUp" target="_blank" rel="noopener">Зарегистрироваться</a>
+        <span class="login-links-sep" aria-hidden="true">·</span>
+        <a href="https://app.ecomkassa.ru/password/forgot" target="_blank" rel="noopener">Сбросить пароль</a>
+      </div>
     </div>
   </div>
 
@@ -1082,6 +1087,7 @@
             <button type="button" class="settings-tab active" data-settings-tab="org">Организация</button>
             <button type="button" class="settings-tab" data-settings-tab="stores">Магазины</button>
             <button type="button" class="settings-tab" data-settings-tab="catalog">Каталог</button>
+            <button type="button" class="settings-tab" data-settings-tab="integrations">Интеграции</button>
             <button type="button" class="settings-tab" data-settings-tab="appearance">Внешний вид</button>
           </div>
           <div id="settings-org" class="settings-pane">
@@ -1100,6 +1106,17 @@
               <div class="section-title">Магазины (точки продаж)</div>
               <p class="hint" style="margin-bottom:14px">storeId используется как group_code при фискализации. Последний выбранный магазин запоминается.</p>
               <div id="set_stores_list"></div>
+            </div>
+          </div>
+          <div id="settings-integrations" class="settings-pane hidden">
+            <div class="card" style="max-width:640px">
+              <div class="section-title">Интеграции</div>
+              <p class="hint" style="margin-bottom:16px">
+                Интеграции с платёжными системами настраиваются в старом личном кабинете по адресу
+                <a href="https://app.ecomkassa.ru" target="_blank" rel="noopener">app.ecomkassa.ru</a>.
+                После завершения настройки они автоматически появятся в новом личном кабинете.
+              </p>
+              <a class="btn" href="https://app.ecomkassa.ru/admin/integrations" target="_blank" rel="noopener">Перейти к настройке</a>
             </div>
           </div>
           <div id="settings-appearance" class="settings-pane hidden">
@@ -1208,7 +1225,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260827ui17"></script>
+  <script src="/static/js/app.js?v=20260902links1"></script>
   <script src="/static/js/sections/dashboard.js?v=20260827ui1"></script>
   <script src="/static/js/sections/catalog.js?v=20260825c"></script>
   <script src="/static/js/sections/reports.js?v=20260825c"></script>

@@ -3971,6 +3971,7 @@
       btn.classList.add("active");
       $("#settings-org") && $("#settings-org").classList.toggle("hidden", name !== "org");
       $("#settings-stores") && $("#settings-stores").classList.toggle("hidden", name !== "stores");
+      $("#settings-integrations") && $("#settings-integrations").classList.toggle("hidden", name !== "integrations");
       $("#settings-appearance") && $("#settings-appearance").classList.toggle("hidden", name !== "appearance");
       // если были на каталоге — вернуться в настройки
       if ($("#tab-settings") && $("#tab-settings").classList.contains("hidden")) {
