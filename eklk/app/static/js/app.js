@@ -1537,6 +1537,13 @@
 
   function nameOverlapsPrice(table) {
     if (!table) return false;
+    // Скрытая вкладка (display:none): getBoundingClientRect = 0 → ложный «не overlap».
+    // Тогда ориентируемся на ширину окна (zoom 110% уменьшает CSS px).
+    const visible = table.offsetParent !== null && table.getBoundingClientRect().width > 2;
+    if (!visible) {
+      const vw = window.innerWidth || document.documentElement.clientWidth || 1200;
+      return vw < 1100;
+    }
     const was = table.classList.contains("items-stacked");
     if (was) table.classList.remove("items-stacked");
     // принудительный reflow в режиме таблицы
@@ -1567,6 +1574,24 @@
     }
     if (was) table.classList.add("items-stacked");
     return overlap;
+  }
+
+  /** После показа вкладки с таблицей позиций — пересчёт (F5 при zoom / смена раздела). */
+  function scheduleItemsTableLayoutSync() {
+    if (typeof syncItemsTableLayout !== "function") return;
+    const run = () => {
+      try { syncItemsTableLayout(); } catch (e) { /* ignore */ }
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => {
+        run();
+        requestAnimationFrame(run);
+      });
+    } else {
+      run();
+    }
+    setTimeout(run, 50);
+    setTimeout(run, 200);
   }
 
   function syncItemsTableLayout() {
@@ -2573,6 +2598,10 @@
     if (tab === "ai-cashier") {
       bindAiCashierUI();
       ensureAiCashier().catch((e) => console.warn("ai-cashier", e));
+    }
+    // Товарные строки: пересчёт stacked после показа (F5 при zoom ≠ 100%)
+    if (tab === "create" || tab === "payment") {
+      scheduleItemsTableLayoutSync();
     }
     if (push) {
       const path = tabToPath(tab);
