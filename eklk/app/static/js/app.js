@@ -623,6 +623,104 @@
     }
   }
 
+  /** Сброс формы «Чек» к пустому состоянию (навигация). Не вызывать после «Действие». */
+  function resetCreateFormFields() {
+    sourceDocumentId = null;
+    sourceExternalId = null;
+    lastExternalId = null;
+    clearCopiedMarks();
+    setCloneBanner();
+    createAttempted = false;
+    const hide = (id) => { const el = $("#" + id); if (el) el.classList.add("hidden"); };
+    const val = (id, v) => { const el = $("#" + id); if (el) el.value = v; };
+    val("c_operation", "sell");
+    // СНО/магазин не трогаем — это выбор организации
+    val("c_email", "");
+    val("c_phone", "");
+    val("c_name", "");
+    val("c_inn", "");
+    hide("c_extraBuyer");
+    val("c_corr_type", "self");
+    val("c_corr_date", "");
+    val("c_corr_number", "");
+    hide("c_correction_card");
+    hide("c_corr_number_wrap");
+    const addProp = $("#c_addProp");
+    if (addProp) addProp.checked = false;
+    val("c_addPropName", "");
+    val("c_addPropVal", "");
+    hide("c_addPropBox");
+    ["c_pa_op", "c_pa_phones", "c_recv_phones", "c_mt_name", "c_mt_addr", "c_mt_inn", "c_mt_phones", "c_sup_name", "c_sup_inn", "c_sup_phones"].forEach((id) => val(id, ""));
+    const agentType = $("#c_agent_type");
+    if (agentType && agentType.options.length) agentType.selectedIndex = 0;
+    hide("c_agentBox");
+    hide("c_agent_paying");
+    hide("c_agent_receive");
+    hide("c_agent_transfer");
+    const tb = $("#c_items");
+    if (tb) {
+      tb.innerHTML = "";
+      tb.insertAdjacentHTML("beforeend", itemRowHtml());
+      bindItemTable("c_items", updateCreateSummary);
+      syncAllItemConstraints("c_items");
+      syncAgentBoxFromItems();
+    }
+    const payBox = $("#c_payments");
+    if (payBox) {
+      payBox.innerHTML = "";
+      payBox.insertAdjacentHTML("beforeend", payRowHtml(true));
+      bindPays();
+    }
+    const res = $("#c_result");
+    if (res) {
+      res.classList.add("hidden");
+      res.innerHTML = "";
+    }
+    if (typeof syncCorrectionFields === "function") {
+      try { syncCorrectionFields(); } catch (e) { /* ignore */ }
+    }
+    if (typeof updateCreateSummary === "function") updateCreateSummary();
+    const submitBtn = $("#c_submit");
+    if (submitBtn) submitBtn.textContent = "Создать чек";
+  }
+
+  /** Сброс формы «Ссылка на оплату» при входе через навигацию. */
+  function resetPaymentFormFields() {
+    const val = (id, v) => { const el = $("#" + id); if (el) el.value = v; };
+    const hide = (id) => { const el = $("#" + id); if (el) el.classList.add("hidden"); };
+    val("p_email", "");
+    val("p_phone", "");
+    val("p_name", "");
+    val("p_inn", "");
+    hide("p_extraBuyer");
+    ["p_pa_op", "p_pa_phones", "p_recv_phones", "p_mt_name", "p_mt_addr", "p_mt_inn", "p_mt_phones", "p_sup_name", "p_sup_inn", "p_sup_phones"].forEach((id) => val(id, ""));
+    const agentType = $("#p_agent_type");
+    if (agentType && agentType.options.length) agentType.selectedIndex = 0;
+    hide("p_agentBox");
+    hide("p_agentPaying");
+    hide("p_agentTransfer");
+    const tb = $("#p_items");
+    if (tb) {
+      tb.innerHTML = "";
+      tb.insertAdjacentHTML("beforeend", itemRowHtml());
+      bindItemTable("p_items", updatePaySummary);
+      if (typeof syncAllItemConstraints === "function") syncAllItemConstraints("p_items");
+      if (typeof syncPayAgentBoxFromItems === "function") syncPayAgentBoxFromItems();
+    }
+    const res = $("#p_result");
+    if (res) {
+      res.classList.add("hidden");
+      res.innerHTML = "";
+    }
+    if (typeof updatePaySummary === "function") updatePaySummary();
+  }
+
+  /** Сброс только при явном клике по разделу в меню (не при showTab из «Действие»). */
+  function resetFormIfNavTo(tab) {
+    if (tab === "create") resetCreateFormFields();
+    else if (tab === "payment") resetPaymentFormFields();
+  }
+
   function mapAtolVat(v) {
     if (!v) return "none";
     if (typeof v === "string") return v;
@@ -2505,6 +2603,9 @@
     btn.onclick = () => {
       const tab = btn.dataset.tab;
       if (!APP_TABS.includes(tab)) return;
+      // Клик по разделу «Чек» / «Ссылка на оплату» — чистая форма.
+      // «Действие» из списка чеков вызывает showTab напрямую и сброс не делает.
+      resetFormIfNavTo(tab);
       showTab(tab, true);
     };
   });
@@ -2538,6 +2639,7 @@
         e.preventDefault();
         e.stopPropagation();
         closeMenu();
+        resetFormIfNavTo(b.dataset.tab);
         showTab(b.dataset.tab, true);
       };
     });
@@ -2729,10 +2831,7 @@
   }
 
   $("#c_reset").onclick = () => {
-    $("#c_result").classList.add("hidden");
-    $("#c_email").value = "";
-    createAttempted = false;
-    updateCreateSummary();
+    resetCreateFormFields();
   };
 
   $("#c_submit").onclick = async () => {
