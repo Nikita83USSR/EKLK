@@ -658,13 +658,18 @@
     el.classList.add("field-copied");
   }
 
-  /** Извлечь receipt/correction из atol-5 ответа. */
+  /** Извлечь receipt/correction из atol-5 / atol-4 ответа. */
   function extractAtolReceipt(atol5) {
     if (!atol5 || typeof atol5 !== "object") return {};
-    if (atol5.receipt && typeof atol5.receipt === "object") return atol5.receipt;
-    if (atol5.correction && typeof atol5.correction === "object") return atol5.correction;
-    // иногда сам объект и есть чек
-    if (atol5.items || atol5.company || atol5.payments) return atol5;
+    // mobile sometimes wraps: { payload: { receipt: … } }
+    const root =
+      atol5.payload && typeof atol5.payload === "object" && !atol5.receipt && !atol5.items
+        ? atol5.payload
+        : atol5;
+    if (root.receipt && typeof root.receipt === "object") return root.receipt;
+    if (root.correction && typeof root.correction === "object") return root.correction;
+    // иногда сам объект и есть чек (v4/v5)
+    if (root.items || root.company || root.payments) return root;
     return {};
   }
 
@@ -921,6 +926,15 @@
       if (!data.atol5 && !data.raw_summary) {
         showAlert("Не удалось загрузить состав чека для редактирования");
         return;
+      }
+      const receipt = extractAtolReceipt(data.atol5 || {});
+      const items = (receipt && receipt.items) || [];
+      if (!items.length) {
+        showAlert(
+          "В составе чека нет товарных позиций (не удалось получить atol-5/atol-4). " +
+            "Форму можно заполнить вручную."
+        );
+        // still open form with whatever meta we have (company/client/payments)
       }
       fillCreateFormFromOrder(data);
     } catch (e) {
@@ -3617,7 +3631,7 @@
 
     html += `<div class="r-section-title">Позиции</div>`;
     if (!items.length) {
-      html += `<p class="hint">Нет позиций (или формат Atol 5 недоступен)</p>`;
+      html += `<p class="hint">Нет позиций в составе чека</p>`;
     } else {
       items.forEach((it) => {
         const meas = measureLabel(it.measure);

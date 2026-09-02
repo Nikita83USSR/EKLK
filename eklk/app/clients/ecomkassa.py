@@ -461,6 +461,76 @@ class EcomKassaClient:
             return data["payload"]
         return data
 
+    async def get_order_atol4(self, order_id: int | str) -> dict:
+        """GET /api/mobile/v1/orders/:orderId/atol-4 — older fiscal document shape."""
+        data = await self._mobile_request("GET", f"orders/{order_id}/atol-4")
+        if "payload" in data and isinstance(data["payload"], dict):
+            return data["payload"]
+        return data
+
+    @staticmethod
+    def atol_document_has_items(doc: dict | None) -> bool:
+        """True if payload looks like a receipt/correction with non-empty items[]."""
+        if not doc or not isinstance(doc, dict):
+            return False
+        for key in ("receipt", "correction"):
+            block = doc.get(key)
+            if isinstance(block, dict):
+                items = block.get("items")
+                if isinstance(items, list) and len(items) > 0:
+                    return True
+        items = doc.get("items")
+        return isinstance(items, list) and len(items) > 0
+
+    async def get_order_atol_document(self, order_id: int | str) -> tuple[dict | None, str | None]:
+        """
+        Prefer Atol Online v5; if empty/no items — try v4.
+        Returns (document, source) where source is 'atol-5' | 'atol-4' | None.
+        UI keeps using the atol5 response field (seamless).
+        """
+        doc5: dict | None = None
+        try:
+            raw5 = await self.get_order_atol5(order_id)
+            if isinstance(raw5, dict):
+                doc5 = raw5
+        except EcomKassaError as e:
+            log_action(
+                "ecom_atol5_miss",
+                f"order={order_id} {e}",
+                level="warning",
+            )
+            doc5 = None
+
+        if self.atol_document_has_items(doc5):
+            return doc5, "atol-5"
+
+        doc4: dict | None = None
+        try:
+            raw4 = await self.get_order_atol4(order_id)
+            if isinstance(raw4, dict):
+                doc4 = raw4
+        except EcomKassaError as e:
+            log_action(
+                "ecom_atol4_miss",
+                f"order={order_id} {e}",
+                level="warning",
+            )
+            doc4 = None
+
+        if self.atol_document_has_items(doc4):
+            log_action(
+                "ecom_atol_fallback",
+                f"order={order_id} using atol-4 (atol-5 had no items)",
+                level="info",
+            )
+            return doc4, "atol-4"
+
+        if doc5:
+            return doc5, "atol-5"
+        if doc4:
+            return doc4, "atol-4"
+        return None, None
+
     async def _request(
 
         self,

@@ -105,25 +105,29 @@ async def search_orders_get(
 @router.get("/{order_id}", response_model=OrderDetailResponse)
 async def get_order_detail(order_id: int, user: CurrentUser):
     """
-    Краткая карточка + полный состав в формате Atol Online v5.
+    Краткая карточка + состав чека (Atol Online v5, fallback v4 при пустых позициях).
     """
     client = _client_for(user)
     try:
         summary_raw = None
-        atol5 = None
         try:
             summary_raw = await client.get_order(order_id)
         except EcomKassaError as e:
             log_action("order_summary_warn", str(e), level="warning", user_id=user["username"])
-        try:
-            atol5 = await client.get_order_atol5(order_id)
-        except EcomKassaError as e:
-            log_action("order_atol5_warn", str(e), level="warning", user_id=user["username"])
-            if summary_raw is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail={"message": str(e), "code": e.code, "raw": e.raw},
-                )
+
+        # atol-5 first; if no product lines — seamless fallback to atol-4
+        atol5, atol_src = await client.get_order_atol_document(order_id)
+        if atol5 is None and summary_raw is None:
+            raise HTTPException(
+                status_code=400,
+                detail={"message": "Не удалось загрузить чек (summary и atol недоступны)"},
+            )
+        if atol_src == "atol-4":
+            log_action(
+                "order_atol_source",
+                f"order={order_id} source=atol-4",
+                user_id=user["username"],
+            )
 
         summary = _map_item(summary_raw) if summary_raw else OrderListItem(order_id=order_id)
 
@@ -147,6 +151,17 @@ async def get_order_detail(order_id: int, user: CurrentUser):
                 user_id=user["username"],
             )
             fiscal = None
+
+        # Rare: items only inside fiscal report payload
+        if atol5 is not None and not EcomKassaClient.atol_document_has_items(atol5) and isinstance(fiscal, dict):
+            fp = fiscal.get("payload") if isinstance(fiscal.get("payload"), dict) else None
+            if isinstance(fp, dict) and EcomKassaClient.atol_document_has_items(fp):
+                atol5 = fp
+                log_action(
+                    "order_atol_source",
+                    f"order={order_id} source=fiscal_payload",
+                    user_id=user["username"],
+                )
 
         return OrderDetailResponse(
             summary=summary,
