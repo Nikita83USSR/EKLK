@@ -3300,13 +3300,19 @@
 
   function toIsoLocal(val) {
     if (!val) return undefined;
-    // datetime-local / date -> ISO local without Z (EcomKassa rejects trailing Z)
-    // date-only YYYY-MM-DD -> T00:00:00; YYYY-MM-DDTHH:mm -> :00
-    let s = String(val).trim().replace(/Z$/i, "");
+    // EcomKassa (Joda-like): needs yyyy-MM-dd'T'HH:mm:ss.SSSZZ
+    // without millis → "malformed at Z"; without offset → "is too short"
+    let s = String(val).trim();
+    s = s.replace(/Z$/i, "").replace(/[+-]\d{2}:?\d{2}$/, "");
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s += "T00:00:00";
     else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) s += ":00";
-    else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(s)) { /* already full */ }
-    else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$/.test(s)) s = s.split(".")[0];
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(s)) s += ".000";
+    else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$/.test(s)) {
+      const base = s.split(".")[0];
+      const frac = (s.split(".")[1] || "0").replace(/\D/g, "").padEnd(3, "0").slice(0, 3);
+      s = base + "." + frac;
+    }
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/.test(s)) s += "Z";
     return s;
   }
 
