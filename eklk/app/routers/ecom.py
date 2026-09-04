@@ -80,7 +80,7 @@ async def create_check(body: CreateCheckRequest, user: CurrentUser):
     group = _resolve_group(user, body.group_code)
     client = _client_for(user, group)
     try:
-        external_id = body.external_id or f"EKLK-{int(time.time())}-{uuid_lib.uuid4().hex[:8]}"
+        external_id = body.external_id or f"EKLK-{int(time.time() * 1000)}-{uuid_lib.uuid4().hex}"
         items = [it.model_dump() for it in body.items]
         for it in items:
             if it.get("sum") is None:
@@ -172,7 +172,7 @@ async def create_refund(body: CreateRefundRequest, user: CurrentUser):
     group = _resolve_group(user, body.group_code)
     client = _client_for(user, group)
     try:
-        external_id = body.external_id or f"REF-{int(time.time())}-{uuid_lib.uuid4().hex[:8]}"
+        external_id = body.external_id or f"REF-{int(time.time() * 1000)}-{uuid_lib.uuid4().hex}"
         items = [it.model_dump() for it in body.items]
         for it in items:
             if it.get("sum") is None:

@@ -1043,7 +1043,18 @@
 
   let lastExternalId = null;
   function nextExternalId(prefix) {
-    lastExternalId = prefix + "-" + Date.now() + "-" + Math.random().toString(16).slice(2, 10);
+    const ts = Date.now();
+    let rand;
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+      rand = crypto.randomUUID().replace(/-/g, "");
+    } else if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      rand = Array.from(bytes, function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+    } else {
+      rand = Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2) + ts.toString(16);
+    }
+    lastExternalId = prefix + "-" + ts + "-" + rand;
     return lastExternalId;
   }
 
