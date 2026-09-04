@@ -255,6 +255,23 @@
     const type = $("#rpt_type")?.value || "monthly";
     const ot = $("#rpt_order_types")?.value || "";
     const storeId = $("#rpt_store")?.value || "";
+    // не даём выбрать период позже текущей даты
+    const today = todayISO();
+    const yNow = new Date().getFullYear();
+    const mNow = new Date().getMonth() + 1;
+    const qNow = Math.floor((mNow - 1) / 3) + 1;
+    if ($("#rpt_date") && $("#rpt_date").value && $("#rpt_date").value > today) {
+      $("#rpt_date").value = today;
+    }
+    if ($("#rpt_year") && Number($("#rpt_year").value) > yNow) {
+      $("#rpt_year").value = yNow;
+    }
+    if (type === "monthly" && Number($("#rpt_year")?.value) === yNow && Number($("#rpt_month")?.value) > mNow) {
+      if ($("#rpt_month")) $("#rpt_month").value = String(mNow);
+    }
+    if (type === "quarterly" && Number($("#rpt_year")?.value) === yNow && Number($("#rpt_quarter")?.value) > qNow) {
+      if ($("#rpt_quarter")) $("#rpt_quarter").value = String(qNow);
+    }
     let path = "";
     const qs = new URLSearchParams();
     if (ot) qs.set("order_types", ot);
@@ -351,9 +368,17 @@
 
   function bind() {
     const now = new Date();
-    if ($("#rpt_date") && !$("#rpt_date").value) $("#rpt_date").value = todayISO();
-    if ($("#rpt_year") && !$("#rpt_year").value) $("#rpt_year").value = now.getFullYear();
-    if ($("#rpt_month")) $("#rpt_month").value = String(now.getMonth() + 1);
+    const yNow = now.getFullYear();
+    const mNow = now.getMonth() + 1;
+    if ($("#rpt_date")) {
+      $("#rpt_date").max = todayISO();
+      if (!$("#rpt_date").value) $("#rpt_date").value = todayISO();
+    }
+    if ($("#rpt_year")) {
+      $("#rpt_year").max = yNow;
+      if (!$("#rpt_year").value) $("#rpt_year").value = yNow;
+    }
+    if ($("#rpt_month")) $("#rpt_month").value = String(mNow);
     syncFilterVisibility();
     $("#rpt_type")?.addEventListener("change", syncFilterVisibility);
     $("#rpt_load")?.addEventListener("click", loadReport);
