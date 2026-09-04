@@ -36,13 +36,24 @@
       .replace(/"/g, "&quot;");
   }
   function todayISO() {
-    return new Date().toISOString().slice(0, 10);
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
   }
 
   function setDelta(el, v) {
     if (!el) return;
     el.className = "dash-delta " + (v > 0 ? "up" : v < 0 ? "down" : "flat");
-    el.textContent = v == null || Number.isNaN(Number(v)) ? "—" : `${v > 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
+    if (v == null || Number.isNaN(Number(v))) {
+      el.textContent = "—";
+      el.title = "Нет данных за предыдущий период";
+    } else {
+      const n = Number(v);
+      el.textContent = `${n > 0 ? "+" : ""}${n.toFixed(2)}%`;
+      el.title = "Изменение к предыдущему аналогичному периоду";
+    }
   }
 
   function syncFilterVisibility() {
@@ -141,9 +152,13 @@
 
   function render(data) {
     if ($("#dash_firm")) {
-      $("#dash_firm").textContent = data.firmName
+      let line = data.firmName
         ? `${data.firmName} · ${data.period_label || data.date || ""}`
         : data.period_label || data.date || "";
+      if (data.prev_period_label) {
+        line += ` · % к ${data.prev_period_label}`;
+      }
+      $("#dash_firm").textContent = line;
     }
     if ($("#dash_invoices")) $("#dash_invoices").textContent = money(data.by_invoices);
     if ($("#dash_checks")) $("#dash_checks").textContent = money(data.by_checks);
@@ -163,8 +178,29 @@
     renderMiniCharts(byPt, data.total_checks);
   }
 
+  function isFuturePeriod(type) {
+    const today = todayISO();
+    const yNow = new Date().getFullYear();
+    const mNow = new Date().getMonth() + 1;
+    const qNow = Math.floor((mNow - 1) / 3) + 1;
+    if ((type === "daily" || type === "weekly") && $("#dash_date")?.value && $("#dash_date").value > today) {
+      return true;
+    }
+    if ($("#dash_year") && Number($("#dash_year").value) > yNow) return true;
+    if (type === "monthly" && Number($("#dash_year")?.value) === yNow && Number($("#dash_month")?.value) > mNow) {
+      return true;
+    }
+    if (type === "quarterly" && Number($("#dash_year")?.value) === yNow && Number($("#dash_quarter")?.value) > qNow) {
+      return true;
+    }
+    return false;
+  }
+
   async function load() {
     const type = $("#dash_period")?.value || "daily";
+    if (isFuturePeriod(type)) {
+      return alert("Нельзя выбрать период позже текущей даты. Исправьте параметры отчёта.", "error");
+    }
     const qs = new URLSearchParams({ period: type });
     if (type === "daily" || type === "weekly") {
       const d = $("#dash_date")?.value || todayISO();
@@ -187,11 +223,19 @@
 
   function initDefaults() {
     const now = new Date();
-    if ($("#dash_date") && !$("#dash_date").value) $("#dash_date").value = todayISO();
-    if ($("#dash_year") && !$("#dash_year").value) $("#dash_year").value = String(now.getFullYear());
-    if ($("#dash_month") && !$("#dash_month").value) $("#dash_month").value = String(now.getMonth() + 1);
+    const yNow = now.getFullYear();
+    const mNow = now.getMonth() + 1;
+    if ($("#dash_date")) {
+      $("#dash_date").max = todayISO();
+      if (!$("#dash_date").value) $("#dash_date").value = todayISO();
+    }
+    if ($("#dash_year")) {
+      $("#dash_year").max = yNow;
+      if (!$("#dash_year").value) $("#dash_year").value = String(yNow);
+    }
+    if ($("#dash_month") && !$("#dash_month").value) $("#dash_month").value = String(mNow);
     if ($("#dash_quarter") && !$("#dash_quarter").value) {
-      $("#dash_quarter").value = String(Math.floor(now.getMonth() / 3) + 1);
+      $("#dash_quarter").value = String(Math.floor((mNow - 1) / 3) + 1);
     }
     syncFilterVisibility();
   }

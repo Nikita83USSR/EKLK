@@ -195,6 +195,18 @@ async def dashboard_summary(
     elif period == "annual":
         day = date(y, 1, 1)
 
+    # период не позже текущей даты (как в разделе Отчёты)
+    if period in ("daily", "weekly") and day > today:
+        raise HTTPException(status_code=400, detail="Нельзя выбрать период позже текущей даты")
+    if period == "monthly" and (y > today.year or (y == today.year and m > today.month)):
+        raise HTTPException(status_code=400, detail="Нельзя выбрать период позже текущей даты")
+    if period == "quarterly":
+        q_now = (today.month - 1) // 3 + 1
+        if y > today.year or (y == today.year and q > q_now):
+            raise HTTPException(status_code=400, detail="Нельзя выбрать период позже текущей даты")
+    if period == "annual" and y > today.year:
+        raise HTTPException(status_code=400, detail="Нельзя выбрать период позже текущей даты")
+
     client = _client_for(user)
     try:
         raw_all = await _fetch_report(client, period, day, y, m, q, None)
@@ -238,6 +250,9 @@ async def dashboard_summary(
 
         stores = cur.get("stores") or []
         label = _period_label(period, day, y, m, q)
+        prev_label = _period_label(
+            prev_p["period"], prev_p["date"], prev_p["year"], prev_p["month"], prev_p["quarter"]
+        )
 
         result = {
             "period": period,
@@ -246,6 +261,7 @@ async def dashboard_summary(
             "month": m,
             "quarter": q,
             "period_label": label,
+            "prev_period_label": prev_label,
             "firmName": raw_all.get("firmName"),
             "store_id": store_id,
             "by_invoices": by_invoices["total_checks"],
