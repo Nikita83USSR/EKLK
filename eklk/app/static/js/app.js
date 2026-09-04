@@ -3300,10 +3300,14 @@
 
   function toIsoLocal(val) {
     if (!val) return undefined;
-    // datetime-local -> ISO-ish UTC guess: treat as local, append Z-less; API wants ISO 8601
-    // Convert: 2026-08-17T10:00 -> 2026-08-17T10:00:00Z (user enters as filter approx)
-    if (val.length === 16) return val + ":00Z";
-    return val;
+    // datetime-local / date -> ISO local without Z (EcomKassa rejects trailing Z)
+    // date-only YYYY-MM-DD -> T00:00:00; YYYY-MM-DDTHH:mm -> :00
+    let s = String(val).trim().replace(/Z$/i, "");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s += "T00:00:00";
+    else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) s += ":00";
+    else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(s)) { /* already full */ }
+    else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$/.test(s)) s = s.split(".")[0];
+    return s;
   }
 
   // Статусы EcomKassa / Atol (fiscal + invoice) → русский UI
@@ -4075,7 +4079,7 @@
       compactCb.onchange = () => applyOrdersCompact(compactCb.checked);
     }
 
-    // Параметры поиска — плавное выезжание
+    // Фильтр — плавное выезжание
     const filtersToggle = $("#o_filters_toggle");
     const filtersPanel = $("#o_filters_panel");
     if (filtersToggle && filtersPanel) {

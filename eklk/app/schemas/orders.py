@@ -6,8 +6,8 @@ class OrderSearchRequest(BaseModel):
     offset: int = Field(default=0, ge=0)
     limit: int = Field(default=30, ge=1, le=500)
     external_id: Optional[str] = None
-    since: Optional[str] = Field(default=None, description="ISO 8601 UTC, e.g. 2026-01-01T00:00:00Z")
-    until: Optional[str] = Field(default=None, description="ISO 8601 UTC")
+    since: Optional[str] = Field(default=None, description="ISO local datetime without Z, e.g. 2026-01-01T00:00:00")
+    until: Optional[str] = Field(default=None, description="ISO local datetime without Z")
     order_types: Optional[List[str]] = Field(
         default=None,
         description="VCHR | INVC | CORD",
