@@ -22,13 +22,13 @@
   <div id="loginScreen" class="login-wrap">
     <div class="login-card">
       <div class="login-logo-wrap">
-        <img src="/static/img/logo.png?v=20260822i" alt="EcomKassa" class="login-logo" />
+        <img src="/static/img/logo.png?v=20260822i" alt="Екомкасса" class="login-logo" />
       </div>
-      <p class="subtitle">Личный кабинет · логин с учётом регистра букв (как в EcomKassa)</p>
+      <p class="subtitle">Личный кабинет · логин с учётом регистра букв (как в Екомкассе)</p>
       <div id="loginError" class="alert alert-error hidden"></div>
       <form id="loginForm">
-        <label>Логин EcomKassa</label>
-        <input type="text" id="loginUser" name="username" placeholder="Логин EcomKassa (регистр важен)" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required />
+        <label>Логин Екомкасса</label>
+        <input type="text" id="loginUser" name="username" placeholder="Логин Екомкасса (регистр важен)" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required />
         <label style="margin-top:10px">Пароль</label>
         <input type="password" id="loginPass" autocomplete="current-password" required />
         <button type="submit" class="btn btn-block" style="margin-top:16px">Войти</button>
@@ -45,7 +45,7 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <img src="/static/img/logo.png?v=20260822i" alt="EcomKassa" class="header-logo" />
+          <img src="/static/img/logo.png?v=20260822i" alt="Екомкасса" class="header-logo" />
         </div>
         <nav class="nav">
           <!-- URL: /home /create /payment /templates /orders /settings (см. app.js route) -->
@@ -856,7 +856,7 @@
                 </div>
               </div>
               <p class="hint" style="margin-bottom:12px">
-                Данные только из API EcomKassa. Поиск, массовое удаление, импорт CommerceML&nbsp;2
+                Данные только из API Екомкассы. Поиск, массовое удаление, импорт CommerceML&nbsp;2
                 (неподдерживаемые поля игнорируются; модификации → клоны товара).
               </p>
               <div class="catalog-filters" style="margin-bottom:12px">
@@ -1088,12 +1088,12 @@
           <div id="settings-org" class="settings-pane">
             <div class="card" style="max-width:640px">
               <div class="section-title">Организация</div>
-              <p class="hint" style="margin-bottom:14px">Данные загружаются из EcomKassa при входе (<code>GET /api/mobile/v1/profile/firm</code>).</p>
+              <p class="hint" style="margin-bottom:14px">Данные загружаются из Екомкассы при входе (<code>GET /api/mobile/v1/profile/firm</code>).</p>
               <div class="kv"><span class="k">Наименование</span><span class="v" id="set_firm_name">—</span></div>
               <div class="kv"><span class="k">ID фирмы</span><span class="v" id="set_firm_id">—</span></div>
               <div class="kv"><span class="k">ИНН</span><span class="v" id="set_firm_inn">—</span></div>
               <div class="kv"><span class="k">СНО (taxVariant)</span><span class="v" id="set_firm_sno">—</span></div>
-              <button type="button" class="btn btn-secondary mt-3" id="set_refresh">Обновить из EcomKassa</button>
+              <button type="button" class="btn btn-secondary mt-3" id="set_refresh">Обновить из Екомкассы</button>
             </div>
           </div>
           <div id="settings-stores" class="settings-pane hidden">

@@ -4566,7 +4566,7 @@
     });
     box.innerHTML = rows.length
       ? rows.join("")
-      : '<p class="hint">Нет доступных платёжных систем. Проверьте интеграции в EcomKassa.</p>';
+      : '<p class="hint">Нет доступных платёжных систем. Проверьте интеграции в Екомкассе.</p>';
   }
 
   function fillTplStoreSelect(selected) {
