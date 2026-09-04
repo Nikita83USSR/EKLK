@@ -255,22 +255,23 @@
     const type = $("#rpt_type")?.value || "monthly";
     const ot = $("#rpt_order_types")?.value || "";
     const storeId = $("#rpt_store")?.value || "";
-    // не даём выбрать период позже текущей даты
+    // период не позже текущей даты — только ошибка, без автозамены
     const today = todayISO();
     const yNow = new Date().getFullYear();
     const mNow = new Date().getMonth() + 1;
     const qNow = Math.floor((mNow - 1) / 3) + 1;
-    if ($("#rpt_date") && $("#rpt_date").value && $("#rpt_date").value > today) {
-      $("#rpt_date").value = today;
+    const futureMsg = "Нельзя выбрать период позже текущей даты. Исправьте параметры отчёта.";
+    if ((type === "daily" || type === "weekly") && $("#rpt_date")?.value && $("#rpt_date").value > today) {
+      return alert(futureMsg, "error");
     }
     if ($("#rpt_year") && Number($("#rpt_year").value) > yNow) {
-      $("#rpt_year").value = yNow;
+      return alert(futureMsg, "error");
     }
     if (type === "monthly" && Number($("#rpt_year")?.value) === yNow && Number($("#rpt_month")?.value) > mNow) {
-      if ($("#rpt_month")) $("#rpt_month").value = String(mNow);
+      return alert(futureMsg, "error");
     }
     if (type === "quarterly" && Number($("#rpt_year")?.value) === yNow && Number($("#rpt_quarter")?.value) > qNow) {
-      if ($("#rpt_quarter")) $("#rpt_quarter").value = String(qNow);
+      return alert(futureMsg, "error");
     }
     let path = "";
     const qs = new URLSearchParams();
