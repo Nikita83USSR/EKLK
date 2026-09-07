@@ -3615,6 +3615,27 @@
     ordersOffset = 0;
   }
 
+
+  /** Записать текущие фильтры документов в URL (replaceState, без лишней истории). */
+  function syncOrdersUrlFromFilters() {
+    const params = new URLSearchParams();
+    const limit = ($("#o_limit") && $("#o_limit").value) || "";
+    const type = ($("#o_types") && $("#o_types").value) || "";
+    const status = ($("#o_status") && $("#o_status").value) || "";
+    const since = ($("#o_since") && $("#o_since").value) || "";
+    const until = ($("#o_until") && $("#o_until").value) || "";
+    if (limit) params.set("limit", limit);
+    if (type) params.set("type", type);
+    if (status) params.set("status", status);
+    if (since) params.set("since", since);
+    if (until) params.set("until", until);
+    const qs = params.toString();
+    const url = "/orders" + (qs ? "?" + qs : "");
+    if (location.pathname + location.search !== url) {
+      history.replaceState({ tab: "orders" }, "", url);
+    }
+  }
+
   async function loadOrders() {
     const list = $("#o_list");
     if (!list) return;
@@ -4122,7 +4143,11 @@
 
   function bindOrdersUI() {
 
-    if ($("#o_search")) $("#o_search").onclick = () => { ordersOffset = 0; loadOrders(); };
+    if ($("#o_search")) $("#o_search").onclick = () => {
+      ordersOffset = 0;
+      if (typeof syncOrdersUrlFromFilters === "function") syncOrdersUrlFromFilters();
+      loadOrders();
+    };
     if ($("#o_refresh")) $("#o_refresh").onclick = () => loadOrders();
     if ($("#o_reset")) {
       $("#o_reset").onclick = () => {
@@ -4133,6 +4158,9 @@
         if ($("#o_until")) $("#o_until").value = "";
         if ($("#o_limit")) $("#o_limit").value = "25";
         ordersOffset = 0;
+        if (location.pathname === "/orders" && location.search) {
+          history.replaceState({ tab: "orders" }, "", "/orders");
+        }
         loadOrders();
       };
     }
@@ -4847,6 +4875,7 @@
       if (ev.key === "Enter") {
         ev.preventDefault();
         ordersOffset = 0;
+        if (typeof syncOrdersUrlFromFilters === "function") syncOrdersUrlFromFilters();
         loadOrders();
       }
     });
