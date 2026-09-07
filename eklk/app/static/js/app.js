@@ -331,7 +331,13 @@
       if (!stores.length) {
         $("#set_stores_list").innerHTML = "<p class=\"hint\">Магазины не найдены</p>";
       } else {
-        $("#set_stores_list").innerHTML = stores
+        // Выбранный по умолчанию магазин — первым в списке
+        const storesOrdered = stores.slice().sort((a, b) => {
+          const aSel = String(a.store_id) === String(selected) ? 0 : 1;
+          const bSel = String(b.store_id) === String(selected) ? 0 : 1;
+          return aSel - bSel;
+        });
+        $("#set_stores_list").innerHTML = storesOrdered
           .map((s) => {
             const active = String(s.store_id) === String(selected);
             return `<div class="store-card ${active ? "active" : ""}" data-store-id="${s.store_id}">
@@ -4884,7 +4890,11 @@
     $("#o_types").onchange = () => { ordersOffset = 0; loadOrders(); };
   }
   if ($("#o_limit")) {
-    $("#o_limit").onchange = () => { ordersOffset = 0; loadOrders(); };
+    $("#o_limit").onchange = () => {
+      ordersOffset = 0;
+      if (typeof syncOrdersUrlFromFilters === "function") syncOrdersUrlFromFilters();
+      loadOrders();
+    };
   }
 
   if (token) afterLogin().catch(() => logout(true));
