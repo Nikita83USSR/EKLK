@@ -2615,6 +2615,19 @@
     if (tab === "orders") {
       // Не запоминаем последний выбранный чек при входе в список
       clearOrderSelection();
+      // push=true (клик по меню) → сброс фильтров (кроме лимита и «Сжато»)
+      // push=false (F5 / прямая ссылка / popstate) → применить query-параметры или сброс
+      if (push) {
+        // принудительный сброс фильтров при клике в меню
+        if ($("#o_ext")) $("#o_ext").value = "";
+        if ($("#o_types")) $("#o_types").value = "";
+        if ($("#o_status")) $("#o_status").value = "";
+        if ($("#o_since")) $("#o_since").value = "";
+        if ($("#o_until")) $("#o_until").value = "";
+        ordersOffset = 0;
+      } else if (typeof applyOrdersUrlParamsOrReset === "function") {
+        applyOrdersUrlParamsOrReset();
+      }
       if (typeof loadOrders === "function") {
         try { loadOrders(); } catch (e) { console.warn(e); }
       }
@@ -2659,7 +2672,11 @@
     }
     if (push) {
       const path = tabToPath(tab);
-      if (location.pathname !== path) {
+      // Для «Документы» всегда чистый URL без query (сброс фильтров по клику в меню)
+      const needPush =
+        location.pathname !== path ||
+        (tab === "orders" && location.search);
+      if (needPush) {
         history.pushState({ tab }, "", path);
       }
     }
@@ -3539,6 +3556,63 @@
         editOrderAsNew(btn.dataset.orderId);
       };
     });
+  }
+
+
+  /** Нормализация значения для input[type=datetime-local] (YYYY-MM-DDTHH:mm). */
+  function normalizeDatetimeLocal(val) {
+    if (!val) return "";
+    let s = String(val).trim();
+    s = s.replace(/Z$/i, "").replace(/[+-]\d{2}:?\d{2}$/, "");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s + "T00:00";
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s.slice(0, 16);
+    return s.length >= 16 ? s.slice(0, 16) : s;
+  }
+
+  /**
+   * Применить query-параметры раздела /orders или сбросить фильтры.
+   * Параметры (все опциональны): limit, type, status, since, until.
+   * Без параметров — сброс фильтров, кроме лимита и галочки «Сжато».
+   */
+  function applyOrdersUrlParamsOrReset() {
+    const params = new URLSearchParams(location.search || "");
+    const hasFilterParam =
+      params.has("limit") ||
+      params.has("type") ||
+      params.has("status") ||
+      params.has("since") ||
+      params.has("until");
+
+    if (hasFilterParam) {
+      if (params.has("limit") && $("#o_limit")) {
+        const lim = String(params.get("limit") || "").trim();
+        const allowed = ["25", "50", "100", "200", "500"];
+        if (allowed.includes(lim)) $("#o_limit").value = lim;
+      }
+      if (params.has("type") && $("#o_types")) {
+        const t = String(params.get("type") || "").trim();
+        if (t) $("#o_types").value = t;
+      }
+      if (params.has("status") && $("#o_status")) {
+        const st = String(params.get("status") || "").trim();
+        const opt = Array.from($("#o_status").options || []).find((o) => o.value === st);
+        if (opt) $("#o_status").value = st;
+      }
+      if (params.has("since") && $("#o_since")) {
+        $("#o_since").value = normalizeDatetimeLocal(params.get("since"));
+      }
+      if (params.has("until") && $("#o_until")) {
+        $("#o_until").value = normalizeDatetimeLocal(params.get("until"));
+      }
+    } else {
+      // Сброс фильтров; лимит и «Сжато» сохраняем
+      if ($("#o_ext")) $("#o_ext").value = "";
+      if ($("#o_types")) $("#o_types").value = "";
+      if ($("#o_status")) $("#o_status").value = "";
+      if ($("#o_since")) $("#o_since").value = "";
+      if ($("#o_until")) $("#o_until").value = "";
+    }
+    ordersOffset = 0;
   }
 
   async function loadOrders() {

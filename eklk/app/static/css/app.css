@@ -109,6 +109,17 @@ a { color: var(--primary); text-decoration: none; }
 .nav button { background: transparent; border: none; color: var(--muted); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.875rem; font-family: inherit; font-weight: 500; }
 .nav button.active, .nav button:hover { background: #ecfdf5; color: #15803d; }
 .user-info { color: var(--muted); font-size: 0.85rem; display: flex; align-items: center; gap: 8px; }
+/* Одинаковая высота кнопок ⚙ и «Выйти» */
+.user-info .btn {
+  height: 32px;
+  box-sizing: border-box;
+}
+.user-info .btn-icon {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+}
 .btn-icon {
   min-width: 34px; width: 34px; height: 34px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
