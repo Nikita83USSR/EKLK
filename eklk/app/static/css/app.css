@@ -3214,3 +3214,9 @@ body[data-theme="glass"] .nav-dropdown-menu {
 }
 .cat-busy-stop.hidden { display: none !important; }
 .cat-busy-stop { align-self: flex-start; }
+
+
+/* Catalog suggest: no pick button — search on name focus/input */
+.it-cat-btn { display: none !important; }
+.it-name-wrap .it-name { padding-right: 8px; }
+.it-name-float .it-name-wide { width: 100%; }

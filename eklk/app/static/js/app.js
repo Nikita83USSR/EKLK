@@ -1216,9 +1216,6 @@
       <td class="it-name-cell">
         <div class="it-name-wrap">
           <input class="it-name" placeholder="Товар или услуга" value="Товар" maxlength="127" autocomplete="off" />
-          <button type="button" class="it-cat-btn" title="Выбрать из каталога" aria-label="Выбрать из каталога">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="18" cy="17" r="3"/></svg>
-          </button>
         </div>
         <span class="it-name-warn hidden"></span>
       </td>
@@ -1294,16 +1291,48 @@
     closeCatalogSuggest();
   }
 
-  async function searchCatalogForRow(row, query, onChange) {
-    const q = (query || "").trim();
-    if (q.length < 1) {
-      closeCatalogSuggest();
-      return;
+  function catalogLetterCount(s) {
+    const m = String(s || "").match(/\p{L}/gu);
+    return m ? m.length : 0;
+  }
+
+  function normalizeCatalogQuery(query) {
+    let q = (query == null ? "" : String(query)).trim();
+    if (q === "Товар" || q === ".") q = "";
+    return q;
+  }
+
+  /**
+   * Catalog suggest for item row.
+   * mode "browse" (click/focus): first 15 items.
+   * mode "search" / auto: from 3+ letters — filter by name.
+   */
+  async function searchCatalogForRow(row, query, onChange, opts) {
+    opts = opts || {};
+    const mode = opts.mode || "auto";
+    const q = normalizeCatalogQuery(query);
+    const letters = catalogLetterCount(q);
+    let browse = mode === "browse" || !q;
+    if (mode === "search" || (mode === "auto" && q)) {
+      if (letters < 3) {
+        if (mode === "search") {
+          closeCatalogSuggest();
+          return;
+        }
+        // auto with 1–2 letters: do not search yet
+        if (letters > 0) {
+          closeCatalogSuggest();
+          return;
+        }
+        browse = true;
+      } else {
+        browse = false;
+      }
     }
     const seq = ++__catSuggestSeq;
     try {
-      const qs = new URLSearchParams({ page: "1", size: "12", name: q === "." ? "" : q });
-      if (q === ".") qs.delete("name");
+      const qs = new URLSearchParams({ page: "1", size: "15" });
+      if (!browse && q) qs.set("name", q);
       const data = await api("/catalog/items?" + qs.toString());
       if (seq !== __catSuggestSeq) return;
       const items = data.items || [];
@@ -1400,28 +1429,33 @@
     if (!row || row.dataset.catBound === "1") return;
     row.dataset.catBound = "1";
     const nameEl = row.querySelector(".it-name");
-    const pickBtn = row.querySelector(".it-cat-btn");
-    if (pickBtn) {
-      pickBtn.onclick = (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        if (nameEl) {
-          openItemNameExpand(nameEl, onChange);
-        }
-        const q = (nameEl && nameEl.value) || "";
-        const searchQ = !q || q === "Товар" ? "." : q;
-        // после открытия float — поиск (suggest сядет в float)
-        setTimeout(() => searchCatalogForRow(row, searchQ, onChange), 40);
-      };
-    }
     if (nameEl) {
-      nameEl.addEventListener("input", () => {
+      const scheduleCatalog = (mode, val) => {
         if (__catSuggestTimer) clearTimeout(__catSuggestTimer);
-        const val = nameEl.value;
         __catSuggestTimer = setTimeout(() => {
-          if (val && val !== "Товар") searchCatalogForRow(row, val, onChange);
-          else closeCatalogSuggest();
-        }, 280);
+          searchCatalogForRow(row, val, onChange, { mode: mode });
+        }, mode === "browse" ? 40 : 280);
+      };
+      // Клик / фокус — сразу топ-15 из каталога (без кнопки)
+      const onActivate = () => {
+        scheduleCatalog("browse", "");
+      };
+      nameEl.addEventListener("focus", onActivate);
+      nameEl.addEventListener("click", onActivate);
+      nameEl.addEventListener("input", () => {
+        const val = nameEl.value;
+        const q = normalizeCatalogQuery(val);
+        const letters = catalogLetterCount(q);
+        if (!q) {
+          scheduleCatalog("browse", "");
+          return;
+        }
+        if (letters >= 3) {
+          scheduleCatalog("search", q);
+        } else {
+          if (__catSuggestTimer) clearTimeout(__catSuggestTimer);
+          closeCatalogSuggest();
+        }
       });
       nameEl.addEventListener("keydown", (ev) => {
         if (ev.key === "Escape") closeCatalogSuggest();
@@ -1538,9 +1572,6 @@
     box.className = "it-name-float";
     box.innerHTML =
       '<input type="text" class="it-name-wide" maxlength="127" placeholder="Товар или услуга" autocomplete="off" />' +
-      '<button type="button" class="it-cat-btn" title="Выбрать из каталога" aria-label="Выбрать из каталога">' +
-      '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="18" cy="17" r="3"/></svg>' +
-      '</button>' +
       '<span class="it-name-warn hidden"></span>';
     document.body.appendChild(box);
 
@@ -1549,7 +1580,6 @@
     __nameFloatOnChange = onChange;
 
     const wide = box.querySelector(".it-name-wide");
-    const floatCatBtn = box.querySelector(".it-cat-btn");
     wide.value = compact.value || "";
     updateItemNameWarn(wide);
 
@@ -1560,23 +1590,20 @@
       updateItemNameWarn(wide);
       updateItemNameWarn(compact);
       onChange && onChange();
+      if (!row) return;
       if (__catSuggestTimer) clearTimeout(__catSuggestTimer);
-      const val = wide.value;
+      const q = normalizeCatalogQuery(wide.value);
+      const letters = catalogLetterCount(q);
       __catSuggestTimer = setTimeout(() => {
-        if (row && val && val !== "Товар") searchCatalogForRow(row, val, onChange);
+        if (!q) searchCatalogForRow(row, "", onChange, { mode: "browse" });
+        else if (letters >= 3) searchCatalogForRow(row, q, onChange, { mode: "search" });
         else closeCatalogSuggest();
       }, 280);
     };
 
-    if (floatCatBtn && row) {
-      floatCatBtn.onclick = (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        const q = (wide.value || "").trim();
-        const searchQ = !q || q === "Товар" ? "." : q;
-        searchCatalogForRow(row, searchQ, onChange);
-        try { wide.focus(); } catch (e) {}
-      };
+    // При открытии выезжающего поля — сразу топ-15
+    if (row) {
+      setTimeout(() => searchCatalogForRow(row, "", onChange, { mode: "browse" }), 50);
     }
 
     const saveAndClose = () => {
