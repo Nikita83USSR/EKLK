@@ -1215,7 +1215,7 @@
     return `<tr class="item-row">
       <td class="it-name-cell">
         <div class="it-name-wrap">
-          <input class="it-name" placeholder="Товар или услуга" value="Товар" maxlength="127" autocomplete="off" />
+          <input class="it-name" placeholder="Товар или услуга" value="" maxlength="127" autocomplete="off" />
         </div>
         <span class="it-name-warn hidden"></span>
       </td>
