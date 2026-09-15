@@ -81,15 +81,16 @@
       gaugeChart = null;
     }
     const pct = Math.max(0, Math.min(100, Number(gaugePct) || 0));
-    const isDark = document.body?.getAttribute("data-theme") === "dark"
-      || document.body?.getAttribute("data-theme") === "glass";
+    const theme = document.body?.getAttribute("data-theme");
+    const isDark = theme === "dark" || theme === "glass" || theme === "pro";
+    const primary = theme === "pro" ? "#c6f64d" : "#60a5fa";
     const track = isDark ? "rgba(148,163,184,0.25)" : "#e2e8f0";
     gaugeChart = new Chart(canvas, {
       type: "doughnut",
       data: {
         datasets: [{
           data: [pct, 100 - pct],
-          backgroundColor: ["#60a5fa", track],
+          backgroundColor: [primary, track],
           borderWidth: 0,
           circumference: 180,
           rotation: 270,
@@ -108,8 +109,8 @@
   function renderMiniCharts(byPt, total) {
     destroyMini();
     if (typeof Chart === "undefined") return;
-    const isDark = document.body?.getAttribute("data-theme") === "dark"
-      || document.body?.getAttribute("data-theme") === "glass";
+    const theme = document.body?.getAttribute("data-theme");
+    const isDark = theme === "dark" || theme === "glass" || theme === "pro";
     const track = isDark ? "rgba(148,163,184,0.25)" : "#e2e8f0";
     const sum = Number(total) || 0;
 
@@ -125,7 +126,7 @@
         data: {
           datasets: [{
             data: [pct || 0.0001, Math.max(0.0001, 100 - pct)],
-            backgroundColor: [cfg.color, track],
+            backgroundColor: [theme === "pro" && cfg.key === "CREDIT_CARD" ? "#c6f64d" : cfg.color, track],
             borderWidth: 0,
           }],
         },

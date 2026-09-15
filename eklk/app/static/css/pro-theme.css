@@ -340,3 +340,279 @@ body[data-theme="pro"] .login-card {
     width: 24px;
   }
 }
+
+/* v2: cabinet language from the actual Ecomkassa.pro product UI. */
+body[data-theme="pro"] {
+  --bg: #0d0d0e;
+  --surface: #18181a;
+  --surface2: #202023;
+  --border: #29292d;
+  --text: #f2f2ef;
+  --muted: #85858b;
+  --accent: #c6f64d;
+  --accent-hover: #d0ff58;
+  --primary: #c6f64d;
+  --radius: 18px;
+  --shadow: none;
+  background: var(--bg);
+}
+
+body[data-theme="pro"] .header {
+  min-height: 94px;
+  display: flex;
+  align-items: center;
+  background: rgba(13, 13, 14, .97);
+}
+
+body[data-theme="pro"] .header-inner,
+body[data-theme="pro"] .footer-inner,
+body[data-theme="pro"] .container {
+  width: min(100%, 1540px);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: clamp(22px, 3vw, 48px);
+  padding-right: clamp(22px, 3vw, 48px);
+}
+
+body[data-theme="pro"] .container {
+  padding-top: 48px;
+  padding-bottom: 56px;
+}
+
+body[data-theme="pro"] .logo::after {
+  content: "PRO";
+  margin-left: 10px;
+  color: #77777d;
+  font-family: "Unbounded", var(--font);
+  font-size: .62rem;
+  letter-spacing: .28em;
+  vertical-align: middle;
+}
+
+body[data-theme="pro"] .header-logo {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+body[data-theme="pro"] .nav {
+  gap: 22px;
+  border: 0;
+}
+
+body[data-theme="pro"] .nav button,
+body[data-theme="pro"] .nav button:last-child {
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  color: #85858b;
+}
+
+body[data-theme="pro"] .nav button:hover,
+body[data-theme="pro"] .nav button.active,
+body[data-theme="pro"] .nav-dropdown.is-active > .nav-dropdown-btn {
+  background: transparent;
+  color: var(--accent);
+}
+
+body[data-theme="pro"] .nav-dropdown-menu {
+  padding: 8px;
+  border-radius: 14px;
+  background: #1a1a1c;
+  border-color: #303034;
+  box-shadow: 0 18px 50px rgba(0,0,0,.45);
+}
+
+body[data-theme="pro"] .nav-dropdown-menu button {
+  padding: 10px 12px;
+  border-radius: 9px;
+}
+
+body[data-theme="pro"] .nav-dropdown-menu button:hover,
+body[data-theme="pro"] .nav-dropdown-menu button.active {
+  color: var(--text);
+  background: #242427;
+}
+
+body[data-theme="pro"] .card,
+body[data-theme="pro"] .aside-card,
+body[data-theme="pro"] .login-card,
+body[data-theme="pro"] .modal-dialog,
+body[data-theme="pro"] .store-card,
+body[data-theme="pro"] .tpl-card,
+body[data-theme="pro"] .ai-cashier-embed,
+body[data-theme="pro"] .dash-card,
+body[data-theme="pro"] .dash-action {
+  border-radius: 18px;
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+body[data-theme="pro"] .card,
+body[data-theme="pro"] .aside-card {
+  padding: 28px 30px;
+}
+
+body[data-theme="pro"] .card::before,
+body[data-theme="pro"] .aside-card::before { display: none; }
+
+body[data-theme="pro"] .dash-title {
+  font-family: "Unbounded", var(--font);
+  font-size: clamp(1.45rem, 2.2vw, 2.15rem);
+  font-weight: 500;
+  letter-spacing: -.045em;
+}
+
+body[data-theme="pro"] .dash-head { margin-bottom: 30px; }
+
+body[data-theme="pro"] .dash-card {
+  border: 1px solid var(--border);
+  padding: 26px 28px;
+}
+
+body[data-theme="pro"] .dash-grid { gap: 18px; }
+body[data-theme="pro"] .dash-side { gap: 16px; }
+
+body[data-theme="pro"] .dash-metric-label,
+body[data-theme="pro"] .section-title,
+body[data-theme="pro"] .items-table th,
+body[data-theme="pro"] .orders-table th {
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-size: .68rem;
+  font-weight: 600;
+}
+
+body[data-theme="pro"] .section-title {
+  padding-bottom: 16px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid #29292d;
+}
+
+body[data-theme="pro"] .dash-metric-value {
+  font-family: "Unbounded", var(--font);
+  font-weight: 500;
+  letter-spacing: -.055em;
+}
+
+body[data-theme="pro"] .dash-actions-grid { gap: 16px; }
+
+body[data-theme="pro"] .dash-action {
+  min-height: 118px;
+  padding: 24px;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+
+body[data-theme="pro"] .dash-action:hover {
+  transform: translateY(-2px);
+  border-color: #515a35;
+  background: #1c1c1e;
+}
+
+body[data-theme="pro"] .dash-action-title {
+  font-family: "Unbounded", var(--font);
+  font-size: .92rem;
+  font-weight: 500;
+  letter-spacing: -.025em;
+}
+
+body[data-theme="pro"] .btn {
+  border-radius: 999px;
+  padding-left: 22px;
+  padding-right: 22px;
+}
+
+body[data-theme="pro"] .btn-sm,
+body[data-theme="pro"] .btn-icon,
+body[data-theme="pro"] .orders-toolbar-row .btn-sm {
+  border-radius: 9px;
+  padding-left: 13px;
+  padding-right: 13px;
+}
+
+body[data-theme="pro"] .btn-icon { padding: 0; }
+
+body[data-theme="pro"] input:not([type="checkbox"]):not([type="radio"]),
+body[data-theme="pro"] select,
+body[data-theme="pro"] textarea,
+body[data-theme="pro"] .pay-link-input {
+  min-height: 44px;
+  border-radius: 4px !important;
+  background: #101011 !important;
+  border-color: #303034 !important;
+}
+
+body[data-theme="pro"] .orders-table-wrap {
+  overflow: hidden;
+  border-radius: 14px;
+  border-color: #29292d;
+}
+
+body[data-theme="pro"] .orders-table th {
+  background: #121213;
+  padding-top: 13px;
+  padding-bottom: 13px;
+}
+
+body[data-theme="pro"] .orders-table td {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+body[data-theme="pro"] .orders-table tr.active {
+  background: rgba(198, 246, 77, .07);
+}
+
+body[data-theme="pro"] .badge { border-radius: 6px; }
+
+body[data-theme="pro"] .receipt-view,
+body[data-theme="pro"] .result-box,
+body[data-theme="pro"] .pay-row,
+body[data-theme="pro"] .pay-link-panel,
+body[data-theme="pro"] .clone-banner,
+body[data-theme="pro"] .warn-box {
+  border-radius: 12px;
+  background: #111113 !important;
+}
+
+body[data-theme="pro"] .receipt-view { border-style: solid !important; }
+
+body[data-theme="pro"] .settings-tabs {
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+body[data-theme="pro"] .settings-tab {
+  border-radius: 9px;
+  padding: 10px 14px;
+}
+
+body[data-theme="pro"] .settings-tab:hover,
+body[data-theme="pro"] .settings-tab.active {
+  background: #242427;
+  border-color: #343438;
+  color: var(--accent);
+}
+
+body[data-theme="pro"] .theme-option {
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
+body[data-theme="pro"] .theme-option:hover,
+body[data-theme="pro"] .theme-option:has(input:checked) {
+  box-shadow: none;
+  background: #202023;
+}
+
+body[data-theme="pro"] .login-card {
+  padding: 42px;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 900px) {
+  body[data-theme="pro"] .header { min-height: auto; }
+  body[data-theme="pro"] .nav { gap: 12px; }
+  body[data-theme="pro"] .container { padding-top: 28px; }
+  body[data-theme="pro"] .card,
+  body[data-theme="pro"] .aside-card { padding: 22px; }
+}
