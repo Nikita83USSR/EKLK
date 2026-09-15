@@ -3946,14 +3946,12 @@
     })();
     const docTitle = isCorr ? "Чек коррекции" : isInvcDoc ? "Счёт на оплату" : "Кассовый чек";
     const docNo = summary?.order_id != null ? summary.order_id : (oid != null ? oid : "—");
-    const stRaw = summary?.status != null ? String(summary.status) : "";
-    const stKey = stRaw.toLowerCase().trim();
-    const stLabel = (typeof STATUS_LABELS !== "undefined" && STATUS_LABELS[stKey]) ? STATUS_LABELS[stKey] : (stRaw || "—");
     const dtLabel = formatDt(summary?.updated) || "—";
+    // 3 centered lines; status uses same color badges as the documents list
     let html = `<div class="r-head">
       <div class="r-title">${escHtml(docTitle)} - № ${escHtml(docNo)}</div>
-      <div class="r-meta">Статус - ${escHtml(stLabel)}</div>
-      <div class="r-meta">Дата - ${escHtml(dtLabel)}</div>
+      <div class="r-meta r-head-status">Статус - ${statusBadge(summary?.status || "")}</div>
+      <div class="r-meta r-head-date">Дата - ${escHtml(dtLabel)}</div>
       ${(atol5 && atol5.external_id) ? `<div class="r-meta">Внешний ID: ${escHtml(atol5.external_id)}</div>` : (summary?.external_id ? `<div class="r-meta">Внешний ID: ${escHtml(summary.external_id)}</div>` : "")}
     </div>`;
     const payLink = extractPaymentLink(summary, fiscal);
