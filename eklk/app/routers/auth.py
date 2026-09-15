@@ -1,9 +1,14 @@
 """
 Login via EcomKassa credentials only — no local users.
 After login loads firm profile (organization + stores).
+
+Long-lived browser session: httpOnly cookie eklk_sid + short access JWT.
+Silent renew: POST /auth/refresh (cookie only).
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends, Request
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException, status, Depends, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.core.config import settings
@@ -12,7 +17,12 @@ from app.core.deps import (
     CurrentUser,
     save_session,
     clear_session,
+    clear_sid,
+    get_session,
+    get_login_by_sid,
+    touch_session,
     update_session_store,
+    update_session_fields,
 )
 from app.clients.ecomkassa import EcomKassaClient, EcomKassaError
 from app.db import get_db
@@ -25,6 +35,7 @@ from app.schemas.auth import (
     firm_from_payload,
 )
 from app.services import settings_service as settings_svc
+from app.services.session_store import default_session_ttl_seconds
 from app.utils.logger import log_action
 from app.core.rate_limit import allow as rate_allow, client_ip
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,11 +43,42 @@ from sqlalchemy.ext.asyncio import AsyncSession
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
+def _cookie_max_age(remember: bool) -> int:
+    return default_session_ttl_seconds(remember)
+
+
+def _set_session_cookie(response: Response, session_id: str, remember: bool) -> None:
+    response.set_cookie(
+        key=settings.session_cookie_name,
+        value=session_id,
+        max_age=_cookie_max_age(remember),
+        httponly=True,
+        secure=bool(settings.session_cookie_secure),
+        samesite=settings.session_cookie_samesite or "lax",
+        path="/",
+    )
+
+
+def _clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=settings.session_cookie_name,
+        path="/",
+        httponly=True,
+        secure=bool(settings.session_cookie_secure),
+        samesite=settings.session_cookie_samesite or "lax",
+    )
+
+
+def _sid_from_request(request: Request) -> str | None:
+    return request.cookies.get(settings.session_cookie_name)
+
+
 @router.post("/login", response_model=TokenResponse)
-async def login(data: LoginRequest, request: Request):
+async def login(data: LoginRequest, request: Request, response: Response):
     """
     Логин = учётная запись EcomKassa (email + пароль).
     Проверяем через getToken; затем загружаем профиль фирмы и магазины.
+    remember=true → долгая httpOnly cookie eklk_sid (sliding via /auth/refresh).
     """
     ip = client_ip(request)
     if not rate_allow(f"login:{ip}", settings.rate_limit_login_per_minute, 60):
@@ -46,9 +88,9 @@ async def login(data: LoginRequest, request: Request):
             detail="Слишком много попыток входа. Подождите минуту.",
         )
 
-    # Регистр логина сохраняем — EcomKassa чувствителен к case (не .lower())
-    login_name = data.username.strip()
+    login_name = data.username  # do not lower — EcomKassa logins are case-sensitive
     password = data.password
+    remember = bool(data.remember)
 
     client = EcomKassaClient(login=login_name, password=password)
     firm_payload = None
@@ -66,7 +108,7 @@ async def login(data: LoginRequest, request: Request):
             )
             firm_payload = None
     except EcomKassaError as e:
-        log_action("login_failed", f"EcomKassa auth failed: {login_name} — {e}", level="warning")
+        log_action("login_failed", f"EcomKassa auth failed: {e}", level="warning", user_id=login_name)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверный логин или пароль EcomKassa",
@@ -78,12 +120,21 @@ async def login(data: LoginRequest, request: Request):
     default_store = stores[0].get("storeId") if stores else settings.ecomkassa_group_code
     group_code = str(default_store)
 
-    save_session(login_name, password, group_code=group_code, firm=firm_payload, ecom_token=ecom_token)
+    sid = save_session(
+        login_name,
+        password,
+        group_code=group_code,
+        firm=firm_payload,
+        ecom_token=ecom_token,
+        remember=remember,
+    )
+    _set_session_cookie(response, sid, remember)
+
     token = create_access_token(login_name, extra={"username": login_name, "role": "operator"})
     firm_out = firm_from_payload(firm_payload)
     log_action(
         "login_success",
-        f"EcomKassa user logged in: {login_name}, stores={len(stores)}",
+        f"EcomKassa user logged in: {login_name}, stores={len(stores)}, remember={remember}",
         user_id=login_name,
     )
     return TokenResponse(
@@ -95,8 +146,96 @@ async def login(data: LoginRequest, request: Request):
 
 
 @router.post("/login/form", response_model=TokenResponse)
-async def login_form(request: Request, form: OAuth2PasswordRequestForm = Depends()):
-    return await login(LoginRequest(username=form.username, password=form.password), request)
+async def login_form(
+    request: Request,
+    response: Response,
+    form: OAuth2PasswordRequestForm = Depends(),
+):
+    remember = False
+    # optional form field
+    try:
+        form_data = await request.form()
+        remember = str(form_data.get("remember") or "").lower() in ("1", "true", "yes", "on")
+    except Exception:
+        pass
+    return await login(
+        LoginRequest(username=form.username, password=form.password, remember=remember),
+        request,
+        response,
+    )
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh(request: Request, response: Response):
+    """
+    Silent access JWT renew using httpOnly session cookie.
+    Re-validates EcomKassa credentials via getToken; on failure clears session (password change).
+    """
+    sid = _sid_from_request(request)
+    if not sid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Нет сессии",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    login_name = get_login_by_sid(sid)
+    if not login_name:
+        _clear_session_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Сессия истекла. Войдите снова.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    session = get_session(login_name)
+    if not session or session.get("session_id") != sid:
+        clear_sid(sid)
+        _clear_session_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Сессия истекла. Войдите снова.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    password = session.get("password")
+    group_code = str(session.get("group_code") or "990")
+    remember = bool(session.get("remember"))
+
+    client = EcomKassaClient(login=login_name, password=password, group_code=group_code)
+    try:
+        ecom_token = await client.get_token(force=True)
+    except EcomKassaError as e:
+        # Password changed in EcomKassa or account disabled
+        log_action(
+            "refresh_reauth",
+            f"EcomKassa auth failed on refresh: {e}",
+            level="warning",
+            user_id=login_name,
+        )
+        clear_session(login_name)
+        _clear_session_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Требуется повторный вход (пароль изменён или сессия недействительна)",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    finally:
+        await client.close()
+
+    update_session_fields(login_name, ecom_token=ecom_token)
+    touch_session(login_name, session_id=sid)
+    _set_session_cookie(response, sid, remember)
+
+    token = create_access_token(login_name, extra={"username": login_name, "role": "operator"})
+    firm_out = firm_from_payload(session.get("firm"))
+    log_action("token_refresh", f"access renewed remember={remember}", user_id=login_name, level="debug")
+    return TokenResponse(
+        access_token=token,
+        expires_in=settings.access_token_expire_minutes * 60,
+        firm=firm_out,
+        selected_store_id=session.get("selected_store_id"),
+    )
 
 
 @router.get("/me", response_model=UserOut)
@@ -134,6 +273,8 @@ async def get_firm(user: CurrentUser):
             user["password"],
             group_code=user.get("group_code") or "990",
             firm=payload,
+            remember=bool(user.get("remember")),
+            session_id=user.get("session_id"),
         )
         return firm_from_payload(payload) or FirmOut()
     except EcomKassaError as e:
@@ -148,7 +289,7 @@ async def select_store(
     user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ):
-    """Запомнить выбранный магазин в RAM-сессии и в firm_settings (БД)."""
+    """Запомнить выбранный магазин в сессии и в firm_settings (БД)."""
     firm = user.get("firm") or {}
     stores = firm.get("stores") or []
     store_id = body.store_id
@@ -168,7 +309,6 @@ async def select_store(
             db, str(user["username"]), {"selected_store_id": store_id}
         )
     except Exception:
-        # Prefs are best-effort; session already updated
         pass
     log_action(
         "store_selected",
@@ -204,7 +344,32 @@ async def ecom_token(user: CurrentUser):
 
 
 @router.post("/logout")
-async def logout(user: CurrentUser):
-    clear_session(user["username"])
-    log_action("logout", f"User logged out: {user['username']}", user_id=user["username"])
+async def logout(request: Request, response: Response):
+    """
+    Clear server session and session cookie.
+    Uses Bearer if valid; otherwise session cookie. Always clears cookie.
+    """
+    from app.core.security import decode_access_token
+    from fastapi.security.utils import get_authorization_scheme_param
+
+    login_name = None
+    auth = request.headers.get("Authorization")
+    if auth:
+        scheme, token = get_authorization_scheme_param(auth)
+        if scheme.lower() == "bearer" and token:
+            payload = decode_access_token(token)
+            if payload:
+                login_name = payload.get("username") or payload.get("sub")
+
+    sid = _sid_from_request(request)
+    if not login_name and sid:
+        login_name = get_login_by_sid(sid)
+
+    if login_name:
+        clear_session(str(login_name))
+        log_action("logout", f"User logged out: {login_name}", user_id=login_name)
+    elif sid:
+        clear_sid(sid)
+
+    _clear_session_cookie(response)
     return {"ok": True}

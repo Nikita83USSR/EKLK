@@ -240,6 +240,82 @@
     syncFilterVisibility();
   }
 
+
+  function pad2(n) {
+    return String(n).padStart(2, "0");
+  }
+  function toLocalDateParts(d) {
+    return {
+      y: d.getFullYear(),
+      m: d.getMonth() + 1,
+      d: d.getDate(),
+    };
+  }
+  function fmtDateLocal(y, m, d) {
+    return `${y}-${pad2(m)}-${pad2(d)}`;
+  }
+  function lastDayOfMonth(y, m) {
+    return new Date(y, m, 0).getDate();
+  }
+  /** Диапазон since/until (datetime-local) по фильтрам дашборда. */
+  function dashboardRange() {
+    const type = $("#dash_period")?.value || "daily";
+    if (type === "daily" || type === "weekly") {
+      const iso = $("#dash_date")?.value || todayISO();
+      const [y, m, d] = iso.split("-").map(Number);
+      const start = `${iso}T00:00`;
+      if (type === "daily") {
+        return { since: start, until: `${iso}T23:59` };
+      }
+      // weekly: неделя от выбранной даты (7 дней)
+      const from = new Date(y, m - 1, d);
+      const to = new Date(y, m - 1, d + 6);
+      const tp = toLocalDateParts(to);
+      return {
+        since: start,
+        until: `${fmtDateLocal(tp.y, tp.m, tp.d)}T23:59`,
+      };
+    }
+    const year = parseInt($("#dash_year")?.value || String(new Date().getFullYear()), 10);
+    if (type === "monthly") {
+      const month = parseInt($("#dash_month")?.value || String(new Date().getMonth() + 1), 10);
+      const last = lastDayOfMonth(year, month);
+      return {
+        since: `${fmtDateLocal(year, month, 1)}T00:00`,
+        until: `${fmtDateLocal(year, month, last)}T23:59`,
+      };
+    }
+    if (type === "quarterly") {
+      const q = parseInt($("#dash_quarter")?.value || "1", 10);
+      const startM = (q - 1) * 3 + 1;
+      const endM = startM + 2;
+      const last = lastDayOfMonth(year, endM);
+      return {
+        since: `${fmtDateLocal(year, startM, 1)}T00:00`,
+        until: `${fmtDateLocal(year, endM, last)}T23:59`,
+      };
+    }
+    // annual
+    return {
+      since: `${fmtDateLocal(year, 1, 1)}T00:00`,
+      until: `${fmtDateLocal(year, 12, 31)}T23:59`,
+    };
+  }
+
+  function openOrdersFromDashboard() {
+    const { since, until } = dashboardRange();
+    const params = new URLSearchParams();
+    if (since) params.set("since", since);
+    if (until) params.set("until", until);
+    const url = "/orders" + (params.toString() ? "?" + params.toString() : "");
+    history.pushState({ tab: "orders" }, "", url);
+    if (window.EKLK && typeof window.EKLK.showTab === "function") {
+      window.EKLK.showTab("orders", false);
+    } else {
+      location.href = url;
+    }
+  }
+
   function bind() {
     initDefaults();
     $("#dash_refresh")?.addEventListener("click", load);
@@ -259,6 +335,29 @@
         } else if (tab) {
           location.href = "/" + tab;
         }
+      });
+    });
+    // Клик по любому графику → Документы с since/until периода дашборда
+    const chartClickTargets = [];
+    const gauge = $("#dash_gauge");
+    if (gauge) chartClickTargets.push(gauge.closest(".dash-gauge") || gauge.parentElement || gauge);
+    document.querySelectorAll("#dash_pay_charts canvas, #dash_pay_charts .dash-mini").forEach((el) => {
+      const t = el.closest(".dash-mini") || el.parentElement || el;
+      if (t && !chartClickTargets.includes(t)) chartClickTargets.push(t);
+    });
+    // fallback: все canvas на дашборде
+    if (!chartClickTargets.length) {
+      document.querySelectorAll("#tab-home canvas").forEach((c) => {
+        chartClickTargets.push(c.parentElement || c);
+      });
+    }
+    chartClickTargets.forEach((el) => {
+      if (!el) return;
+      el.style.cursor = "pointer";
+      el.title = el.title || "Открыть документы за период";
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        openOrdersFromDashboard();
       });
     });
   }

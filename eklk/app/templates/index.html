@@ -16,7 +16,7 @@
     })();
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260902orderclose1" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260915expbdmerge1" />
   <link rel="stylesheet" href="/static/css/pro-theme.css?v=20260915pro1" />
 </head>
 <body>
@@ -32,6 +32,10 @@
         <input type="text" id="loginUser" name="username" placeholder="Логин Екомкасса (регистр важен)" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required />
         <label style="margin-top:10px">Пароль</label>
         <input type="password" id="loginPass" autocomplete="current-password" required />
+        <label class="login-remember" style="display:flex;align-items:center;gap:8px;margin-top:12px;font-weight:400;cursor:pointer">
+          <input type="checkbox" id="loginRemember" checked />
+          <span>Запомнить на этом компьютере</span>
+        </label>
         <button type="submit" class="btn btn-block" style="margin-top:16px">Войти</button>
       </form>
       <div class="login-links">
@@ -91,7 +95,7 @@
                     <option value="annual">Годовой</option>
                   </select>
                 </label>
-                <label id="dash_date_wrap">Дата
+                <label id="dash_date_wrap">Дата начала
                   <input type="date" id="dash_date" class="input" />
                 </label>
                 <label id="dash_year_wrap" class="hidden">Год
@@ -818,7 +822,7 @@
           </div>
           <aside class="orders-detail-pane">
             <div class="card" id="o_detail_card">
-              <div class="section-title">Состав чека</div>
+              <div class="section-title">Состав документа</div>
               <p class="hint" id="o_detail_placeholder">Выберите чек в списке слева</p>
               <div id="o_detail" class="receipt-view hidden"></div>
             </div>
@@ -1226,11 +1230,11 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260902cattabs1"></script>
-  <script src="/static/js/sections/dashboard.js?v=20260827ui1"></script>
+  <script src="/static/js/app.js?v=20260915expbdmerge1"></script>
+  <script src="/static/js/sections/dashboard.js?v=20260915expbdmerge1"></script>
   <script src="/static/js/sections/catalog.js?v=20260825c"></script>
   <script src="/static/js/sections/reports.js?v=20260825c"></script>
-  <!-- Bitrix24 CRM widget (тот же, что на app.ecomkassa.ru) -->
+  <!-- Bitrix24 CRM widget: context (page, login, firm) via onBitrixLiveChat in app.js -->
   <script data-skip-moving="true">
   (function(w,d,u){
     var s=d.createElement("script");

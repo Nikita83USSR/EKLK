@@ -4,6 +4,8 @@
   let paymentTypes = [];
   let groupCode = localStorage.getItem("eklk_group") || "";
   let firmData = null; // { firm_id, firm_name, tax_identity, tax_variant, stores: [...] }
+  let currentLogin = ""; // EcomKassa login for Bitrix widget context
+  let bitrixWidget = null;
   let createAttempted = false; // contact error only after submit attempt
 
   const $ = (s) => document.querySelector(s);
@@ -176,11 +178,74 @@
     setTimeout(() => el.classList.add("hidden"), 7000);
   }
 
+  /** Shared refresh promise — prevents parallel /auth/refresh races. */
+  let refreshPromise = null;
+
+  function _authPath(path) {
+    const p = String(path || "");
+    return (
+      p.indexOf("/auth/login") !== -1 ||
+      p.indexOf("/auth/refresh") !== -1 ||
+      p.indexOf("/auth/logout") !== -1
+    );
+  }
+
+  async function refreshAccess() {
+    if (refreshPromise) return refreshPromise;
+    refreshPromise = (async () => {
+      const res = await fetch(API + "/auth/refresh", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = new Error(
+          (typeof data.detail === "string" && data.detail) ||
+            "Сессия истекла. Войдите снова."
+        );
+        err.status = res.status;
+        throw err;
+      }
+      if (!data.access_token) throw new Error("Нет access_token в ответе refresh");
+      token = data.access_token;
+      try {
+        localStorage.setItem("eklk_token", token);
+      } catch (e) { /* ignore */ }
+      return token;
+    })();
+    try {
+      return await refreshPromise;
+    } finally {
+      refreshPromise = null;
+    }
+  }
+
   async function api(path, opts = {}) {
-    const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(API + path, { ...opts, headers });
-    const data = await res.json().catch(() => ({}));
+    const doFetch = async () => {
+      const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch(API + path, { ...opts, headers, credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      return { res, data };
+    };
+
+    let { res, data } = await doFetch();
+
+    // Silent renew once on 401 (except auth endpoints)
+    if (res.status === 401 && !_authPath(path) && !opts._retried) {
+      try {
+        await refreshAccess();
+        opts = { ...opts, _retried: true };
+        ({ res, data } = await doFetch());
+      } catch (e) {
+        logout(true);
+        throw new Error(
+          (e && e.message) || "Сессия истекла. Войдите снова."
+        );
+      }
+    }
+
     const detailMsg = (() => {
       const d = data && data.detail;
       if (typeof d === "string") return d;
@@ -190,10 +255,9 @@
       if (d && typeof d === "object") return d.message || d.msg || JSON.stringify(d);
       return data.error || data.message || res.statusText || "Ошибка запроса";
     })();
-    // 401 on login itself must NOT call logout (no session yet)
+
     if (res.status === 401) {
-      const isLogin = String(path).indexOf("/auth/login") !== -1;
-      if (!isLogin) logout(false);
+      if (!_authPath(path)) logout(true);
       throw new Error(detailMsg || "Сессия истекла. Войдите снова.");
     }
     if (!res.ok) {
@@ -203,7 +267,20 @@
   }
 
   function logout(clearStorage = true) {
+    const hadToken = !!token;
+    // Best-effort server logout (clears httpOnly cookie + Redis/memory session)
+    if (hadToken || clearStorage) {
+      fetch(API + "/auth/logout", {
+        method: "POST",
+        credentials: "include",
+        headers: token
+          ? { "Content-Type": "application/json", Authorization: "Bearer " + token }
+          : { "Content-Type": "application/json" },
+      }).catch(() => {});
+    }
     token = "";
+    currentLogin = "";
+    bitrixWidget = null;
     if (clearStorage) {
       localStorage.removeItem("eklk_token");
       // eklk_group (last store) intentionally kept across logout
@@ -331,7 +408,13 @@
       if (!stores.length) {
         $("#set_stores_list").innerHTML = "<p class=\"hint\">Магазины не найдены</p>";
       } else {
-        $("#set_stores_list").innerHTML = stores
+        // Выбранный по умолчанию магазин — первым в списке
+        const storesOrdered = stores.slice().sort((a, b) => {
+          const aSel = String(a.store_id) === String(selected) ? 0 : 1;
+          const bSel = String(b.store_id) === String(selected) ? 0 : 1;
+          return aSel - bSel;
+        });
+        $("#set_stores_list").innerHTML = storesOrdered
           .map((s) => {
             const active = String(s.store_id) === String(selected);
             return `<div class="store-card ${active ? "active" : ""}" data-store-id="${s.store_id}">
@@ -1982,6 +2065,68 @@
   }
 
   // ---- Auth ----
+
+  /** Context for Bitrix24 live chat (page + EcomKassa login + firm). No secrets. */
+  function buildBitrixCustomData() {
+    let login = currentLogin || "";
+    if (!login) {
+      try {
+        const me = JSON.parse(sessionStorage.getItem("eklk_me") || "null");
+        if (me && (me.username || me.email)) login = me.username || me.email || "";
+      } catch (e) { /* ignore */ }
+    }
+    if (!login && $("#userName")) {
+      login = ($("#userName").textContent || "").trim();
+    }
+    const firmName = (firmData && firmData.firm_name) || "—";
+    const firmInn = (firmData && firmData.tax_identity) || "—";
+    const firmId = (firmData && firmData.firm_id) || "—";
+    const store = groupCode ? String(groupCode) : "—";
+    const pageUrl = location.href || "";
+    const pageTitle = document.title || location.pathname || pageUrl;
+    const pageLine = pageUrl
+      ? ("[url=" + pageUrl + "]" + pageTitle + "[/url]")
+      : pageTitle;
+
+    const grid = [
+      { NAME: "Страница", VALUE: pageLine, DISPLAY: "LINE" },
+      { NAME: "Логин EcomKassa", VALUE: login || "—", DISPLAY: "LINE" },
+      { NAME: "Организация", VALUE: firmName, DISPLAY: "LINE" },
+      { NAME: "ИНН", VALUE: String(firmInn), DISPLAY: "LINE" },
+      { NAME: "Firm ID", VALUE: String(firmId), DISPLAY: "LINE" },
+      { NAME: "Магазин (storeId)", VALUE: store, DISPLAY: "LINE" },
+    ];
+    return [
+      { USER: { NAME: login || "EKLK guest" } },
+      { GRID: grid },
+    ];
+  }
+
+  function pushBitrixLiveChatContext() {
+    try {
+      const data = buildBitrixCustomData();
+      if (bitrixWidget && typeof bitrixWidget.setCustomData === "function") {
+        bitrixWidget.setCustomData(data);
+        return true;
+      }
+    } catch (e) {
+      console.warn("Bitrix setCustomData", e);
+    }
+    return false;
+  }
+
+  // Bitrix widget fires when live chat is ready (loader is after app.js in index.html)
+  try {
+    window.addEventListener("onBitrixLiveChat", function (event) {
+      try {
+        bitrixWidget = event && event.detail && event.detail.widget;
+        pushBitrixLiveChatContext();
+      } catch (e) {
+        console.warn("onBitrixLiveChat", e);
+      }
+    });
+  } catch (e) { /* ignore */ }
+
   async function afterLogin(loginPayload) {
     try { document.documentElement.classList.add("eklk-authed"); } catch (e) { /* ignore */ }
     if ($("#loginScreen")) $("#loginScreen").classList.add("hidden");
@@ -2004,6 +2149,7 @@
       } else {
         const me = await api("/auth/me");
         if ($("#userName")) $("#userName").textContent = me.username || me.email || "";
+        currentLogin = me.username || me.email || currentLogin || "";
         const preferred =
           srv.preferredStore ||
           localStorage.getItem("eklk_group") ||
@@ -2014,7 +2160,9 @@
       if (me2 && $("#userName")) $("#userName").textContent = me2.username || me2.email || "";
       if (me2) {
         try { sessionStorage.setItem("eklk_me", JSON.stringify(me2)); } catch (e) { /* ignore */ }
+        currentLogin = me2.username || me2.email || currentLogin || "";
       }
+      pushBitrixLiveChatContext();
       await loadPaymentTypes();
       ensureItem("c_items", updateCreateSummary);
       ensureItem("p_items", updatePaySummary);
@@ -2320,11 +2468,14 @@
       }
       // Логин EcomKassa: регистр букв сохраняем (не email-normalize)
       const loginRaw = (userEl.value || "").trim();
+      const rememberEl = $("#loginRemember");
+      const remember = !!(rememberEl && rememberEl.checked);
       const data = await api("/auth/login", {
         method: "POST",
         body: JSON.stringify({
           username: loginRaw,
           password: passEl.value || "",
+          remember: remember,
         }),
       });
       token = data.access_token;
@@ -2541,6 +2692,8 @@
       iframe.title = "ИИ-кассир";
       host.appendChild(iframe);
     }
+    // Permissions Policy: без allow микрофон в iframe блокируется браузером
+    iframe.setAttribute("allow", "microphone");
     if (iframe.src !== embedUrl) {
       iframe.src = embedUrl;
     }
@@ -2615,6 +2768,19 @@
     if (tab === "orders") {
       // Не запоминаем последний выбранный чек при входе в список
       clearOrderSelection();
+      // push=true (клик по меню) → сброс фильтров (кроме лимита и «Сжато»)
+      // push=false (F5 / прямая ссылка / popstate) → применить query-параметры или сброс
+      if (push) {
+        // принудительный сброс фильтров при клике в меню
+        if ($("#o_ext")) $("#o_ext").value = "";
+        if ($("#o_types")) $("#o_types").value = "";
+        if ($("#o_status")) $("#o_status").value = "";
+        if ($("#o_since")) $("#o_since").value = "";
+        if ($("#o_until")) $("#o_until").value = "";
+        ordersOffset = 0;
+      } else if (typeof applyOrdersUrlParamsOrReset === "function") {
+        applyOrdersUrlParamsOrReset();
+      }
       if (typeof loadOrders === "function") {
         try { loadOrders(); } catch (e) { console.warn(e); }
       }
@@ -2659,7 +2825,11 @@
     }
     if (push) {
       const path = tabToPath(tab);
-      if (location.pathname !== path) {
+      // Для «Документы» всегда чистый URL без query (сброс фильтров по клику в меню)
+      const needPush =
+        location.pathname !== path ||
+        (tab === "orders" && location.search);
+      if (needPush) {
         history.pushState({ tab }, "", path);
       }
     }
@@ -3541,6 +3711,84 @@
     });
   }
 
+
+  /** Нормализация значения для input[type=datetime-local] (YYYY-MM-DDTHH:mm). */
+  function normalizeDatetimeLocal(val) {
+    if (!val) return "";
+    let s = String(val).trim();
+    s = s.replace(/Z$/i, "").replace(/[+-]\d{2}:?\d{2}$/, "");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s + "T00:00";
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s.slice(0, 16);
+    return s.length >= 16 ? s.slice(0, 16) : s;
+  }
+
+  /**
+   * Применить query-параметры раздела /orders или сбросить фильтры.
+   * Параметры (все опциональны): limit, type, status, since, until.
+   * Без параметров — сброс фильтров, кроме лимита и галочки «Сжато».
+   */
+  function applyOrdersUrlParamsOrReset() {
+    const params = new URLSearchParams(location.search || "");
+    const hasFilterParam =
+      params.has("limit") ||
+      params.has("type") ||
+      params.has("status") ||
+      params.has("since") ||
+      params.has("until");
+
+    if (hasFilterParam) {
+      if (params.has("limit") && $("#o_limit")) {
+        const lim = String(params.get("limit") || "").trim();
+        const allowed = ["25", "50", "100", "200", "500"];
+        if (allowed.includes(lim)) $("#o_limit").value = lim;
+      }
+      if (params.has("type") && $("#o_types")) {
+        const t = String(params.get("type") || "").trim();
+        if (t) $("#o_types").value = t;
+      }
+      if (params.has("status") && $("#o_status")) {
+        const st = String(params.get("status") || "").trim();
+        const opt = Array.from($("#o_status").options || []).find((o) => o.value === st);
+        if (opt) $("#o_status").value = st;
+      }
+      if (params.has("since") && $("#o_since")) {
+        $("#o_since").value = normalizeDatetimeLocal(params.get("since"));
+      }
+      if (params.has("until") && $("#o_until")) {
+        $("#o_until").value = normalizeDatetimeLocal(params.get("until"));
+      }
+    } else {
+      // Сброс фильтров; лимит и «Сжато» сохраняем
+      if ($("#o_ext")) $("#o_ext").value = "";
+      if ($("#o_types")) $("#o_types").value = "";
+      if ($("#o_status")) $("#o_status").value = "";
+      if ($("#o_since")) $("#o_since").value = "";
+      if ($("#o_until")) $("#o_until").value = "";
+    }
+    ordersOffset = 0;
+  }
+
+
+  /** Записать текущие фильтры документов в URL (replaceState, без лишней истории). */
+  function syncOrdersUrlFromFilters() {
+    const params = new URLSearchParams();
+    const limit = ($("#o_limit") && $("#o_limit").value) || "";
+    const type = ($("#o_types") && $("#o_types").value) || "";
+    const status = ($("#o_status") && $("#o_status").value) || "";
+    const since = ($("#o_since") && $("#o_since").value) || "";
+    const until = ($("#o_until") && $("#o_until").value) || "";
+    if (limit) params.set("limit", limit);
+    if (type) params.set("type", type);
+    if (status) params.set("status", status);
+    if (since) params.set("since", since);
+    if (until) params.set("until", until);
+    const qs = params.toString();
+    const url = "/orders" + (qs ? "?" + qs : "");
+    if (location.pathname + location.search !== url) {
+      history.replaceState({ tab: "orders" }, "", url);
+    }
+  }
+
   async function loadOrders() {
     const list = $("#o_list");
     if (!list) return;
@@ -3765,18 +4013,15 @@
       const kind = String((fiscal && fiscal.kind) || "").toUpperCase();
       return ot === "INVC" || ot.includes("INVOICE") || kind.includes("INVOICE");
     })();
+    const docTitle = isCorr ? "Чек коррекции" : isInvcDoc ? "Счёт на оплату" : "Кассовый чек";
+    const docNo = summary?.order_id != null ? summary.order_id : (oid != null ? oid : "—");
+    const dtLabel = formatDt(summary?.updated) || "—";
+    // 3 centered lines; status uses same color badges as the documents list
     let html = `<div class="r-head">
-      <div class="r-title">${isCorr ? "Чек коррекции" : isInvcDoc ? "Счёт на оплату" : "Кассовый чек"}</div>
-      <div class="r-meta">№ ${escHtml(summary?.order_id ?? "—")} · ${escHtml(orderTypeLabel(summary || {}))} · ${statusBadge(summary?.status || "")}</div>
-      <div class="r-meta">${escHtml(formatDt(summary?.updated))}</div>
-      ${(atol5 && atol5.external_id) ? `<div class="r-meta">Внешний ID: ${escHtml(atol5.external_id)}</div>` : (summary?.external_id ? `<div class="r-meta">Внешний ID: ${escHtml(summary.external_id)}</div>` : "")}`;
-    if (!opts.hideEdit) {
-      html += `
-      <div class="r-head-actions">
-        <button type="button" class="btn btn-sm btn-secondary" id="o_detail_edit" data-order-id="${oid}">Действие</button>
-      </div>`;
-    }
-    html += `
+      <div class="r-title">${escHtml(docTitle)} - № ${escHtml(docNo)}</div>
+      <div class="r-meta r-head-status">Статус - ${statusBadge(summary?.status || "")}</div>
+      <div class="r-meta r-head-date">Дата - ${escHtml(dtLabel)}</div>
+      ${(atol5 && atol5.external_id) ? `<div class="r-meta">Внешний ID: ${escHtml(atol5.external_id)}</div>` : (summary?.external_id ? `<div class="r-meta">Внешний ID: ${escHtml(summary.external_id)}</div>` : "")}
     </div>`;
     const payLink = extractPaymentLink(summary, fiscal);
     const invoiceWait = isInvoiceWaitingPayment(summary, fiscal);
@@ -3949,7 +4194,7 @@
     const oid = summary && summary.order_id != null ? summary.order_id : ordersSelectedId;
     el.innerHTML =
       `<button type="button" class="r-detail-close" id="o_detail_close" title="Закрыть" aria-label="Закрыть">×</button>` +
-      buildReceiptHtml(atol5, summary, fiscal, { hideEdit: false });
+      buildReceiptHtml(atol5, summary, fiscal, { hideEdit: true });
     const closeBtn = $("#o_detail_close");
     if (closeBtn) {
       closeBtn.onclick = (ev) => {
@@ -4048,7 +4293,11 @@
 
   function bindOrdersUI() {
 
-    if ($("#o_search")) $("#o_search").onclick = () => { ordersOffset = 0; loadOrders(); };
+    if ($("#o_search")) $("#o_search").onclick = () => {
+      ordersOffset = 0;
+      if (typeof syncOrdersUrlFromFilters === "function") syncOrdersUrlFromFilters();
+      loadOrders();
+    };
     if ($("#o_refresh")) $("#o_refresh").onclick = () => loadOrders();
     if ($("#o_reset")) {
       $("#o_reset").onclick = () => {
@@ -4059,6 +4308,9 @@
         if ($("#o_until")) $("#o_until").value = "";
         if ($("#o_limit")) $("#o_limit").value = "25";
         ordersOffset = 0;
+        if (location.pathname === "/orders" && location.search) {
+          history.replaceState({ tab: "orders" }, "", "/orders");
+        }
         loadOrders();
       };
     }
@@ -4773,6 +5025,7 @@
       if (ev.key === "Enter") {
         ev.preventDefault();
         ordersOffset = 0;
+        if (typeof syncOrdersUrlFromFilters === "function") syncOrdersUrlFromFilters();
         loadOrders();
       }
     });
@@ -4781,10 +5034,27 @@
     $("#o_types").onchange = () => { ordersOffset = 0; loadOrders(); };
   }
   if ($("#o_limit")) {
-    $("#o_limit").onchange = () => { ordersOffset = 0; loadOrders(); };
+    $("#o_limit").onchange = () => {
+      ordersOffset = 0;
+      if (typeof syncOrdersUrlFromFilters === "function") syncOrdersUrlFromFilters();
+      loadOrders();
+    };
   }
 
-  if (token) afterLogin().catch(() => logout(true));
+  // Boot: short-lived access in localStorage OR long session cookie via /auth/refresh
+  (async function bootAuth() {
+    try {
+      if (token) {
+        await afterLogin();
+        return;
+      }
+      await refreshAccess();
+      await afterLogin();
+    } catch (e) {
+      logout(true);
+    }
+  })();
+
 
   // CORE: minimal public API for section modules (catalog, reports, …)
   window.EKLK = {
@@ -4794,6 +5064,8 @@
     showTab,
     get firmData() { return firmData; },
     get groupCode() { return groupCode; },
+    get currentLogin() { return currentLogin; },
+    pushBitrixLiveChatContext,
     API,
   };
 })();

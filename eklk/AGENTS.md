@@ -30,12 +30,12 @@
 |------|------|
 | `app/main.py` | FastAPI, CORS, static `/static`, template `/`, health |
 | `app/clients/ecomkassa.py` | Единственный HTTP-клиент к EcomKassa |
-| `app/routers/auth.py` | login / me / firm / select-store |
+| `app/routers/auth.py` | login / refresh / logout / me / firm / select-store |
 | `app/routers/ecom.py` | checks, refunds, payment-types, report |
 | `app/routers/orders.py` | search + order detail + atol5 |
 | `app/schemas/*` | Pydantic request/response |
 | `app/core/config.py` | Settings из `.env` |
-| `app/core/deps.py` | JWT user + **in-memory SESSIONS** |
+| `app/core/deps.py` | JWT user + session_store (memory\|redis) |
 | `app/core/security.py` | create/decode JWT |
 | `app/templates/index.html` | UI |
 | `app/static/js/app.js` | **ЯДРО (CORE)** — монолитный vanilla JS (~3500 строк, IIFE). Стабильное. Не трогать без нужды. |
@@ -45,8 +45,12 @@
 | `app/static/js/sections/catalog.js` | UI Каталог (модуль) |
 | `app/static/js/sections/reports.js` | UI Отчёты (модуль) |
 
-Сессия сервера: `SESSIONS[login] = { password, group_code, selected_store_id, firm }`.  
-После рестарта uvicorn JWT ещё жив, а session нет → 401 «Сессия истекла».
+Сессия сервера (`services/session_store.py`):
+- `eklk:session:{login}` — password (encrypted), ecom_token, firm, group_code, remember, session_id;
+- `eklk:sid:{session_id}` — map cookie → login.
+Access JWT короткий; долгая «память» — HttpOnly cookie `eklk_sid` + `POST /auth/refresh` (sliding TTL).
+При refresh заново вызывается EcomKassa `getToken`; смена пароля → session+cookie сброшены.
+Фронт: mutex `refreshPromise`, один retry на 401; boot без JWT пробует refresh по cookie.
 
 ---
 
@@ -55,8 +59,10 @@
 ### 3.1 Наш REST (`/api/v1`)
 
 ```
-POST /api/v1/auth/login
+POST /api/v1/auth/login                 body: { username, password, remember? }
 POST /api/v1/auth/login/form
+POST /api/v1/auth/refresh               cookie eklk_sid → new access JWT
+POST /api/v1/auth/logout                clear session + cookie
 GET  /api/v1/auth/me
 GET  /api/v1/auth/firm
 POST /api/v1/auth/select-store          body: { store_id }
@@ -224,7 +230,7 @@ UI раньше слал 1/2/14 — это **ошибка** относитель
 
 1. **Исправить маппинг payments.type / payment_method** — `ecomkassa.py` `create_sell` + селекты в `app.js`.
 2. **Новый Mobile API метод** — добавить в `EcomKassaClient`, роут в `orders.py` или `ecom.py`, схему, UI.
-3. **Persistent sessions** — заменить dict в `deps.py` на Redis/SQLite.
+3. **Auth remember-me** — уже: cookie `eklk_sid` + `/auth/refresh`; не удлинять access JWT «на год».
 4. **Не трогать** без нужды: формат Token header, путь getToken, storeId как group_code.
 5. **Новый раздел UI** — отдельный `app/static/js/sections/*.js`, ядро `app.js` не раздувать.
 6. Правки в `app.js` — только критичные багфиксы; помечать комментарием `// CORE`.
@@ -256,7 +262,7 @@ source .venv/bin/activate
 
 ## 9. Известные ограничения
 
-- In-memory sessions: multi-worker / restart ломает сессии.
+- `SESSION_BACKEND=memory`: multi-worker / restart ломает сессии — в production только Redis.
 - Нет полноценной БД заказов — только прокси к EcomKassa.
 - Маркировка (chestny znak) — не реализована.
 - Корректность всех комбинаций ФФД 1.2 agent tags нужно валидировать на sandbox кассе.
@@ -388,7 +394,7 @@ Auth: **`Token`** (как ядро). Ответ: `points[]` с полями `tim
 - Детализация points (колонка «Направление»).
 - Графики Chart.js: типы оплаты; приход vs возврат; матрица; динамика по периодам; **балансы** (ящик / общий / зачёт).
 - Выгрузка **XLS** (SheetJS): листы «Сводка» и «Детализация».
-- История: до 30 отчётов в `SESSIONS[login].report_history` (память процесса, до рестарта).
+- История: до 30 отчётов в session store `report_history` (живёт с TTL сессии / до clear).
 
 #### Backend routes (`/api/v1/reports/...`)
 - `GET /daily`, `/weekly`, `/monthly`, `/quarterly`, `/annual`
@@ -407,7 +413,7 @@ Auth: **`Token`** (как ядро). Ответ: `points[]` с полями `tim
   - `user_settings.login` = EcomKassa login (JWT → session)
   - `firm_settings.firm_id` = `firmId` из session после `get_firm_profile`
 - Клиент **не** передаёт `login` / `firm_id` как ключ записи.
-- Пароль EcomKassa **не** пишется в БД (только RAM `SESSIONS`).
+- Пароль EcomKassa **не** пишется в SQLite (только session store Redis/memory, encrypted).
 
 #### Схема (forward-compatible)
 

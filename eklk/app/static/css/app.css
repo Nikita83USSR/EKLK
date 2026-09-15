@@ -109,6 +109,17 @@ a { color: var(--primary); text-decoration: none; }
 .nav button { background: transparent; border: none; color: var(--muted); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.875rem; font-family: inherit; font-weight: 500; }
 .nav button.active, .nav button:hover { background: #ecfdf5; color: #15803d; }
 .user-info { color: var(--muted); font-size: 0.85rem; display: flex; align-items: center; gap: 8px; }
+/* Одинаковая высота кнопок ⚙ и «Выйти» */
+.user-info .btn {
+  height: 32px;
+  box-sizing: border-box;
+}
+.user-info .btn-icon {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+}
 .btn-icon {
   min-width: 34px; width: 34px; height: 34px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
@@ -609,7 +620,7 @@ html.eklk-authed #appScreen { display: flex !important; }
   gap: 8px;
 }
 /* Деталка: высота = весь чек, без внутреннего скролла (скроллится страница) */
-/* Превью: блок «Состав чека» на всю высоту документа.
+/* Превью: блок «Состав документа» на всю высоту документа.
    Скролл — у внешней панели (sticky), не внутри .receipt-view.
    Список — страница; превью — отдельно при hover/клике. */
 .orders-detail-pane {
@@ -720,13 +731,37 @@ html.eklk-authed #appScreen { display: flex !important; }
 }
 
 .receipt-view .r-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
   margin-bottom: 12px;
   padding-bottom: 10px;
   border-bottom: 1px dashed var(--border);
 }
-.receipt-view .r-head .r-title { font-weight: 700; font-size: 1rem; }
-.receipt-view .r-head .r-meta { color: var(--muted); font-size: 0.78rem; margin-top: 4px; word-break: break-word; overflow-wrap: anywhere; }
+.receipt-view .r-head .r-title,
+.receipt-view .r-head .r-meta {
+  display: block;
+  width: 100%;
+  text-align: center;
+  box-sizing: border-box;
+}
+.receipt-view .r-head .r-title {
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+.receipt-view .r-head .r-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: 6px;
+  line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.receipt-view .r-head .r-meta .badge {
+  vertical-align: middle;
+}
 .receipt-view .r-line {
   display: flex;
   flex-wrap: wrap;
