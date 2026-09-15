@@ -73,11 +73,11 @@ eklk/
 │   ├── main.py                 # FastAPI app, static, templates
 │   ├── clients/ecomkassa.py    # HTTP-клиент к EcomKassa (fiscal + mobile)
 │   ├── routers/
-│   │   ├── auth.py             # login, me, firm, select-store
+│   │   ├── auth.py             # login, refresh, logout, me, firm, select-store
 │   │   ├── ecom.py             # checks, payment-types, refunds, report
 │   │   └── orders.py           # search + detail чеков
 │   ├── schemas/                # Pydantic: auth, checks, orders
-│   ├── core/                   # config, JWT, sessions (in-memory)
+│   ├── core/                   # config, JWT; sessions → services/session_store
 │   ├── templates/index.html    # SPA-подобная вёрстка ЛК
 │   └── static/js/app.js        # ЯДРО фронта (монолит, стабильное; новые разделы — отдельные scripts)
 ├── start-eklk.sh
@@ -86,27 +86,37 @@ eklk/
 └── requirements.txt
 ```
 
-**Сессии:** in-memory `SESSIONS` (логин → password, group_code, firm). JWT (`SECRET_KEY`) не переживает рестарт сервера без повторного login.
+**Сессии (сервер):** Redis (production) или memory (dev). Ключи `eklk:session:{login}` и `eklk:sid:{session_id}`. Password / ecom_token в Redis зашифрованы (Fernet от `SECRET_KEY`).
+
+**Авторизация:**
+- короткий **access JWT** (`ACCESS_TOKEN_EXPIRE_MINUTES`, по умолчанию 30 мин) — заголовок `Authorization: Bearer`;
+- долгая «память» устройства — HttpOnly cookie **`eklk_sid`** + `POST /api/v1/auth/refresh` (sliding TTL);
+- чекбокс «Запомнить на этом компьютере» → `remember: true` при login (TTL ~`SESSION_REMEMBER_DAYS`);
+- без галочки → TTL ~`SESSION_TTL_HOURS`.
 
 **localStorage (браузер):**
 
 | Ключ | Назначение |
 |------|------------|
-| `eklk_token` | JWT (очищается при «Выйти») |
+| `eklk_token` | Кэш access JWT (обновляется через refresh; очищается при «Выйти») |
 | `eklk_group` | Последний `storeId` / group_code (**сохраняется** после выхода) |
+
+Подробнее: `docs/DEPLOY.md` § «Авторизация и Запомнить меня».
 
 ---
 
 ## Backend API (наш `/api/v1`)
 
-Все пути кроме login требуют `Authorization: Bearer <jwt>`.
+API-методы (кроме login/refresh/logout) требуют `Authorization: Bearer <jwt>`. Cookie `eklk_sid` сама по себе API не открывает — только для `/auth/refresh`.
 
 ### Auth
 
 | Метод | Путь | Описание |
 |-------|------|----------|
-| POST | `/api/v1/auth/login` | Логин EcomKassa → JWT + firm + selected_store_id |
-| POST | `/api/v1/auth/login/form` | OAuth2 form (Swagger) |
+| POST | `/api/v1/auth/login` | Логин EcomKassa → JWT + Set-Cookie `eklk_sid`; body: `username`, `password`, `remember?` |
+| POST | `/api/v1/auth/login/form` | OAuth2 form (Swagger); optional form field `remember` |
+| POST | `/api/v1/auth/refresh` | Тихий renew access JWT по cookie `eklk_sid` (без body) |
+| POST | `/api/v1/auth/logout` | Удалить session + cookie (Bearer необязателен) |
 | GET | `/api/v1/auth/me` | Текущий пользователь + firm |
 | GET | `/api/v1/auth/firm` | Обновить профиль фирмы с API |
 | POST | `/api/v1/auth/select-store` | `{ "store_id": 97 }` → session group_code |
@@ -238,7 +248,9 @@ Base URL по умолчанию: `https://app.ecomkassa.ru`
 | `ECOMKASSA_BASE_URL` | API шлюз (`https://app.ecomkassa.ru`) |
 | `ECOMKASSA_GROUP_CODE` | Fallback group, если профиль без stores |
 | `SECRET_KEY` | JWT |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Время жизни JWT |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Время жизни **access** JWT (мин), default 30 |
+| `SESSION_TTL_HOURS` / `SESSION_REMEMBER_DAYS` | TTL серверной сессии / cookie |
+| `SESSION_COOKIE_*` | Имя, Secure, SameSite cookie `eklk_sid` |
 
 Логин/пароль из `.env` — только fallback для фоновых задач; пользователь вводит свои в UI.
 

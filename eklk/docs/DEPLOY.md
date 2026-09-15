@@ -80,7 +80,13 @@ nano .env   # или vi
 DEBUG=false
 LOG_LEVEL=INFO
 SECRET_KEY=<длинная_случайная_строка_не_меньше_32_символов>
-ACCESS_TOKEN_EXPIRE_MINUTES=480
+# Короткий access JWT (минуты). Долгая «память» — cookie eklk_sid + /auth/refresh
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+SESSION_TTL_HOURS=24
+SESSION_REMEMBER_DAYS=400
+SESSION_COOKIE_NAME=eklk_sid
+SESSION_COOKIE_SECURE=true
+SESSION_COOKIE_SAMESITE=lax
 
 SESSION_BACKEND=redis
 REDIS_URL=redis://127.0.0.1:6379/0
@@ -203,8 +209,13 @@ Backup SQLite: копируйте `eklk.db` **и** при наличии `eklk.d
 |------------|------------|----------|
 | `DEBUG` | `false` | Режим отладки |
 | `LOG_LEVEL` | `INFO` | Уровень логов |
-| `SECRET_KEY` | **свой** | Подпись JWT; не дефолт из example |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `480` | Срок JWT (мин) |
+| `SECRET_KEY` | **свой** | Подпись JWT + Fernet сессий; не дефолт из example |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Срок **access** JWT (мин); не путать с cookie |
+| `SESSION_TTL_HOURS` | `24` | TTL сессии без «Запомнить» |
+| `SESSION_REMEMBER_DAYS` | `400` | TTL сессии с «Запомнить на этом компьютере» |
+| `SESSION_COOKIE_NAME` | `eklk_sid` | HttpOnly cookie session id |
+| `SESSION_COOKIE_SECURE` | `true` (HTTPS) | `Secure` на cookie; на http-only стенде `false` |
+| `SESSION_COOKIE_SAMESITE` | `lax` | SameSite для cookie |
 | `SESSION_BACKEND` | `redis` | `memory` только для 1 process / dev |
 | `REDIS_URL` | `redis://127.0.0.1:6379/0` | Redis для сессий |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./eklk.db` | Настройки (тема, org) |
@@ -218,6 +229,36 @@ Backup SQLite: копируйте `eklk.db` **и** при наличии `eklk.d
 При `SESSION_BACKEND=redis` и недоступном Redis приложение **стартует с fallback на memory** и пишет ERROR в лог. При 2 workers сессии снова разъедутся — Redis обязателен для production.
 
 Поля `password` и `ecom_token` в Redis хранятся **зашифрованными** (Fernet от `SECRET_KEY`). Смена `SECRET_KEY` требует повторного входа всех пользователей.
+
+### Авторизация и «Запомнить меня»
+
+| Элемент | Поведение |
+|---------|-----------|
+| Access JWT | Короткий (`ACCESS_TOKEN_EXPIRE_MINUTES`), в `Authorization: Bearer` |
+| Cookie `eklk_sid` | HttpOnly; TTL 24 ч или ~400 дней при `remember=true` |
+| Redis | `eklk:session:{login}` + `eklk:sid:{session_id}` |
+| `POST /api/v1/auth/login` | body: `username`, `password`, `remember` → JWT + Set-Cookie |
+| `POST /api/v1/auth/refresh` | только cookie → новый JWT; sliding TTL сессии |
+| `POST /api/v1/auth/logout` | удаляет session + cookie (JWT не обязателен) |
+
+При refresh вызывается `getToken` к EcomKassa. Если пароль сменён — сессия и cookie сбрасываются (`401`).
+
+Фронт (`app.js`): при `401` один общий `refreshPromise` (без гонок) и один retry; на старте страницы — попытка refresh по cookie, если нет JWT.
+
+Проверка после деплоя:
+
+```bash
+# логин с remember
+curl -sS -c /tmp/eklk.ck -X POST http://127.0.0.1:8000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"...","password":"...","remember":true}' | head -c 200; echo
+
+# тихий refresh по cookie
+curl -sS -b /tmp/eklk.ck -X POST http://127.0.0.1:8000/api/v1/auth/refresh | head -c 200; echo
+
+redis-cli keys 'eklk:session:*'
+redis-cli keys 'eklk:sid:*'
+```
 
 ---
 
