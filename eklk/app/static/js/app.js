@@ -4,6 +4,8 @@
   let paymentTypes = [];
   let groupCode = localStorage.getItem("eklk_group") || "";
   let firmData = null; // { firm_id, firm_name, tax_identity, tax_variant, stores: [...] }
+  let currentLogin = ""; // EcomKassa login for Bitrix widget context
+  let bitrixWidget = null;
   let createAttempted = false; // contact error only after submit attempt
 
   const $ = (s) => document.querySelector(s);
@@ -277,6 +279,8 @@
       }).catch(() => {});
     }
     token = "";
+    currentLogin = "";
+    bitrixWidget = null;
     if (clearStorage) {
       localStorage.removeItem("eklk_token");
       // eklk_group (last store) intentionally kept across logout
@@ -2061,6 +2065,68 @@
   }
 
   // ---- Auth ----
+
+  /** Context for Bitrix24 live chat (page + EcomKassa login + firm). No secrets. */
+  function buildBitrixCustomData() {
+    let login = currentLogin || "";
+    if (!login) {
+      try {
+        const me = JSON.parse(sessionStorage.getItem("eklk_me") || "null");
+        if (me && (me.username || me.email)) login = me.username || me.email || "";
+      } catch (e) { /* ignore */ }
+    }
+    if (!login && $("#userName")) {
+      login = ($("#userName").textContent || "").trim();
+    }
+    const firmName = (firmData && firmData.firm_name) || "—";
+    const firmInn = (firmData && firmData.tax_identity) || "—";
+    const firmId = (firmData && firmData.firm_id) || "—";
+    const store = groupCode ? String(groupCode) : "—";
+    const pageUrl = location.href || "";
+    const pageTitle = document.title || location.pathname || pageUrl;
+    const pageLine = pageUrl
+      ? ("[url=" + pageUrl + "]" + pageTitle + "[/url]")
+      : pageTitle;
+
+    const grid = [
+      { NAME: "Страница", VALUE: pageLine, DISPLAY: "LINE" },
+      { NAME: "Логин EcomKassa", VALUE: login || "—", DISPLAY: "LINE" },
+      { NAME: "Организация", VALUE: firmName, DISPLAY: "LINE" },
+      { NAME: "ИНН", VALUE: String(firmInn), DISPLAY: "LINE" },
+      { NAME: "Firm ID", VALUE: String(firmId), DISPLAY: "LINE" },
+      { NAME: "Магазин (storeId)", VALUE: store, DISPLAY: "LINE" },
+    ];
+    return [
+      { USER: { NAME: login || "EKLK guest" } },
+      { GRID: grid },
+    ];
+  }
+
+  function pushBitrixLiveChatContext() {
+    try {
+      const data = buildBitrixCustomData();
+      if (bitrixWidget && typeof bitrixWidget.setCustomData === "function") {
+        bitrixWidget.setCustomData(data);
+        return true;
+      }
+    } catch (e) {
+      console.warn("Bitrix setCustomData", e);
+    }
+    return false;
+  }
+
+  // Bitrix widget fires when live chat is ready (loader is after app.js in index.html)
+  try {
+    window.addEventListener("onBitrixLiveChat", function (event) {
+      try {
+        bitrixWidget = event && event.detail && event.detail.widget;
+        pushBitrixLiveChatContext();
+      } catch (e) {
+        console.warn("onBitrixLiveChat", e);
+      }
+    });
+  } catch (e) { /* ignore */ }
+
   async function afterLogin(loginPayload) {
     try { document.documentElement.classList.add("eklk-authed"); } catch (e) { /* ignore */ }
     if ($("#loginScreen")) $("#loginScreen").classList.add("hidden");
@@ -2083,6 +2149,7 @@
       } else {
         const me = await api("/auth/me");
         if ($("#userName")) $("#userName").textContent = me.username || me.email || "";
+        currentLogin = me.username || me.email || currentLogin || "";
         const preferred =
           srv.preferredStore ||
           localStorage.getItem("eklk_group") ||
@@ -2093,7 +2160,9 @@
       if (me2 && $("#userName")) $("#userName").textContent = me2.username || me2.email || "";
       if (me2) {
         try { sessionStorage.setItem("eklk_me", JSON.stringify(me2)); } catch (e) { /* ignore */ }
+        currentLogin = me2.username || me2.email || currentLogin || "";
       }
+      pushBitrixLiveChatContext();
       await loadPaymentTypes();
       ensureItem("c_items", updateCreateSummary);
       ensureItem("p_items", updatePaySummary);
@@ -4995,6 +5064,8 @@
     showTab,
     get firmData() { return firmData; },
     get groupCode() { return groupCode; },
+    get currentLogin() { return currentLogin; },
+    pushBitrixLiveChatContext,
     API,
   };
 })();
