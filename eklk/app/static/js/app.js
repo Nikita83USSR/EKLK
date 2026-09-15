@@ -3944,18 +3944,17 @@
       const kind = String((fiscal && fiscal.kind) || "").toUpperCase();
       return ot === "INVC" || ot.includes("INVOICE") || kind.includes("INVOICE");
     })();
+    const docTitle = isCorr ? "Чек коррекции" : isInvcDoc ? "Счёт на оплату" : "Кассовый чек";
+    const docNo = summary?.order_id != null ? summary.order_id : (oid != null ? oid : "—");
+    const stRaw = summary?.status != null ? String(summary.status) : "";
+    const stKey = stRaw.toLowerCase().trim();
+    const stLabel = (typeof STATUS_LABELS !== "undefined" && STATUS_LABELS[stKey]) ? STATUS_LABELS[stKey] : (stRaw || "—");
+    const dtLabel = formatDt(summary?.updated) || "—";
     let html = `<div class="r-head">
-      <div class="r-title">${isCorr ? "Чек коррекции" : isInvcDoc ? "Счёт на оплату" : "Кассовый чек"}</div>
-      <div class="r-meta">№ ${escHtml(summary?.order_id ?? "—")} · ${escHtml(orderTypeLabel(summary || {}))} · ${statusBadge(summary?.status || "")}</div>
-      <div class="r-meta">${escHtml(formatDt(summary?.updated))}</div>
-      ${(atol5 && atol5.external_id) ? `<div class="r-meta">Внешний ID: ${escHtml(atol5.external_id)}</div>` : (summary?.external_id ? `<div class="r-meta">Внешний ID: ${escHtml(summary.external_id)}</div>` : "")}`;
-    if (!opts.hideEdit) {
-      html += `
-      <div class="r-head-actions">
-        <button type="button" class="btn btn-sm btn-secondary" id="o_detail_edit" data-order-id="${oid}">Действие</button>
-      </div>`;
-    }
-    html += `
+      <div class="r-title">${escHtml(docTitle)} - № ${escHtml(docNo)}</div>
+      <div class="r-meta">Статус - ${escHtml(stLabel)}</div>
+      <div class="r-meta">Дата - ${escHtml(dtLabel)}</div>
+      ${(atol5 && atol5.external_id) ? `<div class="r-meta">Внешний ID: ${escHtml(atol5.external_id)}</div>` : (summary?.external_id ? `<div class="r-meta">Внешний ID: ${escHtml(summary.external_id)}</div>` : "")}
     </div>`;
     const payLink = extractPaymentLink(summary, fiscal);
     const invoiceWait = isInvoiceWaitingPayment(summary, fiscal);
@@ -4128,7 +4127,7 @@
     const oid = summary && summary.order_id != null ? summary.order_id : ordersSelectedId;
     el.innerHTML =
       `<button type="button" class="r-detail-close" id="o_detail_close" title="Закрыть" aria-label="Закрыть">×</button>` +
-      buildReceiptHtml(atol5, summary, fiscal, { hideEdit: false });
+      buildReceiptHtml(atol5, summary, fiscal, { hideEdit: true });
     const closeBtn = $("#o_detail_close");
     if (closeBtn) {
       closeBtn.onclick = (ev) => {

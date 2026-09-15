@@ -620,7 +620,7 @@ html.eklk-authed #appScreen { display: flex !important; }
   gap: 8px;
 }
 /* Деталка: высота = весь чек, без внутреннего скролла (скроллится страница) */
-/* Превью: блок «Состав чека» на всю высоту документа.
+/* Превью: блок «Состав документа» на всю высоту документа.
    Скролл — у внешней панели (sticky), не внутри .receipt-view.
    Список — страница; превью — отдельно при hover/клике. */
 .orders-detail-pane {
@@ -736,8 +736,9 @@ html.eklk-authed #appScreen { display: flex !important; }
   padding-bottom: 10px;
   border-bottom: 1px dashed var(--border);
 }
-.receipt-view .r-head .r-title { font-weight: 700; font-size: 1rem; }
-.receipt-view .r-head .r-meta { color: var(--muted); font-size: 0.78rem; margin-top: 4px; word-break: break-word; overflow-wrap: anywhere; }
+.receipt-view .r-head .r-title { font-weight: 700; font-size: 1rem; text-align: center; }
+.receipt-view .r-head .r-meta { color: var(--muted); font-size: 0.78rem; margin-top: 4px; text-align: center; word-break: break-word; overflow-wrap: anywhere; }
+.receipt-view .r-head .r-meta .r-label { color: var(--muted); }
 .receipt-view .r-line {
   display: flex;
   flex-wrap: wrap;
