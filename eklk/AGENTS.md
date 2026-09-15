@@ -156,7 +156,8 @@ UI раньше слал 1/2/14 — это **ошибка** относитель
   Подключать в конце `body`, высокий z-index (см. `app.css`).
 - Footer: ИП Носов А.С., support@ecomkassa.ru, ссылки на оферты/docs.
 - Cache-bust: query `?v=YYYYMMDD…` на css/js/logo в `index.html`.
-- Темы: light / dark / glass (`body[data-theme]`), переключатель в Настройках → Внешний вид.
+- Темы: light / dark / glass / pro (`body[data-theme]`), переключатель в Настройках → Внешний вид.
+  Тема `pro` изолирована в `app/static/css/pro-theme.css` и повторяет визуальный язык Ecomkassa.pro.
 
 ### Вкладки / URL (клиентский роутинг)
 

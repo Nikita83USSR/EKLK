@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class UserSettingsData(BaseModel):
-    theme: Optional[str] = Field(None, description="light | dark | glass")
+    theme: Optional[str] = Field(None, description="light | dark | glass | pro")
     last_pay_type: Optional[str] = Field(None, description="Last selected payment provider id")
     selected_store_id: Optional[str | int] = Field(None, description="Default storeId per login")
 
