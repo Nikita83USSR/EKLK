@@ -2547,6 +2547,8 @@
       iframe.title = "ИИ-кассир";
       host.appendChild(iframe);
     }
+    // Permissions Policy: без allow микрофон в iframe блокируется браузером
+    iframe.setAttribute("allow", "microphone");
     if (iframe.src !== embedUrl) {
       iframe.src = embedUrl;
     }
