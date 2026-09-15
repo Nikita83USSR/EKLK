@@ -1,0 +1,416 @@
+/*
+ * Minimalism theme — black / white / gray only.
+ * Compact dense UI: smaller type and tighter spacing (Novofon-like light cabinet).
+ */
+body[data-theme="minimal"] {
+  --bg: #f0f0f0;
+  --surface: #ffffff;
+  --surface2: #f5f5f5;
+  --border: #e0e0e0;
+  --text: #1a1a1a;
+  --muted: #6b6b6b;
+  --accent: #333333;
+  --accent-hover: #111111;
+  --primary: #333333;
+  --danger: #444444;
+  --radius: 6px;
+  --shadow: none;
+  --input-bg: #ffffff;
+  --input-border: #d0d0d0;
+  color-scheme: light;
+  background: var(--bg);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+body[data-theme="minimal"] .header {
+  min-height: 48px;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+body[data-theme="minimal"] .header-inner,
+body[data-theme="minimal"] .footer-inner,
+body[data-theme="minimal"] .container {
+  width: min(100%, 1400px);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+body[data-theme="minimal"] .container {
+  padding-top: 12px;
+  padding-bottom: 16px;
+}
+
+body[data-theme="minimal"] .header-logo,
+body[data-theme="minimal"] .login-logo {
+  filter: none;
+}
+
+body[data-theme="minimal"] .nav {
+  gap: 2px;
+  border: 0;
+}
+
+body[data-theme="minimal"] .nav button,
+body[data-theme="minimal"] .nav button:last-child {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+}
+
+body[data-theme="minimal"] .nav button:hover,
+body[data-theme="minimal"] .nav button.active,
+body[data-theme="minimal"] .nav-dropdown.is-active > .nav-dropdown-btn {
+  background: #eee;
+  color: var(--text);
+}
+
+body[data-theme="minimal"] .nav-dropdown-menu {
+  padding: 4px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+body[data-theme="minimal"] .nav-dropdown-menu button {
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+body[data-theme="minimal"] .nav-dropdown-menu button:hover,
+body[data-theme="minimal"] .nav-dropdown-menu button.active {
+  background: #f0f0f0;
+  color: var(--text);
+}
+
+body[data-theme="minimal"] .card,
+body[data-theme="minimal"] .aside-card,
+body[data-theme="minimal"] .login-card,
+body[data-theme="minimal"] .modal-dialog,
+body[data-theme="minimal"] .store-card,
+body[data-theme="minimal"] .tpl-card,
+body[data-theme="minimal"] .dash-card,
+body[data-theme="minimal"] .dash-action,
+body[data-theme="minimal"] .ai-cashier-embed {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: none;
+  color: var(--text);
+  padding: 12px 14px;
+}
+
+body[data-theme="minimal"] .card::before,
+body[data-theme="minimal"] .aside-card::before {
+  display: none;
+}
+
+body[data-theme="minimal"] .section-title,
+body[data-theme="minimal"] .card h2 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  letter-spacing: 0;
+}
+
+body[data-theme="minimal"] .hint,
+body[data-theme="minimal"] label,
+body[data-theme="minimal"] .card-desc,
+body[data-theme="minimal"] .tpl-card-meta,
+body[data-theme="minimal"] .store-card-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+body[data-theme="minimal"] input:not([type="checkbox"]):not([type="radio"]),
+body[data-theme="minimal"] select,
+body[data-theme="minimal"] textarea,
+body[data-theme="minimal"] .pay-link-input {
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 4px !important;
+  background: var(--input-bg) !important;
+  border: 1px solid var(--input-border) !important;
+  color: var(--text) !important;
+  box-shadow: none;
+  color-scheme: light;
+}
+
+body[data-theme="minimal"] input:focus,
+body[data-theme="minimal"] select:focus,
+body[data-theme="minimal"] textarea:focus {
+  border-color: #999 !important;
+  box-shadow: 0 0 0 1px #ccc !important;
+}
+
+body[data-theme="minimal"] .btn {
+  padding: 5px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  background: #2a2a2a;
+  border: 1px solid #2a2a2a;
+  color: #fff;
+  box-shadow: none;
+}
+
+body[data-theme="minimal"] .btn:hover {
+  background: #111;
+  border-color: #111;
+}
+
+body[data-theme="minimal"] .btn-secondary,
+body[data-theme="minimal"] .btn-icon {
+  background: #fff;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+body[data-theme="minimal"] .btn-secondary:hover,
+body[data-theme="minimal"] .btn-icon:hover {
+  background: #f5f5f5;
+  border-color: #ccc;
+}
+
+body[data-theme="minimal"] .btn-sm,
+body[data-theme="minimal"] .orders-toolbar-row .btn-sm {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 4px;
+}
+
+body[data-theme="minimal"] .btn-danger {
+  background: #fff;
+  border-color: #888;
+  color: #333;
+}
+
+body[data-theme="minimal"] .orders-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+body[data-theme="minimal"] .orders-table th,
+body[data-theme="minimal"] .items-table th {
+  background: #fafafa;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 6px 8px;
+  border-color: var(--border);
+}
+
+body[data-theme="minimal"] .orders-table td,
+body[data-theme="minimal"] .items-table td {
+  font-size: 12px;
+  padding: 6px 8px;
+  border-color: #ececec;
+  color: var(--text);
+}
+
+body[data-theme="minimal"] .orders-table tr:hover {
+  background: #f7f7f7;
+}
+
+body[data-theme="minimal"] .orders-table tr.active {
+  background: #ececec;
+}
+
+body[data-theme="minimal"] .badge {
+  border-radius: 4px;
+  font-size: 10px;
+  padding: 2px 6px;
+  font-weight: 600;
+  border: 0;
+}
+
+body[data-theme="minimal"] .badge-status-done {
+  background: #e8e8e8;
+  color: #222;
+}
+
+body[data-theme="minimal"] .badge-status-paid {
+  background: #ddd;
+  color: #222;
+}
+
+body[data-theme="minimal"] .badge-status-wait {
+  background: #f0f0f0;
+  color: #555;
+  border: 1px solid #ddd;
+}
+
+body[data-theme="minimal"] .badge-status-fail {
+  background: #333;
+  color: #fff;
+}
+
+body[data-theme="minimal"] .receipt-view,
+body[data-theme="minimal"] .result-box,
+body[data-theme="minimal"] .warn-box,
+body[data-theme="minimal"] .pay-row,
+body[data-theme="minimal"] .pay-link-panel,
+body[data-theme="minimal"] .clone-banner {
+  background: #fafafa !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 10px !important;
+  color: var(--text) !important;
+}
+
+body[data-theme="minimal"] .receipt-view .r-title,
+body[data-theme="minimal"] .receipt-view .r-item-name,
+body[data-theme="minimal"] .receipt-view .r-total {
+  color: var(--text) !important;
+}
+
+body[data-theme="minimal"] .receipt-view .r-meta,
+body[data-theme="minimal"] .receipt-view .r-item-sub {
+  color: var(--muted);
+}
+
+body[data-theme="minimal"] .settings-tabs {
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+body[data-theme="minimal"] .settings-tab {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  border-color: var(--border);
+  color: var(--muted);
+  background: #fff;
+}
+
+body[data-theme="minimal"] .settings-tab.active,
+body[data-theme="minimal"] .settings-tab:hover {
+  background: #eee;
+  color: var(--text);
+  border-color: #ccc;
+}
+
+body[data-theme="minimal"] .theme-option {
+  border-radius: 6px;
+  padding: 10px;
+  border-color: var(--border);
+  background: #fff;
+}
+
+body[data-theme="minimal"] .theme-option:hover,
+body[data-theme="minimal"] .theme-option:has(input:checked) {
+  border-color: #999;
+  background: #f5f5f5;
+  box-shadow: none;
+}
+
+.theme-swatch-minimal {
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  background: linear-gradient(135deg, #fff 50%, #e5e5e5 50%);
+}
+
+body[data-theme="minimal"] .login-wrap {
+  background: #f0f0f0;
+}
+
+body[data-theme="minimal"] .login-card {
+  padding: 20px;
+  border-top: 1px solid var(--border);
+}
+
+body[data-theme="minimal"] .app-footer {
+  background: #fff;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+body[data-theme="minimal"] .dash-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+body[data-theme="minimal"] .dash-head {
+  margin-bottom: 12px;
+}
+
+body[data-theme="minimal"] .dash-card,
+body[data-theme="minimal"] .dash-action {
+  padding: 12px 14px;
+  min-height: auto;
+}
+
+body[data-theme="minimal"] .dash-action:hover {
+  transform: none;
+  background: #f7f7f7;
+  border-color: #ccc;
+}
+
+body[data-theme="minimal"] .dash-grid {
+  gap: 10px;
+}
+
+body[data-theme="minimal"] .dash-side {
+  gap: 10px;
+}
+
+body[data-theme="minimal"] .dash-metric-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+body[data-theme="minimal"] .store-card.active {
+  border-color: #888;
+  background: #f5f5f5;
+}
+
+body[data-theme="minimal"] code {
+  background: #f0f0f0;
+  color: #333;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+body[data-theme="minimal"] .modal-backdrop {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+body[data-theme="minimal"] .modal-header,
+body[data-theme="minimal"] .modal-footer {
+  border-color: var(--border);
+}
+
+@media (max-width: 900px) {
+  body[data-theme="minimal"] .header {
+    min-height: auto;
+  }
+  body[data-theme="minimal"] .container {
+    padding-top: 8px;
+  }
+  body[data-theme="minimal"] .card,
+  body[data-theme="minimal"] .aside-card {
+    padding: 10px 12px;
+  }
+}

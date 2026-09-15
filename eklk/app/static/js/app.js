@@ -11,9 +11,9 @@
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
 
-  // Тема: light | dark | glass | pro. localStorage = кэш; после login — GET /auth/settings.
+  // Тема: light | dark | glass | pro | minimal. localStorage = кэш; после login — GET /auth/settings.
   const THEME_KEY = "eklk_theme";
-  const THEMES = ["light", "dark", "glass", "pro"];
+  const THEMES = ["light", "dark", "glass", "pro", "minimal"];
   function getStoredTheme() {
     const t = localStorage.getItem(THEME_KEY) || "light";
     return THEMES.includes(t) ? t : "light";

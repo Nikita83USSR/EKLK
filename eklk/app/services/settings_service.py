@@ -44,7 +44,7 @@ FIRM_DEFAULTS: dict[str, Any] = {}
 USER_WRITABLE = frozenset({"theme", "last_pay_type", "selected_store_id"})
 FIRM_WRITABLE = frozenset()  # no firm keys for now
 
-ALLOWED_THEMES = frozenset({"light", "dark", "glass", "pro"})
+ALLOWED_THEMES = frozenset({"light", "dark", "glass", "pro", "minimal"})
 
 
 def _utcnow() -> datetime:
