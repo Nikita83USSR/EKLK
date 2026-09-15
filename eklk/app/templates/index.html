@@ -31,6 +31,10 @@
         <input type="text" id="loginUser" name="username" placeholder="Логин Екомкасса (регистр важен)" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required />
         <label style="margin-top:10px">Пароль</label>
         <input type="password" id="loginPass" autocomplete="current-password" required />
+        <label class="login-remember" style="display:flex;align-items:center;gap:8px;margin-top:12px;font-weight:400;cursor:pointer">
+          <input type="checkbox" id="loginRemember" checked />
+          <span>Запомнить на этом компьютере</span>
+        </label>
         <button type="submit" class="btn btn-block" style="margin-top:16px">Войти</button>
       </form>
       <div class="login-links">

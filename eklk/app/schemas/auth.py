@@ -5,6 +5,10 @@ from typing import Optional, List, Any
 class LoginRequest(BaseModel):
     username: str = Field(..., min_length=2, description="Логин EcomKassa (регистр букв сохраняется, не lower)")
     password: str = Field(..., min_length=1)
+    remember: bool = Field(
+        default=False,
+        description="Запомнить на этом устройстве (долгая session cookie + sliding TTL)",
+    )
 
 
 class StoreOut(BaseModel):

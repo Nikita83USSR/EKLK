@@ -176,11 +176,74 @@
     setTimeout(() => el.classList.add("hidden"), 7000);
   }
 
+  /** Shared refresh promise — prevents parallel /auth/refresh races. */
+  let refreshPromise = null;
+
+  function _authPath(path) {
+    const p = String(path || "");
+    return (
+      p.indexOf("/auth/login") !== -1 ||
+      p.indexOf("/auth/refresh") !== -1 ||
+      p.indexOf("/auth/logout") !== -1
+    );
+  }
+
+  async function refreshAccess() {
+    if (refreshPromise) return refreshPromise;
+    refreshPromise = (async () => {
+      const res = await fetch(API + "/auth/refresh", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = new Error(
+          (typeof data.detail === "string" && data.detail) ||
+            "Сессия истекла. Войдите снова."
+        );
+        err.status = res.status;
+        throw err;
+      }
+      if (!data.access_token) throw new Error("Нет access_token в ответе refresh");
+      token = data.access_token;
+      try {
+        localStorage.setItem("eklk_token", token);
+      } catch (e) { /* ignore */ }
+      return token;
+    })();
+    try {
+      return await refreshPromise;
+    } finally {
+      refreshPromise = null;
+    }
+  }
+
   async function api(path, opts = {}) {
-    const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(API + path, { ...opts, headers });
-    const data = await res.json().catch(() => ({}));
+    const doFetch = async () => {
+      const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch(API + path, { ...opts, headers, credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      return { res, data };
+    };
+
+    let { res, data } = await doFetch();
+
+    // Silent renew once on 401 (except auth endpoints)
+    if (res.status === 401 && !_authPath(path) && !opts._retried) {
+      try {
+        await refreshAccess();
+        opts = { ...opts, _retried: true };
+        ({ res, data } = await doFetch());
+      } catch (e) {
+        logout(true);
+        throw new Error(
+          (e && e.message) || "Сессия истекла. Войдите снова."
+        );
+      }
+    }
+
     const detailMsg = (() => {
       const d = data && data.detail;
       if (typeof d === "string") return d;
@@ -190,10 +253,9 @@
       if (d && typeof d === "object") return d.message || d.msg || JSON.stringify(d);
       return data.error || data.message || res.statusText || "Ошибка запроса";
     })();
-    // 401 on login itself must NOT call logout (no session yet)
+
     if (res.status === 401) {
-      const isLogin = String(path).indexOf("/auth/login") !== -1;
-      if (!isLogin) logout(false);
+      if (!_authPath(path)) logout(true);
       throw new Error(detailMsg || "Сессия истекла. Войдите снова.");
     }
     if (!res.ok) {
@@ -203,6 +265,17 @@
   }
 
   function logout(clearStorage = true) {
+    const hadToken = !!token;
+    // Best-effort server logout (clears httpOnly cookie + Redis/memory session)
+    if (hadToken || clearStorage) {
+      fetch(API + "/auth/logout", {
+        method: "POST",
+        credentials: "include",
+        headers: token
+          ? { "Content-Type": "application/json", Authorization: "Bearer " + token }
+          : { "Content-Type": "application/json" },
+      }).catch(() => {});
+    }
     token = "";
     if (clearStorage) {
       localStorage.removeItem("eklk_token");
@@ -2326,11 +2399,14 @@
       }
       // Логин EcomKassa: регистр букв сохраняем (не email-normalize)
       const loginRaw = (userEl.value || "").trim();
+      const rememberEl = $("#loginRemember");
+      const remember = !!(rememberEl && rememberEl.checked);
       const data = await api("/auth/login", {
         method: "POST",
         body: JSON.stringify({
           username: loginRaw,
           password: passEl.value || "",
+          remember: remember,
         }),
       });
       token = data.access_token;
@@ -4899,7 +4975,20 @@
     };
   }
 
-  if (token) afterLogin().catch(() => logout(true));
+  // Boot: short-lived access in localStorage OR long session cookie via /auth/refresh
+  (async function bootAuth() {
+    try {
+      if (token) {
+        await afterLogin();
+        return;
+      }
+      await refreshAccess();
+      await afterLogin();
+    } catch (e) {
+      logout(true);
+    }
+  })();
+
 
   // CORE: minimal public API for section modules (catalog, reports, …)
   window.EKLK = {

@@ -11,7 +11,14 @@ class Settings(BaseSettings):
     # Production: set DEBUG=false and LOG_LEVEL=INFO in .env
     debug: bool = True
     secret_key: str = Field(default="dev-secret-change-in-production-min-32-chars!!")
-    access_token_expire_minutes: int = 480
+    # Short-lived access JWT (minutes). Long remember uses session cookie + /auth/refresh.
+    access_token_expire_minutes: int = 30
+    # Session cookie (eklk_sid): without remember / with remember
+    session_ttl_hours: int = 24
+    session_remember_days: int = 400
+    session_cookie_name: str = "eklk_sid"
+    session_cookie_secure: bool = False  # set True behind HTTPS in production
+    session_cookie_samesite: str = "lax"
     algorithm: str = "HS256"
 
     ecomkassa_base_url: str = "https://app.ecomkassa.ru"
