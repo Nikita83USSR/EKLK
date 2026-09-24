@@ -876,6 +876,16 @@ div[class*="b24-widget"] {
   pointer-events: auto !important;
 }
 .b24-widget-button-shadow { z-index: 2147482990 !important; }
+/* Скрыть виджет чата, пока открыта модалка (мешает закрыть на мобиле) */
+body.modal-open .b24-widget-button-wrapper,
+body.modal-open .b24-widget-button-position-bottom-right,
+body.modal-open div[class*="b24-widget"],
+body.modal-open .b24-widget-button-shadow {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 
 .clone-banner {
   background: #eff6ff;
@@ -1092,8 +1102,19 @@ body[data-theme="glass"] .orders-table tr:hover {
 }
 
 body[data-theme="dark"] .orders-table tr.active,
-body[data-theme="glass"] .orders-table tr.active {
-  background: rgba(46, 194, 126, 0.16);
+body[data-theme="glass"] .orders-table tr.active,
+body[data-theme="pro"] .orders-table tr.active,
+body[data-theme="dark"] #o_list .orders-table tbody tr.active,
+body[data-theme="glass"] #o_list .orders-table tbody tr.active,
+body[data-theme="pro"] #o_list .orders-table tbody tr.active,
+body[data-theme="dark"] #tab-orders .orders-table tbody tr.active,
+body[data-theme="glass"] #tab-orders .orders-table tbody tr.active,
+body[data-theme="pro"] #tab-orders .orders-table tbody tr.active {
+  background: color-mix(in srgb, var(--accent, #22c55e) 22%, transparent);
+}
+body[data-theme="minimal"] .orders-table tr.active,
+body[data-theme="minimal"] #o_list .orders-table tbody tr.active {
+  background: color-mix(in srgb, var(--text, #1a1a1a) 8%, transparent);
 }
 
 body[data-theme="dark"] .orders-table th,
@@ -1677,11 +1698,34 @@ body[data-theme="glass"] .modal-body .pay-link-input {
   padding: 12px 16px;
 }
 #order_modal_body .receipt-view {
-  border: none;
-  background: transparent;
-  padding: 0;
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 14px 12px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 #order_modal_body .r-detail-close { display: none !important; }
+#order_modal_body .receipt-view .r-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 10px;
+}
+#order_modal_body .receipt-view .r-line > span:last-child {
+  text-align: right;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+#order_modal_body .receipt-view code,
+#order_modal_body .receipt-view .r-meta {
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
 
 .modal-footer {
   display: flex;
@@ -2022,8 +2066,19 @@ body[data-theme="glass"] .modal-footer {
     max-width: 12ch;
   }
   #tab-orders .orders-table tbody td:nth-child(1) {
-    max-width: 7ch;
+    max-width: none;
+    min-width: 8ch;
     font-weight: 600;
+    white-space: normal;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    overflow: visible;
+    text-overflow: unset;
+  }
+  #tab-orders .orders-table tbody td:nth-child(1) code {
+    white-space: normal;
+    word-break: break-all;
+    font-size: 0.7rem;
   }
   #tab-orders .orders-table tbody td:nth-child(6) {
     max-width: 10ch;
@@ -2201,9 +2256,17 @@ body[data-theme="glass"] .modal-footer {
     cursor: pointer;
   }
   #o_list .orders-table tbody tr.active {
-    background: #ecfdf5;
+    background: color-mix(in srgb, var(--accent, #22c55e) 18%, transparent);
     border-color: transparent;
     box-shadow: none;
+  }
+  body[data-theme="dark"] #o_list .orders-table tbody tr.active,
+  body[data-theme="glass"] #o_list .orders-table tbody tr.active,
+  body[data-theme="pro"] #o_list .orders-table tbody tr.active {
+    background: color-mix(in srgb, var(--accent, #22c55e) 22%, transparent);
+  }
+  body[data-theme="minimal"] #o_list .orders-table tbody tr.active {
+    background: color-mix(in srgb, var(--text, #1a1a1a) 8%, transparent);
   }
   #o_list .orders-table tbody td {
     display: table-cell;
@@ -2218,8 +2281,19 @@ body[data-theme="glass"] .modal-footer {
     vertical-align: middle;
   }
   #o_list .orders-table tbody td:nth-child(1) {
-    max-width: 7ch;
+    max-width: none;
+    min-width: 8ch;
     font-weight: 600;
+    white-space: normal;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    overflow: visible;
+    text-overflow: unset;
+  }
+  #o_list .orders-table tbody td:nth-child(1) code {
+    white-space: normal;
+    word-break: break-all;
+    font-size: 0.72rem;
   }
   #o_list .orders-table tbody td:nth-child(2) {
     max-width: 12ch;
@@ -3100,6 +3174,32 @@ body[data-theme="glass"] .it-name-float {
 .orders-table-wrap.orders-compact .orders-table tr + tr td {
   border-top: none;
 }
+/* Сжато: работает и в portrait/landscape mobile (перебиваем !important мобильной таблицы) */
+@media (orientation: portrait), (orientation: landscape) and (max-height: 560px) {
+  #o_list.orders-compact .orders-table,
+  #tab-orders .orders-table-wrap.orders-compact .orders-table {
+    font-size: 0.7rem !important;
+  }
+  #o_list.orders-compact .orders-table th,
+  #tab-orders .orders-table-wrap.orders-compact .orders-table th {
+    padding: 2px 3px !important;
+    font-size: 0.62rem !important;
+  }
+  #o_list.orders-compact .orders-table td,
+  #tab-orders .orders-table-wrap.orders-compact .orders-table td {
+    padding: 1px 3px !important;
+    line-height: 1.2 !important;
+  }
+  #o_list.orders-compact .orders-table .o-view-btn,
+  #o_list.orders-compact .orders-table .o-edit-btn,
+  #tab-orders .orders-table-wrap.orders-compact .o-view-btn,
+  #tab-orders .orders-table-wrap.orders-compact .o-edit-btn {
+    padding: 1px 5px !important;
+    font-size: 0.65rem !important;
+    line-height: 1.2 !important;
+  }
+}
+
 
 /* Поля, заполненные из исходного чека */
 .field-copied {

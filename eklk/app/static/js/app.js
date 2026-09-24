@@ -4424,7 +4424,10 @@
       const data = await api("/orders/" + encodeURIComponent(orderId));
       if (land) {
         const oid = data.summary && data.summary.order_id != null ? data.summary.order_id : orderId;
-        const html = buildReceiptHtml(data.atol5, data.summary, data.fiscal, { hideEdit: true });
+        const html =
+          '<div class="receipt-view">' +
+          buildReceiptHtml(data.atol5, data.summary, data.fiscal, { hideEdit: true }) +
+          "</div>";
         openOrderDetailModal(html, oid);
       } else {
         renderReceipt(data.atol5, data.summary, data.fiscal);
