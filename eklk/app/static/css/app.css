@@ -109,9 +109,8 @@ a { color: var(--primary); text-decoration: none; }
 .nav button { background: transparent; border: none; color: var(--muted); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.875rem; font-family: inherit; font-weight: 500; }
 .nav button.active, .nav button:hover { background: #ecfdf5; color: #15803d; }
 .user-info { color: var(--muted); font-size: 0.85rem; display: flex; align-items: center; gap: 8px; }
-/* ИИ в шапке — только portrait; пункт nav скрыт везде (доступ через header на телефоне) */
+/* ИИ: на десктопе/landscape — пункт nav «ИИ кассир»; на portrait — кнопка в шапке */
 .header-ai-btn { display: none !important; }
-.nav > button[data-tab="ai-cashier"] { display: none !important; }
 
 /* Одинаковая высота кнопок ⚙ и «Выйти» */
 .user-info .btn {
@@ -2293,10 +2292,10 @@ body[data-theme="glass"] .modal-footer {
 }
 
 
-/* Landscape / desktop: без кнопки ИИ в chrome */
+/* Landscape: пункт меню «ИИ кассир», без кнопки в шапке */
 @media (orientation: landscape) {
   .header-ai-btn { display: none !important; }
-  .nav > button[data-tab="ai-cashier"] { display: none !important; }
+  .nav > button[data-tab="ai-cashier"] { display: inline-block !important; }
 }
 
 /* Портрет: список чеков, каталог, чек, ссылка на оплату — без выезда за экран */
