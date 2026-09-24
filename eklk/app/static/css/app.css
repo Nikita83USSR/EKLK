@@ -276,12 +276,12 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
 
   .items-table tbody tr.item-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+    /* наименование + × | цена кол-во ед. агент | ндс предмет признак */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
     grid-template-areas:
-      "name name name"
-      "price qty measure"
-      "vat object method"
-      "agent act act";
+      "name name name act"
+      "price qty measure agent"
+      "vat object method method";
     column-gap: 8px;
     row-gap: 8px;
     width: 100%;
@@ -305,7 +305,6 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
   }
   .items-table tbody tr.item-row > td:nth-child(1) {
     grid-area: name;
-    grid-column: 1 / -1;
     width: 100% !important;
   }
   .items-table tbody tr.item-row > td:nth-child(2) { grid-area: price; }
@@ -317,10 +316,14 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
   .items-table tbody tr.item-row > td:nth-child(8) {
     grid-area: agent;
     text-align: left;
+    align-self: end;
   }
-  .items-table tbody tr.item-row > td:nth-child(9) { grid-area: act; }
+  .items-table tbody tr.item-row > td:nth-child(9) {
+    grid-area: act;
+    align-self: end;
+    justify-self: end;
+  }
 
-  /* подписи на каждой позиции — при 3–4 рядах иначе непонятно */
   .items-table tbody tr.item-row > td::before {
     display: block;
     font-size: 0.7rem;
@@ -339,8 +342,12 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
   .items-table tbody tr.item-row > td:nth-child(5)::before { content: "НДС"; }
   .items-table tbody tr.item-row > td:nth-child(6)::before { content: "Предмет"; }
   .items-table tbody tr.item-row > td:nth-child(7)::before { content: "Признак"; }
-  .items-table tbody tr.item-row > td:nth-child(8)::before { content: "Аг."; }
+  .items-table tbody tr.item-row > td:nth-child(8)::before { content: "Агент"; }
   .items-table tbody tr.item-row > td:nth-child(9)::before { content: "\00a0"; }
+
+  .items-table tbody tr.item-row > td:nth-child(8) input[type="checkbox"] {
+    margin: 0;
+  }
 
   .items-table .it-name,
   .items-table .it-price,
