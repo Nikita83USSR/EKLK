@@ -2313,14 +2313,9 @@ body[data-theme="glass"] .modal-footer {
     display: none !important;
     content: none !important;
   }
+  /* Portrait: «Показать» не нужна — открытие по тапу на строку */
   #o_list .o-view-btn {
-    display: inline-flex !important;
-    align-items: center;
-    padding: 3px 8px;
-    font-size: 0.7rem;
-    line-height: 1.3;
-    min-height: 0;
-    white-space: nowrap;
+    display: none !important;
   }
   #o_list .o-edit-btn {
     padding: 3px 6px;
