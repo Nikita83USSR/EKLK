@@ -2143,14 +2143,13 @@ body[data-theme="glass"] .modal-footer {
     max-width: 100%;
   }
   #tab-orders .orders-list-pane,
-  #tab-orders .orders-detail-pane,
   #tab-catalog .card {
     min-width: 0;
     max-width: 100%;
   }
+  /* Документы portrait: превью только в модалке, не внизу списка */
   #tab-orders .orders-detail-pane {
-    position: static;
-    max-height: none;
+    display: none !important;
   }
 
   /* фильтры чеков — в одну колонку */
@@ -2163,81 +2162,120 @@ body[data-theme="glass"] .modal-footer {
     width: 100%;
   }
 
-  /* список чеков — карточки, не широкая таблица */
+  /* список документов — компактная таблица (не карточки) */
   #o_list {
     max-width: 100%;
-    overflow-x: hidden;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   #o_list .orders-table {
     min-width: 0 !important;
     width: 100%;
-    border-collapse: separate;
+    border-collapse: collapse;
     border-spacing: 0;
+    font-size: 0.75rem;
+    table-layout: auto;
   }
   #o_list .orders-table thead {
-    display: none;
+    display: table-header-group;
+  }
+  #o_list .orders-table thead th {
+    padding: 6px 4px;
+    font-size: 0.68rem;
+    white-space: nowrap;
   }
   #o_list .orders-table tbody {
-    display: block;
+    display: table-row-group;
     width: 100%;
   }
   #o_list .orders-table tbody tr {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas:
-      "id date"
-      "type status"
-      "total store"
-      "act act";
-    gap: 6px 10px;
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-    margin: 0 0 10px;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface, transparent);
+    display: table-row;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    grid-template-columns: none;
+    grid-template-areas: none;
     cursor: pointer;
   }
   #o_list .orders-table tbody tr.active {
-    border-color: var(--primary, #22c55e);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary, #22c55e) 40%, transparent);
+    background: #ecfdf5;
+    border-color: transparent;
+    box-shadow: none;
   }
   #o_list .orders-table tbody td {
-    display: block;
+    display: table-cell;
     border: none !important;
-    padding: 0 !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding: 6px 4px !important;
     min-width: 0;
-    max-width: 100%;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    max-width: 11ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
   }
-  #o_list .orders-table tbody td:nth-child(1) { grid-area: id; font-weight: 600; }
-  #o_list .orders-table tbody td:nth-child(2) { grid-area: date; text-align: right; color: var(--muted); font-size: 0.8rem; }
-  #o_list .orders-table tbody td:nth-child(3) { grid-area: type; }
-  #o_list .orders-table tbody td:nth-child(4) { grid-area: status; text-align: right; }
-  #o_list .orders-table tbody td:nth-child(5) { grid-area: total; font-weight: 600; }
-  #o_list .orders-table tbody td:nth-child(6) { grid-area: store; text-align: right; font-size: 0.82rem; color: var(--muted); }
-  #o_list .orders-table tbody td:nth-child(7) { grid-area: act; }
-  #o_list .orders-table tbody td:nth-child(7) .btn {
-    width: 100%;
-    margin-top: 4px;
+  #o_list .orders-table tbody td:nth-child(1) {
+    max-width: 7ch;
+    font-weight: 600;
   }
-  #o_list .orders-table tbody td:nth-child(1)::before,
-  #o_list .orders-table tbody td:nth-child(3)::before,
-  #o_list .orders-table tbody td:nth-child(5)::before,
-  #o_list .orders-table tbody td:nth-child(6)::before {
-    display: block;
-    font-size: 0.68rem;
-    font-weight: 500;
+  #o_list .orders-table tbody td:nth-child(2) {
+    max-width: 12ch;
     color: var(--muted);
-    margin-bottom: 2px;
+    font-size: 0.72rem;
   }
-  #o_list .orders-table tbody td:nth-child(1)::before { content: "ID"; }
-  #o_list .orders-table tbody td:nth-child(3)::before { content: "Тип"; }
-  #o_list .orders-table tbody td:nth-child(5)::before { content: "Сумма"; }
-  #o_list .orders-table tbody td:nth-child(6)::before { content: "Магазин"; }
+  #o_list .orders-table tbody td:nth-child(5) {
+    font-weight: 600;
+  }
+  #o_list .orders-table tbody td:nth-child(6) {
+    max-width: 9ch;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+  #o_list .orders-table tbody td:last-child {
+    max-width: none;
+    white-space: nowrap;
+  }
+  #o_list .orders-table tbody td::before {
+    display: none !important;
+    content: none !important;
+  }
+  #o_list .o-view-btn {
+    display: inline-flex !important;
+    align-items: center;
+    padding: 3px 8px;
+    font-size: 0.7rem;
+    line-height: 1.3;
+    min-height: 0;
+    white-space: nowrap;
+  }
+  #o_list .o-edit-btn {
+    padding: 3px 6px;
+    font-size: 0.7rem;
+    line-height: 1.3;
+    min-height: 0;
+  }
+  #o_list .orders-row-actions {
+    display: inline-flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  #o_list .orders-row-actions .btn {
+    width: auto;
+    margin-top: 0;
+  }
+  /* Модалка документа на портрете */
+  #orderDetailModal .modal-dialog-order {
+    width: min(480px, 96vw);
+    max-height: 92dvh;
+    max-height: 92vh;
+  }
+  #orderDetailModal .modal-body {
+    max-height: calc(92dvh - 120px);
+    max-height: calc(92vh - 120px);
+  }
 
   /* каталог — фильтры и кнопки */
   #tab-catalog .orders-filters {

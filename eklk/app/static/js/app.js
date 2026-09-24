@@ -4289,6 +4289,18 @@
     }
   }
 
+  /** Мобильный просмотр документа в модалке: landscape phone или portrait (не десктоп). */
+  function isOrdersMobileModal() {
+    try {
+      if (!window.matchMedia) return false;
+      if (window.matchMedia("(orientation: landscape) and (max-height: 560px)").matches) return true;
+      if (window.matchMedia("(orientation: portrait) and (max-width: 960px)").matches) return true;
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function closeOrderDetailModal() {
     const modal = $("#orderDetailModal");
     if (!modal) return;
@@ -4384,7 +4396,7 @@
     $$("#o_list tr[data-order-id]").forEach((tr) => {
       tr.classList.toggle("active", String(tr.dataset.orderId) === String(orderId));
     });
-    const land = isOrdersLandscapeMobile();
+    const land = isOrdersMobileModal();
     const el = $("#o_detail");
     const ph = $("#o_detail_placeholder");
     if (!land) {
