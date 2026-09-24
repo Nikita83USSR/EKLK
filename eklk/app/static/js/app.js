@@ -3493,6 +3493,7 @@
       ph.textContent = "Выберите чек в списке слева";
     }
     $$(".orders-table tr.active").forEach((tr) => tr.classList.remove("active"));
+    try { closeOrderDetailModal(); } catch (e) { /* ignore */ }
   }
 
   function toIsoLocal(val) {
@@ -3704,7 +3705,10 @@
               <td>${statusBadge(r.status)}</td>
               <td>${formatMoney(r.total)}</td>
               <td>${r.store_name || r.store_id || "—"}</td>
-              <td><button type="button" class="btn btn-sm btn-secondary o-edit-btn" data-order-id="${id}" title="Действия с документом">Действие</button></td>
+              <td><span class="orders-row-actions">
+                <button type="button" class="btn btn-sm o-view-btn" data-order-id="${id}" title="Показать документ">Показать</button>
+                <button type="button" class="btn btn-sm btn-secondary o-edit-btn" data-order-id="${id}" title="Действия с документом">Действие</button>
+              </span></td>
             </tr>`;
           })
           .join("")}
@@ -3725,8 +3729,15 @@
     });
     list.querySelectorAll("tr[data-order-id]").forEach((tr) => {
       tr.onclick = (ev) => {
-        if (ev.target && ev.target.closest && ev.target.closest(".o-edit-btn")) return;
+        if (ev.target && ev.target.closest && ev.target.closest(".o-edit-btn, .o-view-btn")) return;
         openOrderDetail(tr.dataset.orderId);
+      };
+    });
+    list.querySelectorAll(".o-view-btn").forEach((btn) => {
+      btn.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        openOrderDetail(btn.dataset.orderId);
       };
     });
     list.querySelectorAll(".o-edit-btn").forEach((btn) => {
@@ -4266,23 +4277,153 @@
     requestAnimationFrame(() => focusOrdersDetailPane());
   }
 
+
+  function isOrdersLandscapeMobile() {
+    try {
+      return !!(
+        window.matchMedia &&
+        window.matchMedia("(orientation: landscape) and (max-height: 560px)").matches
+      );
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function closeOrderDetailModal() {
+    const modal = $("#orderDetailModal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("modal-open");
+    const body = $("#order_modal_body");
+    if (body) body.innerHTML = '<p class="hint">Загрузка…</p>';
+  }
+
+  function bindReceiptActions(root, oid) {
+    if (!root) return;
+    const closeBtn = root.querySelector("#o_detail_close, .r-detail-close");
+    if (closeBtn) {
+      closeBtn.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        clearOrderSelection();
+        closeOrderDetailModal();
+      };
+    }
+    const editBtn = root.querySelector("#o_detail_edit");
+    if (editBtn) {
+      editBtn.onclick = () => {
+        const id = editBtn.dataset.orderId || oid;
+        closeOrderDetailModal();
+        editOrderAsNew(id);
+      };
+    }
+    const copyBtn = root.querySelector("#o_pay_copy");
+    if (copyBtn) {
+      copyBtn.onclick = async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const link = copyBtn.getAttribute("data-link") || "";
+        if (!link) return;
+        try {
+          await navigator.clipboard.writeText(link);
+          const prev = copyBtn.textContent;
+          copyBtn.textContent = "Скопировано";
+          setTimeout(() => { copyBtn.textContent = prev || "Скопировать"; }, 1500);
+          showAlert("Ссылка скопирована", "success");
+        } catch (e) {
+          try {
+            const ta = document.createElement("textarea");
+            ta.value = link;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+            showAlert("Ссылка скопирована", "success");
+          } catch (e2) {
+            showAlert("Не удалось скопировать — откройте ссылку вручную");
+          }
+        }
+      };
+    }
+  }
+
+  function openOrderDetailModal(html, oid) {
+    const modal = $("#orderDetailModal");
+    const body = $("#order_modal_body");
+    const title = $("#orderDetailModalTitle");
+    if (!modal || !body) return;
+    if (title) title.textContent = oid != null ? ("Документ № " + oid) : "Документ";
+    body.innerHTML = html;
+    bindReceiptActions(body, oid);
+    const editFooter = $("#order_modal_edit");
+    if (editFooter) {
+      editFooter.onclick = () => {
+        closeOrderDetailModal();
+        if (oid != null) editOrderAsNew(oid);
+      };
+    }
+    $$("[data-close-order-modal]").forEach((el) => {
+      el.onclick = () => closeOrderDetailModal();
+    });
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("modal-open");
+    const onEsc = (e) => {
+      if (e.key === "Escape") {
+        closeOrderDetailModal();
+        document.removeEventListener("keydown", onEsc);
+      }
+    };
+    document.addEventListener("keydown", onEsc);
+    body.scrollTop = 0;
+  }
+
   async function openOrderDetail(orderId) {
     ordersSelectedId = orderId;
     $$("#o_list tr[data-order-id]").forEach((tr) => {
       tr.classList.toggle("active", String(tr.dataset.orderId) === String(orderId));
     });
+    const land = isOrdersLandscapeMobile();
     const el = $("#o_detail");
     const ph = $("#o_detail_placeholder");
-    if (ph) {
-      ph.classList.remove("hidden");
-      ph.textContent = "Загрузка чека…";
+    if (!land) {
+      if (ph) {
+        ph.classList.remove("hidden");
+        ph.textContent = "Загрузка чека…";
+      }
+      if (el) el.classList.add("hidden");
+    } else {
+      const body = $("#order_modal_body");
+      if (body) body.innerHTML = '<p class="hint">Загрузка…</p>';
+      const modal = $("#orderDetailModal");
+      if (modal) {
+        modal.classList.remove("hidden");
+        modal.setAttribute("aria-hidden", "false");
+        document.body.classList.add("modal-open");
+        $$("[data-close-order-modal]").forEach((btn) => {
+          btn.onclick = () => closeOrderDetailModal();
+        });
+      }
+      const title = $("#orderDetailModalTitle");
+      if (title) title.textContent = "Документ № " + orderId;
     }
-    if (el) el.classList.add("hidden");
     try {
       const data = await api("/orders/" + encodeURIComponent(orderId));
-      renderReceipt(data.atol5, data.summary, data.fiscal);
+      if (land) {
+        const oid = data.summary && data.summary.order_id != null ? data.summary.order_id : orderId;
+        const html = buildReceiptHtml(data.atol5, data.summary, data.fiscal, { hideEdit: true });
+        openOrderDetailModal(html, oid);
+      } else {
+        renderReceipt(data.atol5, data.summary, data.fiscal);
+      }
     } catch (e) {
-      if (ph) ph.textContent = e.message;
+      if (land) {
+        const body = $("#order_modal_body");
+        if (body) body.innerHTML = '<p class="hint" style="color:var(--danger)">' + escHtml(e.message || String(e)) + "</p>";
+      } else if (ph) {
+        ph.textContent = e.message;
+      }
       showAlert(e.message);
     }
   }

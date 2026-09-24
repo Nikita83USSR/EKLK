@@ -16,7 +16,7 @@
     })();
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Unbounded:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260924portrait1" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260924landord1" />
   <link rel="stylesheet" href="/static/css/pro-theme.css?v=20260915pro2" />
   <link rel="stylesheet" href="/static/css/minimal-theme.css?v=20260915min1" />
 </head>
@@ -1200,6 +1200,24 @@
     </div>
   </div>
 
+  <!-- Модальное окно: просмотр документа (landscape mobile) -->
+  <div id="orderDetailModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-order-modal></div>
+    <div class="modal-dialog modal-dialog-receipt modal-dialog-order" role="dialog" aria-labelledby="orderDetailModalTitle">
+      <div class="modal-header">
+        <h3 id="orderDetailModalTitle">Документ</h3>
+        <button type="button" class="modal-close" data-close-order-modal aria-label="Закрыть">×</button>
+      </div>
+      <div class="modal-body" id="order_modal_body">
+        <p class="hint">Загрузка…</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="order_modal_edit">Действие</button>
+        <button type="button" class="btn" data-close-order-modal>Закрыть</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Модальное окно: ссылка на оплату -->
   <div id="payLinkModal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-pay-modal></div>
@@ -1236,7 +1254,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260915emptyname1"></script>
+  <script src="/static/js/app.js?v=20260924landord1"></script>
   <script src="/static/js/sections/dashboard.js?v=20260915pro2"></script>
   <script src="/static/js/sections/catalog.js?v=20260825c"></script>
   <script src="/static/js/sections/reports.js?v=20260825c"></script>
