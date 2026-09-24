@@ -265,27 +265,21 @@ input[type="checkbox"]:focus {
 body[data-theme="dark"] .items-table .it-name-warn,
 body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
 
-/* Stacked: только портрет (+ класс при наложении имени на цену). Landscape не трогаем. */
+/* Портрет (телефон): позиции в несколько рядов, без min-width ~600px (не влезало на 320–390px).
+   Landscape / .items-stacked (ПК, zoom) — без изменений. */
 @media (orientation: portrait) {
   .items-table thead { display: none; }
   .items-table tbody { display: block; width: 100%; max-width: 100%; }
 
   .items-table tbody tr.item-row {
     display: grid;
-    /* наименование сверху; остальные — одна компактная строка (как в таблице) */
-    grid-template-columns:
-      minmax(72px, 1.05fr)
-      minmax(56px, 0.85fr)
-      minmax(52px, 0.7fr)
-      minmax(88px, 1.15fr)
-      minmax(110px, 1.55fr)
-      minmax(100px, 1.35fr)
-      44px
-      40px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
-      "name name name name name name name name"
-      "price qty measure vat object method agent act";
-    column-gap: 6px;
+      "name name name"
+      "price qty measure"
+      "vat object method"
+      "agent act act";
+    column-gap: 8px;
     row-gap: 8px;
     width: 100%;
     max-width: 100%;
@@ -323,8 +317,9 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
   }
   .items-table tbody tr.item-row > td:nth-child(9) { grid-area: act; }
 
+  /* подписи на каждой позиции — при 3–4 рядах иначе непонятно */
   .items-table tbody tr.item-row > td::before {
-    display: none;
+    display: block;
     font-size: 0.7rem;
     font-weight: 500;
     color: var(--muted);
@@ -334,21 +329,15 @@ body[data-theme="glass"] .items-table .it-name-warn { color: #fbbf24; }
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .items-table tbody tr.item-row > td:nth-child(1)::before {
-    display: block;
-    content: "Наименование";
-  }
-  .items-table tbody tr.item-row:first-child > td:nth-child(2)::before { display: block; content: "Цена, руб"; }
-  .items-table tbody tr.item-row:first-child > td:nth-child(3)::before { display: block; content: "Кол-во"; }
-  .items-table tbody tr.item-row:first-child > td:nth-child(4)::before { display: block; content: "Ед."; }
-  .items-table tbody tr.item-row:first-child > td:nth-child(5)::before { display: block; content: "НДС"; }
-  .items-table tbody tr.item-row:first-child > td:nth-child(6)::before { display: block; content: "Предмет"; }
-  .items-table tbody tr.item-row:first-child > td:nth-child(7)::before { display: block; content: "Признак"; }
-  .items-table tbody tr.item-row:first-child > td:nth-child(8)::before { display: block; content: "Аг."; }
-  .items-table tbody tr.item-row:first-child > td:nth-child(9)::before { display: block; content: "\00a0"; }
-
-  /* подпись «Наименование» оставляем на каждой позиции */
-  .items-table tbody tr.item-row ~ tr.item-row > td:not(:nth-child(1))::before { display: none; }
+  .items-table tbody tr.item-row > td:nth-child(1)::before { content: "Наименование"; }
+  .items-table tbody tr.item-row > td:nth-child(2)::before { content: "Цена, руб"; }
+  .items-table tbody tr.item-row > td:nth-child(3)::before { content: "Кол-во"; }
+  .items-table tbody tr.item-row > td:nth-child(4)::before { content: "Ед."; }
+  .items-table tbody tr.item-row > td:nth-child(5)::before { content: "НДС"; }
+  .items-table tbody tr.item-row > td:nth-child(6)::before { content: "Предмет"; }
+  .items-table tbody tr.item-row > td:nth-child(7)::before { content: "Признак"; }
+  .items-table tbody tr.item-row > td:nth-child(8)::before { content: "Аг."; }
+  .items-table tbody tr.item-row > td:nth-child(9)::before { content: "\00a0"; }
 
   .items-table .it-name,
   .items-table .it-price,
@@ -1818,6 +1807,18 @@ body[data-theme="glass"] .modal-footer {
   .row-3 {
     grid-template-columns: 1fr !important;
   }
+  /* Оплата в чеке: вид на всю ширину, сумма + × в один ряд */
+  .pay-row {
+    grid-template-columns: 1fr 40px;
+    grid-template-rows: auto auto;
+    gap: 8px;
+  }
+  .pay-row > :nth-child(1) {
+    grid-column: 1 / -1;
+  }
+  .pay-row > :nth-child(2) {
+    min-width: 0;
+  }
   .app-footer {
     padding: 16px 0 24px;
   }
@@ -2003,19 +2004,30 @@ body[data-theme="glass"] .modal-footer {
   }
 }
 
-/* Портрет: список чеков и каталог — без выезда за экран */
+/* Портрет: список чеков, каталог, чек, ссылка на оплату — без выезда за экран */
 @media (orientation: portrait) {
   #tab-orders,
-  #tab-catalog {
+  #tab-catalog,
+  #tab-create,
+  #tab-payment {
     max-width: 100%;
     overflow-x: hidden;
   }
   #tab-orders .orders-layout,
-  #tab-catalog .check-layout {
+  #tab-catalog .check-layout,
+  #tab-create .check-layout,
+  #tab-payment .check-layout {
     grid-template-columns: 1fr !important;
     gap: 12px;
     max-width: 100%;
     min-width: 0;
+  }
+  #tab-create .card,
+  #tab-payment .card,
+  #tab-create .items-table-wrap,
+  #tab-payment .items-table-wrap {
+    min-width: 0;
+    max-width: 100%;
   }
   #tab-orders .orders-list-pane,
   #tab-orders .orders-detail-pane,
