@@ -2779,7 +2779,7 @@
   /** Показать раздел ЛК. push=true → history.pushState */
   function showTab(tab, push) {
     if (!APP_TABS.includes(tab)) tab = "home";
-    $$(".nav button[data-tab]").forEach((b) => {
+    $$(".nav button[data-tab], .user-info button[data-tab], #headerAiBtn").forEach((b) => {
       b.classList.toggle("active", b.dataset.tab === tab);
     });
     const payNav = $("#nav_payments");
@@ -2889,6 +2889,17 @@
       showTab(tab, true);
     };
   });
+
+  // Portrait: кнопка «ИИ» в шапке (вне .nav)
+  const headerAiBtn = $("#headerAiBtn");
+  if (headerAiBtn) {
+    headerAiBtn.onclick = () => {
+      const tab = headerAiBtn.dataset.tab || "ai-cashier";
+      if (!APP_TABS.includes(tab)) return;
+      resetFormIfNavTo(tab);
+      showTab(tab, true);
+    };
+  }
 
   (function bindPaymentsNav() {
     const root = $("#nav_payments");

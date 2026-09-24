@@ -109,6 +109,8 @@ a { color: var(--primary); text-decoration: none; }
 .nav button { background: transparent; border: none; color: var(--muted); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.875rem; font-family: inherit; font-weight: 500; }
 .nav button.active, .nav button:hover { background: #ecfdf5; color: #15803d; }
 .user-info { color: var(--muted); font-size: 0.85rem; display: flex; align-items: center; gap: 8px; }
+.header-ai-btn { display: none; }
+
 /* Одинаковая высота кнопок ⚙ и «Выйти» */
 .user-info .btn {
   height: 32px;
@@ -2177,10 +2179,12 @@ body[data-theme="glass"] .modal-footer {
 }
 
 
-/* Портрет mobile: шапка в 2 строки — лого+⚙+Выйти / навигация; логин скрыт */
+/* Портрет mobile: 2 строки — лого | ИИ ⚙ Выйти / nav; Платежи — нормальный dropdown */
 @media (orientation: portrait) and (max-width: 960px) {
   .header {
     padding: 6px 0;
+    overflow: visible;
+    z-index: 40;
   }
   .header-inner {
     display: grid !important;
@@ -2191,6 +2195,7 @@ body[data-theme="glass"] .modal-footer {
     align-items: center;
     gap: 6px 10px;
     flex-direction: unset;
+    overflow: visible;
   }
   .logo {
     grid-area: logo;
@@ -2214,7 +2219,29 @@ body[data-theme="glass"] .modal-footer {
   .user-info #userName {
     display: none !important;
   }
-  .user-info .btn-sm:not(.btn-icon) {
+  .header-ai-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    padding: 0 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .header-ai-btn.active {
+    background: #ecfdf5;
+    color: #15803d;
+    border-color: #bbf7d0;
+  }
+  body[data-theme="dark"] .header-ai-btn.active,
+  body[data-theme="glass"] .header-ai-btn.active,
+  body[data-theme="pro"] .header-ai-btn.active {
+    background: color-mix(in srgb, var(--accent, #22c55e) 22%, transparent);
+    color: var(--text);
+    border-color: var(--border);
+  }
+  .user-info .btn-sm:not(.btn-icon):not(.header-ai-btn) {
     padding: 0 10px;
     height: 30px;
     font-size: 0.75rem;
@@ -2224,42 +2251,42 @@ body[data-theme="glass"] .modal-footer {
     min-width: 30px;
     height: 30px;
   }
+  /* ИИ только сверху — в nav скрываем */
+  .nav > button[data-tab="ai-cashier"] {
+    display: none !important;
+  }
   .nav {
     grid-area: nav;
     width: 100%;
     order: unset;
     display: flex;
     flex-wrap: nowrap;
-    gap: 2px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    padding-bottom: 1px;
+    gap: 3px;
+    overflow: visible; /* иначе dropdown Платежи обрезается */
+    padding-bottom: 0;
   }
-  .nav::-webkit-scrollbar {
-    display: none;
-  }
-  .nav button,
+  .nav > button[data-tab],
   .nav .nav-dropdown-btn {
-    flex: 1 1 0;
-    min-width: 0;
-    padding: 7px 4px !important;
-    font-size: 0.7rem !important;
+    flex: 1 1 auto;
+    min-width: auto;
+    padding: 7px 6px !important;
+    font-size: 0.72rem !important;
     white-space: nowrap;
     border-radius: 6px;
   }
   .nav .nav-dropdown {
-    flex: 1 1 0;
-    min-width: 0;
+    flex: 0 0 auto;
+    min-width: auto;
+    position: relative;
+    z-index: 60;
   }
   .nav .nav-dropdown-btn {
-    width: 100%;
-  }
-  /* «ИИ кассир» → короче, чтобы влезло в одну линию nav */
-  .nav button[data-tab="ai-cashier"] {
+    width: auto;
     flex: 0 0 auto;
-    padding-left: 6px !important;
-    padding-right: 6px !important;
+  }
+  .nav .nav-dropdown-menu {
+    z-index: 70;
+    min-width: 200px;
   }
 }
 
