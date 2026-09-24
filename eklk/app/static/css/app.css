@@ -2176,6 +2176,93 @@ body[data-theme="glass"] .modal-footer {
   }
 }
 
+
+/* Портрет mobile: шапка в 2 строки — лого+⚙+Выйти / навигация; логин скрыт */
+@media (orientation: portrait) and (max-width: 960px) {
+  .header {
+    padding: 6px 0;
+  }
+  .header-inner {
+    display: grid !important;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "logo user"
+      "nav nav";
+    align-items: center;
+    gap: 6px 10px;
+    flex-direction: unset;
+  }
+  .logo {
+    grid-area: logo;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+  .header-logo {
+    max-width: 100px;
+    height: auto;
+  }
+  .user-info {
+    grid-area: user;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    margin: 0;
+    font-size: 0.8rem;
+  }
+  .user-info #userName {
+    display: none !important;
+  }
+  .user-info .btn-sm:not(.btn-icon) {
+    padding: 0 10px;
+    height: 30px;
+    font-size: 0.75rem;
+  }
+  .user-info .btn-icon {
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+  }
+  .nav {
+    grid-area: nav;
+    width: 100%;
+    order: unset;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 2px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 1px;
+  }
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+  .nav button,
+  .nav .nav-dropdown-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 7px 4px !important;
+    font-size: 0.7rem !important;
+    white-space: nowrap;
+    border-radius: 6px;
+  }
+  .nav .nav-dropdown {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .nav .nav-dropdown-btn {
+    width: 100%;
+  }
+  /* «ИИ кассир» → короче, чтобы влезло в одну линию nav */
+  .nav button[data-tab="ai-cashier"] {
+    flex: 0 0 auto;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+}
+
 /* Портрет: список чеков, каталог, чек, ссылка на оплату — без выезда за экран */
 @media (orientation: portrait) {
   #tab-orders,
