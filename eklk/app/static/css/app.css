@@ -2056,36 +2056,40 @@ body[data-theme="glass"] .modal-footer {
     grid-template-columns: none;
     grid-template-areas: none;
   }
+  #tab-orders .orders-table {
+    min-width: 720px !important;
+    width: max-content;
+  }
+  #tab-orders .orders-table-wrap,
+  #tab-orders #o_list {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
   #tab-orders .orders-table tbody td {
     display: table-cell;
     border-bottom: 1px solid var(--border) !important;
-    padding: 3px 3px !important;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 12ch;
-  }
-  #tab-orders .orders-table tbody td:nth-child(1) {
-    max-width: none;
-    min-width: 8ch;
-    font-weight: 600;
-    white-space: normal;
-    word-break: break-all;
-    overflow-wrap: anywhere;
+    padding: 3px 6px !important;
     overflow: visible;
     text-overflow: unset;
+    white-space: nowrap !important;
+    word-break: normal;
+    overflow-wrap: normal;
+    max-width: none;
+  }
+  #tab-orders .orders-table tbody td:nth-child(1) {
+    font-weight: 600;
+    min-width: 10ch;
   }
   #tab-orders .orders-table tbody td:nth-child(1) code {
-    white-space: normal;
-    word-break: break-all;
+    white-space: nowrap !important;
+    word-break: normal;
     font-size: 0.7rem;
   }
-  #tab-orders .orders-table tbody td:nth-child(6) {
-    max-width: 10ch;
+  #tab-orders .orders-table tbody td:nth-child(2) {
+    min-width: 16ch;
   }
   #tab-orders .orders-table tbody td:last-child {
-    max-width: none;
-    white-space: nowrap;
+    white-space: nowrap !important;
   }
   #tab-orders .orders-table tbody td::before {
     display: none !important;
@@ -2217,15 +2221,15 @@ body[data-theme="glass"] .modal-footer {
     width: 100%;
   }
 
-  /* список документов — компактная таблица (не карточки) */
+  /* список документов — таблица шире экрана, скролл вбок, без переносов */
   #o_list {
     max-width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
   #o_list .orders-table {
-    min-width: 0 !important;
-    width: 100%;
+    min-width: 760px !important;
+    width: max-content;
     border-collapse: collapse;
     border-spacing: 0;
     font-size: 0.75rem;
@@ -2235,13 +2239,13 @@ body[data-theme="glass"] .modal-footer {
     display: table-header-group;
   }
   #o_list .orders-table thead th {
-    padding: 6px 4px;
+    padding: 6px 6px;
     font-size: 0.68rem;
     white-space: nowrap;
   }
   #o_list .orders-table tbody {
     display: table-row-group;
-    width: 100%;
+    width: auto;
   }
   #o_list .orders-table tbody tr {
     display: table-row;
@@ -2272,45 +2276,38 @@ body[data-theme="glass"] .modal-footer {
     display: table-cell;
     border: none !important;
     border-bottom: 1px solid var(--border) !important;
-    padding: 6px 4px !important;
-    min-width: 0;
-    max-width: 11ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    padding: 6px 6px !important;
+    max-width: none;
+    overflow: visible;
+    text-overflow: unset;
+    white-space: nowrap !important;
+    word-break: normal;
+    overflow-wrap: normal;
     vertical-align: middle;
   }
   #o_list .orders-table tbody td:nth-child(1) {
-    max-width: none;
-    min-width: 8ch;
     font-weight: 600;
-    white-space: normal;
-    word-break: break-all;
-    overflow-wrap: anywhere;
-    overflow: visible;
-    text-overflow: unset;
+    min-width: 10ch;
   }
   #o_list .orders-table tbody td:nth-child(1) code {
-    white-space: normal;
-    word-break: break-all;
+    white-space: nowrap !important;
+    word-break: normal;
     font-size: 0.72rem;
   }
   #o_list .orders-table tbody td:nth-child(2) {
-    max-width: 12ch;
     color: var(--muted);
     font-size: 0.72rem;
+    min-width: 16ch; /* дата + время целиком */
   }
   #o_list .orders-table tbody td:nth-child(5) {
     font-weight: 600;
   }
   #o_list .orders-table tbody td:nth-child(6) {
-    max-width: 9ch;
     font-size: 0.72rem;
     color: var(--muted);
   }
   #o_list .orders-table tbody td:last-child {
-    max-width: none;
-    white-space: nowrap;
+    white-space: nowrap !important;
   }
   #o_list .orders-table tbody td::before {
     display: none !important;
@@ -2334,7 +2331,7 @@ body[data-theme="glass"] .modal-footer {
   #o_list .orders-row-actions {
     display: inline-flex;
     gap: 4px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
   #o_list .orders-row-actions .btn {
     width: auto;
