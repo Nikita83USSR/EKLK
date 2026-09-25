@@ -40,3 +40,12 @@ bash remote/build-exe.sh
 
 Рядом с `EKLK-Helper-Setup.exe` / `EKLK-Admin-Setup.exe` положите `eklk-remote.env` с `EKLK_RD_HOST` и `EKLK_RD_KEY`.
 Один exe (386) работает на Windows 32-bit и 64-bit; сам качает x86_64 или x86-sciter RustDesk.
+
+
+## Авторизация админа (EXE)
+
+ перед установкой:
+1. Читает  из 
+2. Запрашивает логин/пароль EcomKassa
+3.  и 
+4. Продолжает только если  (логин в )

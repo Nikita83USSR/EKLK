@@ -1,10 +1,12 @@
-// EKLK remote bootstrap for Windows: detect arch, download RustDesk, write server config.
-// Build:
-//   GOOS=windows GOARCH=386 go build -ldflags="-s -w" -o EKLK-Helper-Setup.exe -tags helper
-//   GOOS=windows GOARCH=386 go build -ldflags="-s -w" -o EKLK-Admin-Setup.exe -tags admin
+// EKLK remote bootstrap for Windows.
+// helper: install RustDesk + server config
+// admin: login to EKLK API, require support admin, then install RustDesk
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,33 +15,54 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
+
+	"golang.org/x/term"
 )
 
 const rustdeskVersion = "1.3.9"
 
+var buildMode = "helper"
+
 func mode() string {
-	// set at build via -X main.buildMode=helper|admin
 	if buildMode == "admin" {
 		return "admin"
 	}
 	return "helper"
 }
 
-var buildMode = "helper"
-
 func main() {
 	fmt.Println("EKLK", mode(), "setup · RustDesk", rustdeskVersion)
-	host, key := loadConfig()
+
+	host, key, apiBase := loadConfig()
 	if host == "" {
 		fmt.Println("Не задан EKLK_RD_HOST.")
-		fmt.Println("Рядом с этим .exe положите файл eklk-remote.env:")
+		fmt.Println("Рядом с .exe положите eklk-remote.env:")
 		fmt.Println("  EKLK_RD_HOST=remote.example.com")
-		fmt.Println("  EKLK_RD_KEY=ваш_ключ_hbbs")
+		fmt.Println("  EKLK_RD_KEY=ключ_hbbs")
+		if mode() == "admin" {
+			fmt.Println("  EKLK_API_BASE=https://your-eklk-host")
+		}
 		writeTemplateEnv()
-		fmt.Println("Шаблон записан. Заполните и запустите установщик снова.")
 		waitExit(1)
 		return
+	}
+
+	if mode() == "admin" {
+		if apiBase == "" {
+			fmt.Println("Для админ-клиента нужен EKLK_API_BASE в eklk-remote.env")
+			fmt.Println("Пример: EKLK_API_BASE=https://lk.example.com")
+			writeTemplateEnv()
+			waitExit(1)
+			return
+		}
+		if err := adminLogin(apiBase); err != nil {
+			fmt.Println("Авторизация не удалась:", err)
+			waitExit(1)
+			return
+		}
+		fmt.Println("Доступ администратора поддержки подтверждён.")
 	}
 
 	arch, url := rustdeskURL()
@@ -53,7 +76,8 @@ func main() {
 	exePath := filepath.Join(destDir, "rustdesk.exe")
 	if err := download(url, exePath); err != nil {
 		fmt.Println("Ошибка загрузки:", err)
-		fmt.Println("Скачайте вручную и сохраните как:", exePath)
+		fmt.Println("Скачайте вручную:", url)
+		fmt.Println("Сохраните как:", exePath)
 		waitExit(1)
 		return
 	}
@@ -62,22 +86,115 @@ func main() {
 	if err := writeRustDeskConfig(host, key); err != nil {
 		fail(err)
 	}
-	fmt.Println("Конфиг сервера записан (AppData\\RustDesk\\config).")
+	fmt.Println("Конфиг сервера записан.")
 
-	// copy env next to install for reference
 	_ = copyFile(envPathBesideExe(), filepath.Join(destDir, "eklk-remote.env"))
 
 	fmt.Println()
 	if mode() == "admin" {
-		fmt.Println("Админ-клиент готов. Откройте ЛК → Поддержка → Подключиться, затем ID в RustDesk.")
+		fmt.Println("Админ-клиент готов.")
+		fmt.Println("Дальше: ЛК → Поддержка → Подключиться → ID клиента в RustDesk.")
 	} else {
 		fmt.Println("Помощник готов.")
-		fmt.Println("1) Дождитесь ID в окне RustDesk")
-		fmt.Println("2) ЛК EKLK → Помощник → вставьте ID → «Я в сети»")
+		fmt.Println("1) Дождитесь ID в RustDesk")
+		fmt.Println("2) ЛК → Помощник → ID → «Я в сети»")
 	}
 	fmt.Println("Запуск RustDesk…")
 	_ = exec.Command(exePath).Start()
 	waitExit(0)
+}
+
+func adminLogin(apiBase string) error {
+	apiBase = strings.TrimRight(apiBase, "/")
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println()
+	fmt.Println("Авторизация на сервере EKLK (логин/пароль EcomKassa)")
+	fmt.Print("Логин: ")
+	user, _ := reader.ReadString('\n')
+	user = strings.TrimSpace(user)
+	if user == "" {
+		return fmt.Errorf("пустой логин")
+	}
+	fmt.Print("Пароль: ")
+	passBytes, err := term.ReadPassword(int(syscall.Stdin))
+	fmt.Println()
+	if err != nil {
+		// fallback visible input (некоторые консоли Windows)
+		pass, _ := reader.ReadString('\n')
+		passBytes = []byte(strings.TrimSpace(pass))
+	}
+	password := string(passBytes)
+	if password == "" {
+		return fmt.Errorf("пустой пароль")
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"username": user,
+		"password": password,
+		"remember": false,
+	})
+	client := &http.Client{Timeout: 45 * time.Second}
+	req, err := http.NewRequest("POST", apiBase+"/api/v1/auth/login", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("нет связи с %s: %w", apiBase, err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("вход отклонён (HTTP %d): %s", resp.StatusCode, truncate(string(raw), 200))
+	}
+	var tok struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.Unmarshal(raw, &tok); err != nil || tok.AccessToken == "" {
+		return fmt.Errorf("некорректный ответ login")
+	}
+
+	req2, err := http.NewRequest("GET", apiBase+"/api/v1/support/me", nil)
+	if err != nil {
+		return err
+	}
+	req2.Header.Set("Authorization", "Bearer "+tok.AccessToken)
+	resp2, err := client.Do(req2)
+	if err != nil {
+		return err
+	}
+	defer resp2.Body.Close()
+	raw2, _ := io.ReadAll(resp2.Body)
+	if resp2.StatusCode != 200 {
+		return fmt.Errorf("проверка роли (HTTP %d): %s", resp2.StatusCode, truncate(string(raw2), 200))
+	}
+	var me struct {
+		IsAdmin bool   `json:"is_admin"`
+		Login   string `json:"login"`
+	}
+	if err := json.Unmarshal(raw2, &me); err != nil {
+		return err
+	}
+	if !me.IsAdmin {
+		return fmt.Errorf("пользователь %q не в SUPPORT_ADMIN_LOGINS — доступ запрещён", user)
+	}
+
+	// сохранить токен локально (опционально для будущих вызовов)
+	dest := installDir()
+	_ = os.MkdirAll(dest, 0755)
+	_ = os.WriteFile(filepath.Join(dest, "eklk_admin_token.txt"), []byte(tok.AccessToken), 0600)
+	_ = os.WriteFile(filepath.Join(dest, "eklk_admin_login.txt"), []byte(me.Login), 0600)
+	return nil
+}
+
+func truncate(s string, n int) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
 }
 
 func installDir() string {
@@ -93,11 +210,9 @@ func installDir() string {
 
 func rustdeskURL() (label, url string) {
 	base := "https://github.com/rustdesk/rustdesk/releases/download/" + rustdeskVersion + "/"
-	// PROCESSOR_ARCHITECTURE: AMD64, x86, ARM64
 	pa := strings.ToUpper(os.Getenv("PROCESSOR_ARCHITECTURE"))
 	paW6432 := strings.ToUpper(os.Getenv("PROCESSOR_ARCHITEW6432"))
 	is64 := pa == "AMD64" || pa == "ARM64" || paW6432 == "AMD64" || paW6432 == "ARM64"
-	// 32-bit process on 64-bit OS still sees AMD64 via PROCESSOR_ARCHITEW6432
 	if !is64 && runtime.GOARCH == "amd64" {
 		is64 = true
 	}
@@ -107,23 +222,23 @@ func rustdeskURL() (label, url string) {
 	return "x86-sciter", base + "rustdesk-" + rustdeskVersion + "-x86-sciter.exe"
 }
 
-func loadConfig() (host, key string) {
+func loadConfig() (host, key, apiBase string) {
 	host = strings.TrimSpace(os.Getenv("EKLK_RD_HOST"))
 	key = strings.TrimSpace(os.Getenv("EKLK_RD_KEY"))
-	paths := []string{
-		envPathBesideExe(),
-		filepath.Join(installDir(), "eklk-remote.env"),
-	}
-	for _, p := range paths {
-		h, k := parseEnvFile(p)
+	apiBase = strings.TrimSpace(os.Getenv("EKLK_API_BASE"))
+	for _, p := range []string{envPathBesideExe(), filepath.Join(installDir(), "eklk-remote.env")} {
+		h, k, a := parseEnvFile(p)
 		if host == "" {
 			host = h
 		}
 		if key == "" {
 			key = k
 		}
+		if apiBase == "" {
+			apiBase = a
+		}
 	}
-	return host, key
+	return host, key, apiBase
 }
 
 func envPathBesideExe() string {
@@ -134,32 +249,33 @@ func envPathBesideExe() string {
 	return filepath.Join(filepath.Dir(exe), "eklk-remote.env")
 }
 
-func parseEnvFile(path string) (host, key string) {
+func parseEnvFile(path string) (host, key, apiBase string) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return "", ""
+		return "", "", ""
 	}
 	for _, line := range strings.Split(string(b), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		if strings.HasPrefix(line, "EKLK_RD_HOST=") {
-			host = strings.TrimSpace(strings.TrimPrefix(line, "EKLK_RD_HOST="))
-			host = strings.Trim(host, `"'`)
-		}
-		if strings.HasPrefix(line, "EKLK_RD_KEY=") {
-			key = strings.TrimSpace(strings.TrimPrefix(line, "EKLK_RD_KEY="))
-			key = strings.Trim(key, `"'`)
+		switch {
+		case strings.HasPrefix(line, "EKLK_RD_HOST="):
+			host = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "EKLK_RD_HOST=")), `"'`)
+		case strings.HasPrefix(line, "EKLK_RD_KEY="):
+			key = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "EKLK_RD_KEY=")), `"'`)
+		case strings.HasPrefix(line, "EKLK_API_BASE="):
+			apiBase = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "EKLK_API_BASE=")), `"'`)
 		}
 	}
-	return host, key
+	return host, key, apiBase
 }
 
 func writeTemplateEnv() {
 	p := envPathBesideExe()
-	_ = os.WriteFile(p, []byte("EKLK_RD_HOST=\nEKLK_RD_KEY=\nEKLK_API_BASE=\n"), 0644)
-	fmt.Println("Создан:", p)
+	content := "EKLK_RD_HOST=\nEKLK_RD_KEY=\nEKLK_API_BASE=\n"
+	_ = os.WriteFile(p, []byte(content), 0644)
+	fmt.Println("Создан шаблон:", p)
 }
 
 func writeRustDeskConfig(host, key string) error {
