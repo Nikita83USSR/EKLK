@@ -42,7 +42,8 @@ class RespondIn(BaseModel):
 class PublicConfigOut(BaseModel):
     rd_host: str
     rd_key: str
-    helper_windows_url: str = "/static/remote/EKLK-Helper-Windows.zip"
+    helper_windows_url: str = "/static/remote/EKLK-Helper-Setup.exe"
     helper_macos_url: str = "/static/remote/EKLK-Helper-macOS.zip"
-    admin_windows_url: str = "/static/remote/EKLK-Admin-Windows.zip"
+    admin_windows_url: str = "/static/remote/EKLK-Admin-Setup.exe"
+    remote_env_example_url: str = "/static/remote/eklk-remote.env.example"
     enabled: bool = True

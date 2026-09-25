@@ -234,8 +234,9 @@ def public_config() -> dict[str, Any]:
     return {
         "rd_host": host,
         "rd_key": key,
-        "helper_windows_url": "/static/remote/EKLK-Helper-Windows.zip",
+        "helper_windows_url": "/static/remote/EKLK-Helper-Setup.exe",
         "helper_macos_url": "/static/remote/EKLK-Helper-macOS.zip",
-        "admin_windows_url": "/static/remote/EKLK-Admin-Windows.zip",
+        "admin_windows_url": "/static/remote/EKLK-Admin-Setup.exe",
+        "remote_env_example_url": "/static/remote/eklk-remote.env.example",
         "enabled": bool(host),
     }
