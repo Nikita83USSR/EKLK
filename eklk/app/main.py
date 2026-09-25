@@ -17,7 +17,7 @@ from app.utils.logger import logger, log_action
 from app.core import metrics as app_metrics
 import time
 import os
-from app.routers import auth, ecom, orders, catalog, reports, dashboard, settings as settings_router, ai_cashier
+from app.routers import auth, ecom, orders, catalog, reports, dashboard, settings as settings_router, ai_cashier, support
 from app.routers import templates as templates_router
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -107,6 +107,7 @@ app.include_router(templates_router.router, prefix="/api/v1")
 app.include_router(catalog.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
+app.include_router(support.router, prefix="/api/v1")
 
 jinja_templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")

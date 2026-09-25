@@ -16,7 +16,7 @@
     })();
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Unbounded:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260924itemlay1" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260925remote1" />
   <link rel="stylesheet" href="/static/css/pro-theme.css?v=20260915pro2" />
   <link rel="stylesheet" href="/static/css/minimal-theme.css?v=20260915min1" />
 </head>
@@ -66,6 +66,8 @@
           </div>
           <button type="button" data-tab="orders">Документы</button>
           <button type="button" data-tab="reports">Отчёты</button>
+          <button type="button" data-tab="support" id="nav_support" class="hidden">Поддержка</button>
+          <button type="button" data-tab="helper" id="nav_helper">Помощник</button>
           <button type="button" data-tab="ai-cashier">ИИ кассир</button>
         </nav>
         <div class="user-info">
@@ -1080,6 +1082,85 @@
         </div>
       </section>
 
+
+      <!-- SUPPORT (admin) -->
+      <section id="tab-support" class="tab-panel hidden">
+        <div class="card">
+          <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+            <span>Удалённая поддержка</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <a class="btn btn-secondary btn-sm" id="sup_dl_admin" href="/static/remote/EKLK-Admin-Windows.zip">Админ Windows</a>
+              <button type="button" class="btn btn-sm" id="sup_refresh">Обновить</button>
+            </div>
+          </div>
+          <p class="hint" style="margin-bottom:12px">Клиенты с запущенным помощником. ИНН из профиля ЛК. Подключение: экран, управление, файлы (RustDesk на вашем сервере).</p>
+          <div id="sup_server_hint" class="hint" style="margin-bottom:12px"></div>
+          <div class="orders-table-wrap">
+            <table class="orders-table" id="sup_table">
+              <thead>
+                <tr>
+                  <th>ИНН</th>
+                  <th>Организация</th>
+                  <th>Логин</th>
+                  <th>Платформа</th>
+                  <th>ID помощника</th>
+                  <th>Статус</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="sup_tbody">
+                <tr><td colspan="7" class="hint">Нет клиентов online</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="sup_connect_box" class="hidden mt-3" style="padding:12px;border:1px solid var(--border);border-radius:8px">
+            <div class="section-title" style="font-size:0.95rem">Сессия</div>
+            <p id="sup_connect_info" class="hint"></p>
+            <p class="hint">В <b>EKLK Admin (RustDesk)</b> подключитесь к ID клиента. Клиент должен нажать «Разрешить» в помощнике и в ЛК.</p>
+            <button type="button" class="btn btn-secondary btn-sm" id="sup_copy_id">Скопировать ID</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- HELPER (client) -->
+      <section id="tab-helper" class="tab-panel hidden">
+        <div class="card" style="max-width:640px">
+          <div class="section-title">Помощник поддержки</div>
+          <p class="hint" style="margin-bottom:12px">Установите программу один раз. Пока она запущена, специалист видит вашу организацию в списке и может подключиться <b>только после вашего разрешения</b>.</p>
+          <div class="row" style="margin-bottom:12px">
+            <a class="btn btn-secondary" id="help_dl_win" href="/static/remote/EKLK-Helper-Windows.zip">Скачать для Windows</a>
+            <a class="btn btn-secondary" id="help_dl_mac" href="/static/remote/EKLK-Helper-macOS.zip">Скачать для macOS</a>
+          </div>
+          <div id="help_cfg" class="hint" style="margin-bottom:12px"></div>
+          <div class="row">
+            <div>
+              <label>ID помощника (из окна RustDesk)</label>
+              <input id="help_agent_id" placeholder="например 123 456 789" autocomplete="off" />
+            </div>
+            <div>
+              <label>Платформа</label>
+              <select id="help_platform">
+                <option value="windows">Windows</option>
+                <option value="macos">macOS</option>
+              </select>
+            </div>
+          </div>
+          <div class="actions-bar" style="margin-top:12px">
+            <button type="button" class="btn" id="help_online">Я в сети</button>
+            <button type="button" class="btn btn-secondary" id="help_offline">Не в сети</button>
+          </div>
+          <p id="help_status" class="hint mt-2">Статус: не в сети</p>
+          <div id="help_incoming" class="hidden mt-3" style="padding:12px;border:1px solid var(--border);border-radius:8px;background:color-mix(in srgb, var(--accent,#22c55e) 12%, transparent)">
+            <strong>Запрос на подключение</strong>
+            <p class="hint" id="help_incoming_text"></p>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button type="button" class="btn" id="help_allow">Разрешить</button>
+              <button type="button" class="btn btn-secondary" id="help_deny">Отклонить</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
 <!-- SETTINGS -->
       <section id="tab-settings" class="tab-panel hidden">
         <div class="settings-layout">
@@ -1253,7 +1334,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260924navfix1"></script>
+  <script src="/static/js/app.js?v=20260925remote1"></script>
   <script src="/static/js/sections/dashboard.js?v=20260915pro2"></script>
   <script src="/static/js/sections/catalog.js?v=20260825c"></script>
   <script src="/static/js/sections/reports.js?v=20260825c"></script>

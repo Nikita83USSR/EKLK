@@ -1,0 +1,20 @@
+# RustDesk self-host рядом с EKLK (или на отдельном VPS).
+# Документация портов: https://rustdesk.com/docs/en/self-host/
+services:
+  hbbs:
+    image: rustdesk/rustdesk-server:latest
+    container_name: eklk-rd-hbbs
+    command: hbbs -r ${RD_RELAY_HOST:-localhost}:21117
+    volumes:
+      - ./data:/root
+    network_mode: host
+    restart: unless-stopped
+
+  hbbr:
+    image: rustdesk/rustdesk-server:latest
+    container_name: eklk-rd-hbbr
+    command: hbbr
+    volumes:
+      - ./data:/root
+    network_mode: host
+    restart: unless-stopped

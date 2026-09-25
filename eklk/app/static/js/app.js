@@ -2189,7 +2189,8 @@
         try { sessionStorage.setItem("eklk_me", JSON.stringify(me2)); } catch (e) { /* ignore */ }
         currentLogin = me2.username || me2.email || currentLogin || "";
       }
-      pushBitrixLiveChatContext();
+      refreshSupportRole().catch(() => {});
+    pushBitrixLiveChatContext();
       await loadPaymentTypes();
       ensureItem("c_items", updateCreateSummary);
       ensureItem("p_items", updatePaySummary);
@@ -2763,7 +2764,7 @@
     // кнопка «Открыть снова» убрана — виджет всегда в разделе
   }
 
-  const APP_TABS = ["home", "create", "payment", "templates", "orders", "catalog", "reports", "ai-cashier", "settings"]; // CORE: home/catalog/reports — sections/*.js
+  const APP_TABS = ["home", "create", "payment", "templates", "orders", "catalog", "reports", "ai-cashier", "support", "helper", "settings"];
 
   function pathToTab(pathname) {
     const p = String(pathname || "/").replace(/\/+$/, "") || "/";
@@ -2845,6 +2846,12 @@
     if (tab === "ai-cashier") {
       bindAiCashierUI();
       ensureAiCashier().catch((e) => console.warn("ai-cashier", e));
+    }
+    if (tab === "support") {
+      loadSupportOnline().catch((e) => console.warn("support", e));
+    }
+    if (tab === "helper") {
+      initHelperPanel().catch((e) => console.warn("helper", e));
     }
     // Товарные строки: пересчёт stacked после показа (F5 при zoom ≠ 100%)
     if (tab === "create" || tab === "payment") {
@@ -5249,6 +5256,263 @@
     }
   })();
 
+
+
+  // ===== Remote support (expremote) =====
+  let supportPollTimer = null;
+  let helperPollTimer = null;
+  let helperHeartbeatTimer = null;
+  let lastConnectAgentId = "";
+  let pendingSessionId = null;
+
+  async function refreshSupportRole() {
+    try {
+      const me = await api("/support/me");
+      const nav = document.getElementById("nav_support");
+      if (nav) nav.classList.toggle("hidden", !me.is_admin);
+      return !!me.is_admin;
+    } catch (e) {
+      const nav = document.getElementById("nav_support");
+      if (nav) nav.classList.add("hidden");
+      return false;
+    }
+  }
+
+  async function loadSupportOnline() {
+    const tb = document.getElementById("sup_tbody");
+    const hint = document.getElementById("sup_server_hint");
+    try {
+      const cfg = await api("/support/config");
+      if (hint) {
+        hint.textContent = cfg.enabled
+          ? ("Сервер удалёнки: " + (cfg.rd_host || "—") + (cfg.rd_key ? " (ключ задан)" : " (ключ не задан)"))
+          : "Задайте SUPPORT_RD_HOST / SUPPORT_RD_KEY в .env сервера EKLK";
+      }
+    } catch (e) {}
+    if (!tb) return;
+    try {
+      const rows = await api("/support/online");
+      if (!rows.length) {
+        tb.innerHTML = '<tr><td colspan="7" class="hint">Нет клиентов online</td></tr>';
+        return;
+      }
+      tb.innerHTML = rows
+        .map((r) => {
+          const st = r.status || "online";
+          return (
+            "<tr data-agent=\"" +
+            escHtml(r.agent_id) +
+            "\">" +
+            "<td>" +
+            escHtml(r.inn || "—") +
+            "</td>" +
+            "<td>" +
+            escHtml(r.firm_name || "—") +
+            "</td>" +
+            "<td>" +
+            escHtml(r.login || "") +
+            "</td>" +
+            "<td>" +
+            escHtml(r.platform || "—") +
+            "</td>" +
+            "<td><code>" +
+            escHtml(r.agent_id) +
+            "</code></td>" +
+            "<td>" +
+            escHtml(st) +
+            "</td>" +
+            '<td><button type="button" class="btn btn-sm sup-connect-btn" data-agent="' +
+            escHtml(r.agent_id) +
+            '">Подключиться</button></td>' +
+            "</tr>"
+          );
+        })
+        .join("");
+      tb.querySelectorAll(".sup-connect-btn").forEach((btn) => {
+        btn.onclick = () => connectSupportAgent(btn.getAttribute("data-agent"));
+      });
+    } catch (e) {
+      tb.innerHTML =
+        '<tr><td colspan="7" class="hint">' +
+        escHtml((e && e.message) || "Ошибка загрузки") +
+        "</td></tr>";
+    }
+  }
+
+  async function connectSupportAgent(agentId) {
+    if (!agentId) return;
+    try {
+      const data = await api("/support/connect", {
+        method: "POST",
+        body: JSON.stringify({ agent_id: agentId }),
+      });
+      lastConnectAgentId = data.agent_id || agentId;
+      const box = document.getElementById("sup_connect_box");
+      const info = document.getElementById("sup_connect_info");
+      if (box) box.classList.remove("hidden");
+      if (info) {
+        info.textContent =
+          "ИНН " +
+          (data.inn || "—") +
+          " · " +
+          (data.firm_name || "") +
+          " · ID " +
+          data.agent_id +
+          " · статус " +
+          data.status +
+          ". " +
+          (data.connect_hint || "");
+      }
+      showAlert("Запрос отправлен. Дождитесь «Разрешить» у клиента, затем подключитесь в RustDesk по ID.", "success");
+      try {
+        await navigator.clipboard.writeText(String(data.agent_id || ""));
+      } catch (e) {}
+      // deep link где поддерживается
+      try {
+        window.location.href = "rustdesk://" + encodeURIComponent(data.agent_id);
+      } catch (e) {}
+      loadSupportOnline();
+    } catch (e) {
+      showAlert((e && e.message) || "Не удалось создать сессию");
+    }
+  }
+
+  async function initHelperPanel() {
+    const cfgEl = document.getElementById("help_cfg");
+    try {
+      const cfg = await api("/support/config");
+      if (cfgEl) {
+        cfgEl.textContent = cfg.rd_host
+          ? "Сервер: " + cfg.rd_host + " — пропишите его в eklk-remote.env установщика"
+          : "Сервер удалёнки на стороне EKLK ещё не настроен (SUPPORT_RD_HOST)";
+      }
+    } catch (e) {}
+    const saved = localStorage.getItem("eklk_helper_agent_id") || "";
+    const inp = document.getElementById("help_agent_id");
+    if (inp && saved && !inp.value) inp.value = saved;
+  }
+
+  async function helperGoOnline() {
+    const inp = document.getElementById("help_agent_id");
+    const plat = document.getElementById("help_platform");
+    let id = (inp && inp.value) || "";
+    id = String(id).replace(/\s+/g, "").trim();
+    if (id.length < 5) {
+      showAlert("Укажите ID из окна помощника (RustDesk)");
+      return;
+    }
+    try {
+      await api("/support/presence", {
+        method: "POST",
+        body: JSON.stringify({
+          agent_id: id,
+          platform: (plat && plat.value) || "windows",
+          status: "online",
+        }),
+      });
+      localStorage.setItem("eklk_helper_agent_id", id);
+      const st = document.getElementById("help_status");
+      if (st) st.textContent = "Статус: в сети · ID " + id;
+      showAlert("Вы в списке поддержки", "success");
+      if (helperHeartbeatTimer) clearInterval(helperHeartbeatTimer);
+      helperHeartbeatTimer = setInterval(() => {
+        api("/support/presence", {
+          method: "POST",
+          body: JSON.stringify({
+            agent_id: id,
+            platform: (plat && plat.value) || "windows",
+            status: "online",
+          }),
+        }).catch(() => {});
+      }, 30000);
+      if (helperPollTimer) clearInterval(helperPollTimer);
+      helperPollTimer = setInterval(pollHelperIncoming, 4000);
+      pollHelperIncoming();
+    } catch (e) {
+      showAlert((e && e.message) || "Ошибка presence");
+    }
+  }
+
+  async function helperGoOffline() {
+    const id = (localStorage.getItem("eklk_helper_agent_id") || "").trim();
+    if (helperHeartbeatTimer) clearInterval(helperHeartbeatTimer);
+    if (helperPollTimer) clearInterval(helperPollTimer);
+    helperHeartbeatTimer = null;
+    helperPollTimer = null;
+    if (id) {
+      try {
+        await api("/support/presence/offline", {
+          method: "POST",
+          body: JSON.stringify({ agent_id: id, status: "offline" }),
+        });
+      } catch (e) {}
+    }
+    const st = document.getElementById("help_status");
+    if (st) st.textContent = "Статус: не в сети";
+    const box = document.getElementById("help_incoming");
+    if (box) box.classList.add("hidden");
+  }
+
+  async function pollHelperIncoming() {
+    try {
+      const data = await api("/support/pending");
+      const p = data && data.pending;
+      const box = document.getElementById("help_incoming");
+      const text = document.getElementById("help_incoming_text");
+      if (!p) {
+        if (box) box.classList.add("hidden");
+        pendingSessionId = null;
+        return;
+      }
+      pendingSessionId = p.session_id;
+      if (box) box.classList.remove("hidden");
+      if (text)
+        text.textContent =
+          "Специалист (" +
+          (p.admin_login || "") +
+          ") запрашивает доступ к экрану. Разрешить?";
+    } catch (e) {}
+  }
+
+  async function helperRespond(allow) {
+    if (!pendingSessionId) return;
+    try {
+      await api("/support/session/" + encodeURIComponent(pendingSessionId) + "/respond", {
+        method: "POST",
+        body: JSON.stringify({ allow: !!allow }),
+      });
+      showAlert(allow ? "Доступ разрешён — примите входящее в RustDesk" : "Отклонено", allow ? "success" : "error");
+      const box = document.getElementById("help_incoming");
+      if (box) box.classList.add("hidden");
+      pendingSessionId = null;
+    } catch (e) {
+      showAlert((e && e.message) || "Ошибка ответа");
+    }
+  }
+
+  function bindSupportUI() {
+    const ref = document.getElementById("sup_refresh");
+    if (ref) ref.onclick = () => loadSupportOnline();
+    const copy = document.getElementById("sup_copy_id");
+    if (copy)
+      copy.onclick = async () => {
+        if (!lastConnectAgentId) return;
+        try {
+          await navigator.clipboard.writeText(lastConnectAgentId);
+          showAlert("ID скопирован", "success");
+        } catch (e) {
+          showAlert(String(lastConnectAgentId), "success");
+        }
+      };
+    const on = document.getElementById("help_online");
+    if (on) on.onclick = () => helperGoOnline();
+    const off = document.getElementById("help_offline");
+    if (off) off.onclick = () => helperGoOffline();
+    const al = document.getElementById("help_allow");
+    if (al) al.onclick = () => helperRespond(true);
+    const dn = document.getElementById("help_deny");
+    if (dn) dn.onclick = () => helperRespond(false);
+  }
 
   // CORE: minimal public API for section modules (catalog, reports, …)
   window.EKLK = {

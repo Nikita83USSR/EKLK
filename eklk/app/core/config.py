@@ -63,6 +63,15 @@ class Settings(BaseSettings):
     catalog_basic_user: str = ""
     catalog_basic_password: str = ""
 
+    # Удалённая поддержка (expremote): логины EcomKassa через запятую — админы поддержки
+    support_admin_logins: str = ""
+    # Публичный хост RustDesk server (hbbs), например remote.example.com
+    support_rd_host: str = ""
+    # Ключ hbbs (RustDesk Key) — клиенты прописывают в config
+    support_rd_key: str = ""
+    # Через сколько секунд без heartbeat агент считается offline
+    support_presence_ttl_seconds: int = 90
+
 
 @lru_cache
 def get_settings() -> Settings:
