@@ -41,11 +41,13 @@ bash remote/build-exe.sh
 Рядом с `EKLK-Helper-Setup.exe` / `EKLK-Admin-Setup.exe` положите `eklk-remote.env` с `EKLK_RD_HOST` и `EKLK_RD_KEY`.
 Один exe (386) работает на Windows 32-bit и 64-bit; сам качает x86_64 или x86-sciter RustDesk.
 
-
 ## Авторизация админа (EXE)
 
- перед установкой:
-1. Читает  из 
-2. Запрашивает логин/пароль EcomKassa
-3.  и 
-4. Продолжает только если  (логин в )
+Файл EKLK-Admin-Setup.exe перед установкой RustDesk:
+
+1. Читает EKLK_API_BASE из eklk-remote.env (URL вашего ЛК)
+2. Запрашивает логин и пароль EcomKassa
+3. POST /api/v1/auth/login и GET /api/v1/support/me
+4. Продолжает только если is_admin=true (логин в SUPPORT_ADMIN_LOGINS на сервере)
+
+Помощник (EKLK-Helper-Setup.exe) авторизацию на EKLK не требует.
