@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
-  EKLK Helper (Windows) — ставит RustDesk и прописывает ваш сервер.
-  Запуск: правый клик → Run with PowerShell (от имени пользователя).
+  EKLK Helper (Windows) — ставит RustDesk под разрядность ОС и прописывает ваш сервер.
+  Запуск: правый клик → Run with PowerShell.
 #>
 param(
   [string]$RdHost = $env:EKLK_RD_HOST,
@@ -25,23 +25,51 @@ if (-not $RdHost) {
   exit 1
 }
 
+# --- Архитектура ОС ---
+$Is64 = [Environment]::Is64BitOperatingSystem
+# PROCESSOR_ARCHITECTURE: AMD64 | x86 | ARM64
+$ArchEnv = [string]$env:PROCESSOR_ARCHITECTURE
+$IsArm64 = $ArchEnv -eq "ARM64"
+
+$RdVersion = "1.3.9"
+$BaseUrl = "https://github.com/rustdesk/rustdesk/releases/download/$RdVersion"
+
+if ($IsArm64) {
+  # Официального Windows ARM64 exe в 1.3.9 нет — пробуем x64 (эмуляция на Windows on ARM)
+  Write-Host "Обнаружен Windows ARM64: скачиваем x86_64 (эмуляция)." -ForegroundColor Yellow
+  $Uri = "$BaseUrl/rustdesk-$RdVersion-x86_64.exe"
+  $ArchLabel = "x86_64 (WoA)"
+} elseif ($Is64) {
+  $Uri = "$BaseUrl/rustdesk-$RdVersion-x86_64.exe"
+  $ArchLabel = "x86_64"
+} else {
+  # 32-bit: Flutter-сборки нет, используется Sciter-сборка
+  $Uri = "$BaseUrl/rustdesk-$RdVersion-x86-sciter.exe"
+  $ArchLabel = "x86 (32-bit Sciter)"
+}
+
+Write-Host "ОС: $(if ($Is64) { '64-bit' } else { '32-bit' }) · сборка RustDesk: $ArchLabel"
+Write-Host "URL: $Uri"
+
 $Dest = Join-Path $env:LOCALAPPDATA "EKLK-Helper"
 New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 $RustDeskExe = Join-Path $Dest "rustdesk.exe"
 
-# Official portable-ish download (latest windows x86_64)
-$Uri = "https://github.com/rustdesk/rustdesk/releases/download/1.3.9/rustdesk-1.3.9-x86_64.exe"
 Write-Host "Скачивание RustDesk..."
 try {
   Invoke-WebRequest -Uri $Uri -OutFile $RustDeskExe -UseBasicParsing
 } catch {
-  Write-Host "Не удалось скачать автоматически. Скачайте RustDesk вручную с github.com/rustdesk/rustdesk/releases и положите rustdesk.exe в $Dest" -ForegroundColor Yellow
+  Write-Host "Автозагрузка не удалась: $_" -ForegroundColor Yellow
+  Write-Host "Скачайте вручную:" -ForegroundColor Yellow
+  Write-Host "  64-bit: $BaseUrl/rustdesk-$RdVersion-x86_64.exe"
+  Write-Host "  32-bit: $BaseUrl/rustdesk-$RdVersion-x86-sciter.exe"
+  Write-Host "Положите файл как: $RustDeskExe"
+  if (-not (Test-Path $RustDeskExe)) { exit 1 }
 }
 
 $ConfDir = Join-Path $env:APPDATA "RustDesk\config"
 New-Item -ItemType Directory -Force -Path $ConfDir | Out-Null
 $Toml = Join-Path $ConfDir "RustDesk2.toml"
-# Минимальный конфиг: только ваш сервер (ID появится после первого запуска)
 $Content = @"
 rendezvous_server = '$RdHost'
 nat_type = 1
@@ -55,12 +83,9 @@ direct-server = 'Y'
 verification-method = 'use-permanent-password'
 approve-mode = 'password'
 "@
-# permanent password optional — admin is trusted; user still confirms connection in UI
 Set-Content -Path $Toml -Value $Content -Encoding UTF8
 
-# Register helper script
 $Reg = @"
-# Register presence in EKLK after RustDesk has an ID
 `$conf = Join-Path `$env:APPDATA 'RustDesk\config\RustDesk.toml'
 if (-not (Test-Path `$conf)) { `$conf = Join-Path `$env:APPDATA 'RustDesk\config\RustDesk2.toml' }
 `$id = `$null
@@ -74,18 +99,17 @@ if (-not `$id) {
   exit 0
 }
 Write-Host "RustDesk ID: `$id"
-Write-Host "Вставьте ID в ЛК EKLK → Помощник (или сохраните; heartbeat из ЛК отправит ID)."
 Set-Content -Path (Join-Path '$Dest' 'agent_id.txt') -Value `$id
 "@
 Set-Content -Path (Join-Path $Dest "Register-Presence.ps1") -Value $Reg -Encoding UTF8
 
-Copy-Item -Force (Join-Path $Root "eklk-remote.env") -Destination (Join-Path $Dest "eklk-remote.env") -ErrorAction SilentlyContinue
+if (Test-Path $CfgLocal) {
+  Copy-Item -Force $CfgLocal -Destination (Join-Path $Dest "eklk-remote.env") -ErrorAction SilentlyContinue
+}
 
 Write-Host ""
-Write-Host "Готово. Запустите: $RustDeskExe" -ForegroundColor Green
-Write-Host "1) Откройте RustDesk, дождитесь своего ID"
-Write-Host "2) В ЛК EKLK → раздел «Помощник» вставьте ID и нажмите «Я в сети»"
-Write-Host "3) Оставьте RustDesk запущенным пока нужна поддержка"
-if ($RustDeskExe -and (Test-Path $RustDeskExe)) {
-  Start-Process $RustDeskExe
-}
+Write-Host "Готово ($ArchLabel). Запуск: $RustDeskExe" -ForegroundColor Green
+Write-Host "1) Дождитесь ID в окне RustDesk"
+Write-Host "2) ЛК EKLK → Помощник → вставьте ID → «Я в сети»"
+Write-Host "3) Оставьте RustDesk включённым на время поддержки"
+if (Test-Path $RustDeskExe) { Start-Process $RustDeskExe }

@@ -1,6 +1,5 @@
 #Requires -Version 5.1
-# Админ-клиент Windows — тот же RustDesk, сервер EKLK, подключение по ID из ЛК.
-param()
+# Админ-клиент Windows — RustDesk под разрядность ОС, сервер EKLK.
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RdHost = ""; $RdKey = ""
@@ -13,14 +12,33 @@ if (Test-Path $CfgLocal) {
 }
 if (-not $RdHost) { Write-Host "Заполните eklk-remote.env"; exit 1 }
 
+$Is64 = [Environment]::Is64BitOperatingSystem
+$IsArm64 = [string]$env:PROCESSOR_ARCHITECTURE -eq "ARM64"
+$RdVersion = "1.3.9"
+$BaseUrl = "https://github.com/rustdesk/rustdesk/releases/download/$RdVersion"
+
+if ($IsArm64 -or $Is64) {
+  $Uri = "$BaseUrl/rustdesk-$RdVersion-x86_64.exe"
+  $ArchLabel = if ($IsArm64) { "x86_64 (WoA)" } else { "x86_64" }
+} else {
+  $Uri = "$BaseUrl/rustdesk-$RdVersion-x86-sciter.exe"
+  $ArchLabel = "x86 (32-bit Sciter)"
+}
+
+Write-Host "Сборка: $ArchLabel"
+Write-Host "URL: $Uri"
+
 $Dest = Join-Path $env:LOCALAPPDATA "EKLK-Admin"
 New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 $Exe = Join-Path $Dest "rustdesk.exe"
-$Uri = "https://github.com/rustdesk/rustdesk/releases/download/1.3.9/rustdesk-1.3.9-x86_64.exe"
 Write-Host "Скачивание RustDesk (админ)..."
-try { Invoke-WebRequest -Uri $Uri -OutFile $Exe -UseBasicParsing } catch {
-  Write-Host "Скачайте rustdesk.exe вручную в $Dest"
+try {
+  Invoke-WebRequest -Uri $Uri -OutFile $Exe -UseBasicParsing
+} catch {
+  Write-Host "Скачайте вручную в $Exe : $Uri" -ForegroundColor Yellow
+  if (-not (Test-Path $Exe)) { exit 1 }
 }
+
 $ConfDir = Join-Path $env:APPDATA "RustDesk\config"
 New-Item -ItemType Directory -Force -Path $ConfDir | Out-Null
 @"
@@ -34,5 +52,5 @@ key = '$RdKey'
 direct-server = 'Y'
 "@ | Set-Content -Path (Join-Path $ConfDir "RustDesk2.toml") -Encoding UTF8
 
-Write-Host "Админ-клиент готов. В ЛК: Поддержка → Подключиться → в RustDesk введите ID клиента." -ForegroundColor Green
+Write-Host "Админ-клиент готов ($ArchLabel). ЛК → Поддержка → Подключиться → ID в RustDesk." -ForegroundColor Green
 if (Test-Path $Exe) { Start-Process $Exe }
