@@ -5033,12 +5033,29 @@
       .join("");
   }
 
+
+  function syncTplPriceFloat() {
+    const floatOn = !!( $("#tpl_price_float") && $("#tpl_price_float").checked );
+    const priceEl = $("#tpl_price");
+    if (!priceEl) return;
+    if (floatOn) {
+      priceEl.value = "";
+      priceEl.disabled = true;
+      priceEl.placeholder = "сумма от покупателя";
+    } else {
+      priceEl.disabled = false;
+      priceEl.placeholder = "0.00";
+    }
+  }
+
   function resetTplForm() {
     $("#tpl_id").value = "";
     if ($("#tpl_user_id")) $("#tpl_user_id").value = "";
     $("#tpl_name").value = "";
     $("#tpl_product").value = "";
     $("#tpl_price").value = "";
+    if ($("#tpl_price_float")) $("#tpl_price_float").checked = false;
+    syncTplPriceFloat();
     $("#tpl_count").value = "1";
     $("#tpl_vat").value = "none";
     $("#tpl_method").value = "full_payment";
@@ -5088,7 +5105,10 @@
           $("#tpl_id").value = tpl.templateId || templateId;
           $("#tpl_name").value = tpl.name || "";
           $("#tpl_product").value = tpl.product || "";
-          $("#tpl_price").value = tpl.price != null ? tpl.price : "";
+          const hasFixedPrice = tpl.price != null && tpl.price !== "";
+          if ($("#tpl_price_float")) $("#tpl_price_float").checked = !hasFixedPrice;
+          $("#tpl_price").value = hasFixedPrice ? tpl.price : "";
+          syncTplPriceFloat();
           $("#tpl_count").value = tpl.count != null ? tpl.count : 1;
           if (tpl.vat) $("#tpl_vat").value = tpl.vat;
           if (tpl.paymentMethod) $("#tpl_method").value = tpl.paymentMethod;
@@ -5133,15 +5153,17 @@
   function collectTplBody() {
     const name = ($("#tpl_name").value || "").trim();
     const product = ($("#tpl_product").value || "").trim();
+    const floatPrice = !!( $("#tpl_price_float") && $("#tpl_price_float").checked );
     const priceRaw = ($("#tpl_price").value || "").trim();
     const count = parseFloat($("#tpl_count").value) || 1;
     if (!name) throw new Error("Укажите наименование шаблона");
     if (!product) throw new Error("Укажите наименование товара/услуги");
-    // Пустая цена = плавающая сумма (EcomKassa: поле price не передаём)
+    // Плавающая сумма: не передаём price в API (EcomKassa)
     let price = null;
-    if (priceRaw !== "") {
+    if (!floatPrice) {
+      if (priceRaw === "") throw new Error("Укажите цену или включите «Покупатель вводит сам»");
       price = parseFloat(priceRaw);
-      if (!(price >= 0) || isNaN(price)) throw new Error("Укажите корректную цену или оставьте поле пустым");
+      if (!(price >= 0) || isNaN(price)) throw new Error("Укажите корректную цену");
     }
     const storeId = parseInt($("#tpl_store").value, 10);
     if (!storeId) throw new Error("Выберите магазин");
@@ -5236,6 +5258,9 @@
     if ($("#tpl_save")) $("#tpl_save").onclick = () => saveTpl();
     if ($("#tpl_agent")) {
       $("#tpl_agent").addEventListener("change", () => syncTplAgentBox());
+    }
+    if ($("#tpl_price_float")) {
+      $("#tpl_price_float").addEventListener("change", () => syncTplPriceFloat());
     }
     $$("[data-close-tpl]").forEach((el) => {
       el.onclick = () => closeTplModal();
