@@ -5262,6 +5262,7 @@
     syncTplAgentBox();
     $("#tpl_req_email").checked = true;
     $("#tpl_req_phone").checked = false;
+    if ($("#tpl_req_fio")) $("#tpl_req_fio").checked = true;
     const err = $("#tpl_form_error");
     if (err) { err.classList.add("hidden"); err.textContent = ""; }
     fillTplStoreSelect();
@@ -5338,6 +5339,7 @@
     syncTplAgentBox();
     $("#tpl_req_email").checked = !!tpl.requireClientEmail;
     $("#tpl_req_phone").checked = !!tpl.requireClientPhone;
+    if ($("#tpl_req_fio")) $("#tpl_req_fio").checked = !!tpl.requireClientData;
     const qp = tpl.qrPay || {};
     if ($("#tpl_user_id") && qp.userId) $("#tpl_user_id").value = qp.userId;
     fillTplStoreSelect(qp.storeId);
@@ -5422,7 +5424,7 @@
       agentType,
       requireClientEmail: !!$("#tpl_req_email").checked,
       requireClientPhone: !!$("#tpl_req_phone").checked,
-      requireClientData: true,
+      requireClientData: !!($("#tpl_req_fio") && $("#tpl_req_fio").checked),
       qrPay: {
         allowedProviders,
         storeId,
