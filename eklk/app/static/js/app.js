@@ -2451,60 +2451,132 @@
     }
 
     function downloadQrPng(dataUrl, filename) {
-      if (!dataUrl) return;
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = filename || "qr.png";
-      a.rel = "noopener";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      if (!dataUrl || dataUrl === "data:,") return false;
+      try {
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = filename || "qr.png";
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => a.remove(), 0);
+        return true;
+      } catch (e) {
+        console.warn("downloadQrPng", e);
+        return false;
+      }
     }
 
-    function generateQrDataUrl(text, px) {
+    function scaleCanvasToDataUrl(srcEl, px) {
+      if (!srcEl) return null;
+      const out = document.createElement("canvas");
+      out.width = px;
+      out.height = px;
+      const ctx = out.getContext("2d");
+      if (!ctx) return null;
+      ctx.imageSmoothingEnabled = false;
+      try {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, px, px);
+        ctx.drawImage(srcEl, 0, 0, px, px);
+        return out.toDataURL("image/png");
+      } catch (e) {
+        console.warn("scaleCanvasToDataUrl", e);
+        return null;
+      }
+    }
+
+    function qrToCanvasDataUrl(text, px) {
       return new Promise((resolve, reject) => {
-        if (typeof QRCode === "undefined" || !QRCode.toDataURL) {
-          reject(new Error("QR library missing"));
+        if (typeof QRCode === "undefined") {
+          reject(new Error("QRCode undefined"));
           return;
         }
-        QRCode.toDataURL(
-          text,
-          {
-            width: px,
-            margin: 2,
-            errorCorrectionLevel: "M",
-            color: { dark: "#0f172a", light: "#ffffff" },
-          },
-          (err, url) => {
-            if (err || !url) reject(err || new Error("QR failed"));
-            else resolve(url);
+        const tmp = document.createElement("canvas");
+        const opts = {
+          width: px,
+          margin: 2,
+          color: { dark: "#0f172a", light: "#ffffff" },
+        };
+        const done = (err) => {
+          if (err) {
+            reject(err);
+            return;
           }
-        );
+          try {
+            resolve(tmp.toDataURL("image/png"));
+          } catch (e) {
+            reject(e);
+          }
+        };
+        try {
+          if (typeof QRCode.toCanvas === "function") {
+            QRCode.toCanvas(tmp, text, opts, done);
+          } else if (typeof QRCode.toDataURL === "function") {
+            QRCode.toDataURL(text, opts, (err, url) => {
+              if (err || !url) reject(err || new Error("toDataURL empty"));
+              else resolve(url);
+            });
+          } else {
+            reject(new Error("no QRCode export"));
+          }
+        } catch (e) {
+          reject(e);
+        }
       });
     }
 
     async function downloadQrAtScale(scale) {
-      const px = QR_BASE_SIZE * (scale || 1);
+      const s = scale || 1;
+      const px = QR_BASE_SIZE * s;
       const filename = qrDownloadFilename();
+      const text = String(link || "").trim();
+      if (!text) {
+        showAlert("Нет ссылки для QR");
+        return;
+      }
+
+      // 1) Генерация в нужном размере через QRCode
       try {
-        const dataUrl = await generateQrDataUrl(link, px);
-        downloadQrPng(dataUrl, filename);
-        const panel = $("#pay_qr_size_panel");
-        if (panel) panel.classList.add("hidden");
-      } catch (e) {
-        // fallback: текущий canvas (только «обычный»)
-        const c = $("#pay_qr_canvas");
-        if (c && c.toDataURL && scale === 1) {
-          downloadQrPng(c.toDataURL("image/png"), filename);
+        const dataUrl = await qrToCanvasDataUrl(text, px);
+        if (downloadQrPng(dataUrl, filename)) {
+          const panel = $("#pay_qr_size_panel");
+          if (panel) panel.classList.add("hidden");
           return;
         }
-        showAlert("Не удалось сформировать QR");
+      } catch (e) {
+        console.warn("qrToCanvasDataUrl failed", e);
       }
+
+      // 2) Масштаб с уже показанного canvas / img в модалке
+      const c = $("#pay_qr_canvas");
+      const im = $("#pay_qr_img");
+      const src = (c && c.width) ? c : im;
+      if (src) {
+        const dataUrl = scaleCanvasToDataUrl(src, px);
+        if (dataUrl && downloadQrPng(dataUrl, filename)) {
+          const panel = $("#pay_qr_size_panel");
+          if (panel) panel.classList.add("hidden");
+          return;
+        }
+        if (c && s === 1) {
+          try {
+            if (downloadQrPng(c.toDataURL("image/png"), filename)) {
+              const panel = $("#pay_qr_size_panel");
+              if (panel) panel.classList.add("hidden");
+              return;
+            }
+          } catch (e2) {}
+        }
+      }
+
+      showAlert("Не удалось сформировать QR");
     }
 
     const dl = $("#pay_qr_download");
     if (dl) {
-      dl.onclick = () => {
+      dl.onclick = (ev) => {
+        if (ev) ev.preventDefault();
         const panel = $("#pay_qr_size_panel");
         if (!panel) {
           downloadQrAtScale(1);
@@ -2514,7 +2586,11 @@
       };
     }
     $$(".pay-qr-size-btn").forEach((btn) => {
-      btn.onclick = () => {
+      btn.onclick = (ev) => {
+        if (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+        }
         const scale = parseInt(btn.getAttribute("data-qr-scale") || "1", 10) || 1;
         downloadQrAtScale(scale);
       };
