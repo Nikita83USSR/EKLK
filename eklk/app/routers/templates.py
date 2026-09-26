@@ -72,16 +72,58 @@ def _user_id_from_jwt(token: str | None) -> str | None:
     return None
 
 
-def _user_id_from_templates(items: list) -> str | None:
+def _is_firm_id(uid: str | None, firm_id: str | None) -> bool:
+    if not uid or not firm_id:
+        return False
+    if not _is_uuid(str(uid)) or not _is_uuid(str(firm_id)):
+        return False
+    return str(uid).strip().lower() == str(firm_id).strip().lower()
+
+
+def _user_id_from_templates(
+    items: list,
+    firm_id: str | None = None,
+    prefer_store_id: int | str | None = None,
+) -> str | None:
+    """Берём qrPay.userId кассира; firmId в userId пропускаем — это не кассир."""
+
+    def is_cashier(uid) -> bool:
+        if not _is_uuid(str(uid) if uid is not None else None):
+            return False
+        if _is_firm_id(str(uid), firm_id):
+            return False
+        return True
+
+    prefer = None
+    if prefer_store_id is not None and str(prefer_store_id).strip() != "":
+        try:
+            prefer = int(prefer_store_id)
+        except (TypeError, ValueError):
+            prefer = str(prefer_store_id)
+
+    if prefer is not None:
+        for t in items or []:
+            if not isinstance(t, dict):
+                continue
+            qp = t.get("qrPay") or {}
+            if not isinstance(qp, dict):
+                continue
+            sid = qp.get("storeId")
+            try:
+                sid_match = int(sid) == prefer if isinstance(prefer, int) else str(sid) == str(prefer)
+            except (TypeError, ValueError):
+                sid_match = str(sid) == str(prefer)
+            if sid_match and is_cashier(qp.get("userId")):
+                return str(qp.get("userId")).strip()
+
     for t in items or []:
         if not isinstance(t, dict):
             continue
         qp = t.get("qrPay") or {}
         if not isinstance(qp, dict):
             continue
-        uid = qp.get("userId")
-        if _is_uuid(str(uid) if uid is not None else None):
-            return str(uid).strip()
+        if is_cashier(qp.get("userId")):
+            return str(qp.get("userId")).strip()
     return None
 
 
@@ -89,34 +131,24 @@ async def _resolve_cashier_user_id(
     client: EcomKassaClient,
     explicit: str | None = None,
     firm_id: str | None = None,
+    prefer_store_id: int | str | None = None,
 ) -> str | None:
     """
-    userId в qrPay — UUID (на практике часто совпадает с firmId).
+    userId в qrPay — UUID кассира (не firmId).
     Источники (по приоритету):
-      1) явно переданный UUID
-      2) firmId из сессии / профиля фирмы
-      3) из уже существующих шаблонов (qrPay.userId)
-      4) JWT userId (если UUID)
+      1) явный UUID, если это не firmId
+      2) qrPay.userId из существующих шаблонов (лучше с тем же storeId)
+      3) JWT userId (если UUID и не firmId)
+    firmId как кассир не подставляем — EcomKassa: need to define store and cashier.
     """
-    if _is_uuid(explicit):
+    if _is_uuid(explicit) and not _is_firm_id(explicit, firm_id):
         return str(explicit).strip()
-
-    if _is_uuid(firm_id):
-        return str(firm_id).strip()
-
-    try:
-        firm = await client.get_firm_profile()
-        if isinstance(firm, dict):
-            for key in ("firmId", "firm_id", "userId", "user_id", "ownerId", "owner_id"):
-                val = firm.get(key)
-                if _is_uuid(str(val) if val is not None else None):
-                    return str(val).strip()
-    except EcomKassaError:
-        pass
 
     try:
         items = await client.list_templates(firm_id=firm_id)
-        from_tpl = _user_id_from_templates(items)
+        from_tpl = _user_id_from_templates(
+            items, firm_id=firm_id, prefer_store_id=prefer_store_id
+        )
         if from_tpl:
             return from_tpl
     except EcomKassaError:
@@ -124,7 +156,7 @@ async def _resolve_cashier_user_id(
 
     token = getattr(client, "_token", None) or await client.get_token()
     from_jwt = _user_id_from_jwt(token)
-    if from_jwt:
+    if from_jwt and not _is_firm_id(from_jwt, firm_id):
         return from_jwt
 
     return None
@@ -186,20 +218,24 @@ async def _ensure_qrpay_user_id(
     payload: dict,
     firm_id: str | None,
 ) -> dict:
-    """Гарантируем qrPay.userId как UUID — иначе EcomKassa: error.expected.uuid."""
+    """Гарантируем qrPay.userId = UUID кассира (не firmId)."""
     qp = payload.get("qrPay")
     if not isinstance(qp, dict):
         return payload
     current = qp.get("userId")
-    if _is_uuid(str(current) if current is not None else None):
-        # нормализуем регистр/пробелы
+    cur_s = str(current).strip() if current is not None else ""
+    # firmId в userId считаем пустым — иначе need to define store and cashier
+    if _is_uuid(cur_s) and not _is_firm_id(cur_s, firm_id):
         qp = dict(qp)
-        qp["userId"] = str(current).strip()
+        qp["userId"] = cur_s
         payload = dict(payload)
         payload["qrPay"] = qp
         return payload
     uid = await _resolve_cashier_user_id(
-        client, explicit=None, firm_id=firm_id
+        client,
+        explicit=None,
+        firm_id=firm_id,
+        prefer_store_id=qp.get("storeId"),
     )
     if not uid or not _is_uuid(uid):
         raise HTTPException(
@@ -207,8 +243,8 @@ async def _ensure_qrpay_user_id(
             detail={
                 "message": (
                     "Не удалось определить UUID кассира (qrPay.userId). "
-                    "Создайте/откройте шаблон с QR Pay в ЛК EcomKassa один раз, "
-                    "либо отредактируйте существующий шаблон — userId подтянется автоматически."
+                    "Откройте любой рабочий шаблон с QR Pay в ЛК EcomKassa "
+                    "или сохраните шаблон, созданный там — userId подтянется автоматически."
                 ),
                 "code": "userId_missing",
             },

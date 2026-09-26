@@ -5206,10 +5206,17 @@
     const el = $("#tpl_store");
     if (!el) return;
     const stores = storesList();
-    const cur = selected != null ? String(selected) : String(getSelectedStoreId() || "");
+    let cur = selected != null && selected !== "" ? String(selected) : String(getSelectedStoreId() || "");
     if (!stores.length) {
-      el.innerHTML = '<option value="' + escHtml(cur || "990") + '">' + escHtml(cur || "990") + "</option>";
+      el.innerHTML = cur
+        ? '<option value="' + escHtml(cur) + '">' + escHtml(cur) + "</option>"
+        : '<option value="">Нет магазинов в профиле</option>';
       return;
+    }
+    const ids = new Set(stores.map((s) => String(s.store_id)));
+    if (!ids.has(cur)) {
+      const fromSession = String(getSelectedStoreId() || "");
+      cur = ids.has(fromSession) ? fromSession : String(stores[0].store_id);
     }
     el.innerHTML = stores
       .map((s) => {
@@ -5265,17 +5272,32 @@
     return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(String(s || "").trim());
   }
 
-  /** userId для qrPay: firmId (UUID фирмы) или из существующих шаблонов. */
-  async function findKnownCashierUserId() {
-    if (firmData && isUuid(firmData.firm_id)) {
-      return String(firmData.firm_id).trim();
-    }
+  /** userId кассира для qrPay — НЕ firmId (иначе EcomKassa: need to define store and cashier). */
+  async function findKnownCashierUserId(preferStoreId) {
+    const firmId =
+      firmData && isUuid(firmData.firm_id)
+        ? String(firmData.firm_id).trim().toLowerCase()
+        : "";
+    const isCashier = (uid) => {
+      if (!isUuid(uid)) return false;
+      if (firmId && String(uid).trim().toLowerCase() === firmId) return false;
+      return true;
+    };
     try {
       const items = await api("/templates");
       const list = Array.isArray(items) ? items : [];
+      if (preferStoreId != null && preferStoreId !== "") {
+        const want = String(preferStoreId);
+        for (const tpl of list) {
+          const qp = tpl && tpl.qrPay;
+          if (qp && String(qp.storeId) === want && isCashier(qp.userId)) {
+            return String(qp.userId).trim();
+          }
+        }
+      }
       for (const tpl of list) {
         const uid = tpl && tpl.qrPay && tpl.qrPay.userId;
-        if (isUuid(uid)) return String(uid).trim();
+        if (isCashier(uid)) return String(uid).trim();
       }
     } catch (e) { /* ignore */ }
     return "";
@@ -5407,12 +5429,15 @@
       },
     };
     if (price != null) body.price = price;
-    // userId = firmId (UUID) — иначе EcomKassa: error.expected.uuid
+    // userId кассира: не подставляем firmId
+    const firmIdStr =
+      firmData && isUuid(firmData.firm_id) ? String(firmData.firm_id).trim().toLowerCase() : "";
     const hid = $("#tpl_user_id");
     if (hid && isUuid(hid.value)) {
-      body.qrPay.userId = hid.value.trim();
-    } else if (firmData && isUuid(firmData.firm_id)) {
-      body.qrPay.userId = String(firmData.firm_id).trim();
+      const uid = hid.value.trim();
+      if (!firmIdStr || uid.toLowerCase() !== firmIdStr) {
+        body.qrPay.userId = uid;
+      }
     }
     if (agentType && agentType !== "non_agent") {
       const sn = ($("#tpl_sup_name") && $("#tpl_sup_name").value.trim()) || "";
@@ -5440,6 +5465,14 @@
     if (errEl) { errEl.classList.add("hidden"); errEl.textContent = ""; }
     try {
       const body = collectTplBody();
+      // добить кассира из рабочих шаблонов (тот же store предпочтительнее)
+      if (body.qrPay && !body.qrPay.userId) {
+        const uid = await findKnownCashierUserId(body.qrPay.storeId);
+        if (uid) {
+          body.qrPay.userId = uid;
+          if ($("#tpl_user_id")) $("#tpl_user_id").value = uid;
+        }
+      }
       const id = ($("#tpl_id").value || "").trim();
       if (id) {
         await api("/templates/" + encodeURIComponent(id), {
