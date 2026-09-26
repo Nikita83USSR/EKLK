@@ -4904,6 +4904,7 @@
               '</div>' +
             '</div>' +
             '<div class="tpl-card-actions">' +
+              '<button type="button" class="btn btn-sm btn-secondary tpl-dup" data-id="' + escHtml(id) + '" title="Создать копию шаблона">Копировать</button>' +
               '<button type="button" class="btn btn-sm btn-secondary tpl-edit" data-id="' + escHtml(id) + '">Изменить</button>' +
               '<button type="button" class="btn btn-sm btn-secondary tpl-del" data-id="' + escHtml(id) + '">Удалить</button>' +
             '</div>' +
@@ -4933,6 +4934,13 @@
           const input = btn.closest(".tpl-card").querySelector(".tpl-link-input");
           if (input) { input.select(); document.execCommand("copy"); }
         }
+      };
+    });
+    $$(".tpl-dup").forEach((btn) => {
+      btn.onclick = (ev) => {
+        if (ev) ev.stopPropagation();
+        const id = btn.dataset.id;
+        if (id) openTplModal(id, { asCopy: true });
       };
     });
     $$(".tpl-edit").forEach((btn) => {
@@ -5094,43 +5102,71 @@
     return "";
   }
 
-  function openTplModal(templateId) {
+  function copyTplName(name) {
+    const base = String(name || "Шаблон").trim() || "Шаблон";
+    const suffix = " (копия)";
+    const max = 128;
+    if (base.length + suffix.length <= max) return base + suffix;
+    return base.slice(0, Math.max(1, max - suffix.length)).trimEnd() + suffix;
+  }
+
+  /** Заполнить форму из объекта шаблона. asCopy=true → без id, имя с «(копия)». */
+  function fillTplFormFromTpl(tpl, asCopy) {
+    if (!tpl) return;
+    if (asCopy) {
+      $("#tpl_id").value = "";
+      $("#tpl_name").value = copyTplName(tpl.name || "");
+    } else {
+      $("#tpl_id").value = tpl.templateId || "";
+      $("#tpl_name").value = tpl.name || "";
+    }
+    $("#tpl_product").value = tpl.product || "";
+    const hasFixedPrice = tpl.price != null && tpl.price !== "";
+    if ($("#tpl_price_float")) $("#tpl_price_float").checked = !hasFixedPrice;
+    $("#tpl_price").value = hasFixedPrice ? tpl.price : "";
+    syncTplPriceFloat();
+    $("#tpl_count").value = tpl.count != null ? tpl.count : 1;
+    if (tpl.vat) $("#tpl_vat").value = tpl.vat;
+    if (tpl.paymentMethod) $("#tpl_method").value = tpl.paymentMethod;
+    if (tpl.paymentObject) $("#tpl_object").value = tpl.paymentObject;
+    if (tpl.operationType) $("#tpl_operation").value = tpl.operationType;
+    if (tpl.agentType) $("#tpl_agent").value = tpl.agentType;
+    if ($("#tpl_sup_name")) $("#tpl_sup_name").value = tpl.supplierName || "";
+    if ($("#tpl_sup_inn")) $("#tpl_sup_inn").value = tpl.supplierInn || "";
+    if ($("#tpl_sup_phone")) $("#tpl_sup_phone").value = tpl.supplierPhone || "";
+    syncTplAgentBox();
+    $("#tpl_req_email").checked = !!tpl.requireClientEmail;
+    $("#tpl_req_phone").checked = !!tpl.requireClientPhone;
+    const qp = tpl.qrPay || {};
+    if ($("#tpl_user_id") && qp.userId) $("#tpl_user_id").value = qp.userId;
+    fillTplStoreSelect(qp.storeId);
+    fillTplProviders(qp.allowedProviders || []);
+  }
+
+  function openTplModal(templateId, opts) {
+    const asCopy = !!(opts && opts.asCopy);
     const modal = $("#tplModal");
     if (!modal) return;
     resetTplForm();
-    $("#tpl_modal_title").textContent = templateId ? "Редактировать шаблон" : "Новый шаблон";
     if (templateId) {
+      $("#tpl_modal_title").textContent = asCopy ? "Копия шаблона" : "Редактировать шаблон";
       api("/templates/" + encodeURIComponent(templateId))
         .then((tpl) => {
-          $("#tpl_id").value = tpl.templateId || templateId;
-          $("#tpl_name").value = tpl.name || "";
-          $("#tpl_product").value = tpl.product || "";
-          const hasFixedPrice = tpl.price != null && tpl.price !== "";
-          if ($("#tpl_price_float")) $("#tpl_price_float").checked = !hasFixedPrice;
-          $("#tpl_price").value = hasFixedPrice ? tpl.price : "";
-          syncTplPriceFloat();
-          $("#tpl_count").value = tpl.count != null ? tpl.count : 1;
-          if (tpl.vat) $("#tpl_vat").value = tpl.vat;
-          if (tpl.paymentMethod) $("#tpl_method").value = tpl.paymentMethod;
-          if (tpl.paymentObject) $("#tpl_object").value = tpl.paymentObject;
-          if (tpl.operationType) $("#tpl_operation").value = tpl.operationType;
-          if (tpl.agentType) $("#tpl_agent").value = tpl.agentType;
-          if ($("#tpl_sup_name")) $("#tpl_sup_name").value = tpl.supplierName || "";
-          if ($("#tpl_sup_inn")) $("#tpl_sup_inn").value = tpl.supplierInn || "";
-          if ($("#tpl_sup_phone")) $("#tpl_sup_phone").value = tpl.supplierPhone || "";
-          syncTplAgentBox();
-          $("#tpl_req_email").checked = !!tpl.requireClientEmail;
-          $("#tpl_req_phone").checked = !!tpl.requireClientPhone;
-          const qp = tpl.qrPay || {};
-          if ($("#tpl_user_id") && qp.userId) $("#tpl_user_id").value = qp.userId;
-          fillTplStoreSelect(qp.storeId);
-          fillTplProviders(qp.allowedProviders || []);
+          fillTplFormFromTpl(tpl, asCopy);
+          // Копия: userId из исходника или firm UUID
+          if (asCopy && $("#tpl_user_id") && !isUuid($("#tpl_user_id").value)) {
+            findKnownCashierUserId().then((uid) => {
+              if (uid && $("#tpl_user_id") && !$("#tpl_user_id").value) {
+                $("#tpl_user_id").value = uid;
+              }
+            });
+          }
         })
         .catch((e) => showAlert(e.message || String(e)));
     } else {
+      $("#tpl_modal_title").textContent = "Новый шаблон";
       fillTplStoreSelect();
       fillTplProviders([]);
-      // для создания: заранее подтянуть UUID кассира из существующих шаблонов
       findKnownCashierUserId().then((uid) => {
         if (uid && $("#tpl_user_id") && !$("#tpl_user_id").value) {
           $("#tpl_user_id").value = uid;
