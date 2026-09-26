@@ -2434,10 +2434,12 @@
     function sanitizeQrFilename(name) {
       let s = String(name || "").trim();
       if (!s) s = "qr";
+      // только запрещённые в Windows/macOS символы; кириллица/пробелы/тире — ок
       s = s.replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ").trim();
       if (!s) s = "qr";
       if (s.length > 80) s = s.slice(0, 80).trim();
-      return s + ".png";
+      if (!/\.png$/i.test(s)) s += ".png";
+      return s;
     }
 
     function qrDownloadFilename() {
@@ -2450,124 +2452,145 @@
       return "payment-qr.png";
     }
 
-    function downloadQrPng(dataUrl, filename) {
-      if (!dataUrl || dataUrl === "data:,") return false;
+    function downloadBlobAsFile(blob, filename) {
+      if (!blob) return false;
       try {
+        const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = dataUrl;
+        a.href = url;
         a.download = filename || "qr.png";
-        a.rel = "noopener";
+        a.style.display = "none";
         document.body.appendChild(a);
         a.click();
-        setTimeout(() => a.remove(), 0);
+        setTimeout(() => {
+          try { a.remove(); } catch (e) {}
+          try { URL.revokeObjectURL(url); } catch (e) {}
+        }, 1500);
         return true;
       } catch (e) {
-        console.warn("downloadQrPng", e);
+        console.warn("downloadBlobAsFile", e);
         return false;
       }
     }
 
-    function scaleCanvasToDataUrl(srcEl, px) {
-      if (!srcEl) return null;
-      const out = document.createElement("canvas");
-      out.width = px;
-      out.height = px;
-      const ctx = out.getContext("2d");
-      if (!ctx) return null;
-      ctx.imageSmoothingEnabled = false;
+    function dataUrlToBlob(dataUrl) {
       try {
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, px, px);
-        ctx.drawImage(srcEl, 0, 0, px, px);
-        return out.toDataURL("image/png");
+        const parts = String(dataUrl).split(",");
+        const mime = (parts[0].match(/:(.*?);/) || [])[1] || "image/png";
+        const bin = atob(parts[1]);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        return new Blob([arr], { type: mime });
       } catch (e) {
-        console.warn("scaleCanvasToDataUrl", e);
         return null;
       }
     }
 
-    function qrToCanvasDataUrl(text, px) {
+    function scaleElToBlob(srcEl, px) {
+      return new Promise((resolve) => {
+        if (!srcEl) return resolve(null);
+        try {
+          const out = document.createElement("canvas");
+          out.width = px;
+          out.height = px;
+          const ctx = out.getContext("2d");
+          if (!ctx) return resolve(null);
+          ctx.imageSmoothingEnabled = false;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, px, px);
+          ctx.drawImage(srcEl, 0, 0, px, px);
+          out.toBlob((b) => resolve(b || null), "image/png");
+        } catch (e) {
+          console.warn("scaleElToBlob", e);
+          resolve(null);
+        }
+      });
+    }
+
+    function generateQrBlob(text, px) {
       return new Promise((resolve, reject) => {
-        if (typeof QRCode === "undefined") {
-          reject(new Error("QRCode undefined"));
+        if (typeof QRCode === "undefined" || typeof QRCode.toCanvas !== "function") {
+          reject(new Error("QRCode missing"));
           return;
         }
         const tmp = document.createElement("canvas");
-        const opts = {
-          width: px,
-          margin: 2,
-          color: { dark: "#0f172a", light: "#ffffff" },
-        };
-        const done = (err) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          try {
-            resolve(tmp.toDataURL("image/png"));
-          } catch (e) {
-            reject(e);
-          }
-        };
         try {
-          if (typeof QRCode.toCanvas === "function") {
-            QRCode.toCanvas(tmp, text, opts, done);
-          } else if (typeof QRCode.toDataURL === "function") {
-            QRCode.toDataURL(text, opts, (err, url) => {
-              if (err || !url) reject(err || new Error("toDataURL empty"));
-              else resolve(url);
-            });
-          } else {
-            reject(new Error("no QRCode export"));
-          }
+          QRCode.toCanvas(
+            tmp,
+            text,
+            {
+              width: px,
+              margin: 2,
+              color: { dark: "#0f172a", light: "#ffffff" },
+            },
+            (err) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              tmp.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob empty"))), "image/png");
+            }
+          );
         } catch (e) {
           reject(e);
         }
       });
     }
 
+    async function fetchQrServerBlob(text, px) {
+      const size = Math.max(80, Math.min(1000, px || 180));
+      const url =
+        "https://api.qrserver.com/v1/create-qr-code/?size=" +
+        size +
+        "x" +
+        size +
+        "&margin=8&data=" +
+        encodeURIComponent(text);
+      const resp = await fetch(url, { mode: "cors" });
+      if (!resp.ok) throw new Error("qrserver " + resp.status);
+      return await resp.blob();
+    }
+
     async function downloadQrAtScale(scale) {
       const s = scale || 1;
       const px = QR_BASE_SIZE * s;
       const filename = qrDownloadFilename();
-      const text = String(link || "").trim();
+      const text = String(link || ($("#pay_link_input") && $("#pay_link_input").value) || "").trim();
       if (!text) {
         showAlert("Нет ссылки для QR");
         return;
       }
 
-      // 1) Генерация в нужном размере через QRCode
+      let blob = null;
+
+      // 1) Локальная генерация (после починки CDN)
       try {
-        const dataUrl = await qrToCanvasDataUrl(text, px);
-        if (downloadQrPng(dataUrl, filename)) {
-          const panel = $("#pay_qr_size_panel");
-          if (panel) panel.classList.add("hidden");
-          return;
-        }
+        blob = await generateQrBlob(text, px);
       } catch (e) {
-        console.warn("qrToCanvasDataUrl failed", e);
+        console.warn("generateQrBlob", e);
       }
 
-      // 2) Масштаб с уже показанного canvas / img в модалке
-      const c = $("#pay_qr_canvas");
-      const im = $("#pay_qr_img");
-      const src = (c && c.width) ? c : im;
-      if (src) {
-        const dataUrl = scaleCanvasToDataUrl(src, px);
-        if (dataUrl && downloadQrPng(dataUrl, filename)) {
-          const panel = $("#pay_qr_size_panel");
-          if (panel) panel.classList.add("hidden");
-          return;
+      // 2) Масштаб с canvas в модалке (не с cross-origin img)
+      if (!blob) {
+        const c = $("#pay_qr_canvas");
+        if (c && c.width) {
+          blob = await scaleElToBlob(c, px);
         }
-        if (c && s === 1) {
-          try {
-            if (downloadQrPng(c.toDataURL("image/png"), filename)) {
-              const panel = $("#pay_qr_size_panel");
-              if (panel) panel.classList.add("hidden");
-              return;
-            }
-          } catch (e2) {}
+      }
+
+      // 3) Внешний QR API → blob (обход taint canvas)
+      if (!blob) {
+        try {
+          blob = await fetchQrServerBlob(text, px);
+        } catch (e) {
+          console.warn("fetchQrServerBlob", e);
         }
+      }
+
+      if (blob && downloadBlobAsFile(blob, filename)) {
+        const panel = $("#pay_qr_size_panel");
+        if (panel) panel.classList.add("hidden");
+        return;
       }
 
       showAlert("Не удалось сформировать QR");
