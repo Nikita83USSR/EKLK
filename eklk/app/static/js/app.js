@@ -2308,6 +2308,10 @@
     opts = opts || {};
     const modal = $("#payLinkModal");
     if (!modal) return;
+    // имя файла при скачивании QR (шаблон / платёж)
+    modal.dataset.qrName = String(opts.downloadName || opts.fileName || "").trim();
+    const sizePanel = $("#pay_qr_size_panel");
+    if (sizePanel) sizePanel.classList.add("hidden");
     const titleEl = $("#payLinkModalTitle");
     if (titleEl) titleEl.textContent = opts.title || "Ссылка на оплату";
     const input = $("#pay_link_input");
@@ -2425,21 +2429,96 @@
       }
       img.src = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=" + encodeURIComponent(link);
     }
+    const QR_BASE_SIZE = 180;
+
+    function sanitizeQrFilename(name) {
+      let s = String(name || "").trim();
+      if (!s) s = "qr";
+      s = s.replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ").trim();
+      if (!s) s = "qr";
+      if (s.length > 80) s = s.slice(0, 80).trim();
+      return s + ".png";
+    }
+
+    function qrDownloadFilename() {
+      const modal = $("#payLinkModal");
+      const fromModal = modal && modal.dataset.qrName;
+      if (fromModal) return sanitizeQrFilename(fromModal);
+      const meta = ($("#pay_modal_meta") && $("#pay_modal_meta").textContent) || "";
+      const m = meta.match(/шаблон:\s*(.+)$/i);
+      if (m) return sanitizeQrFilename(m[1]);
+      return "payment-qr.png";
+    }
+
+    function downloadQrPng(dataUrl, filename) {
+      if (!dataUrl) return;
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = filename || "qr.png";
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    function generateQrDataUrl(text, px) {
+      return new Promise((resolve, reject) => {
+        if (typeof QRCode === "undefined" || !QRCode.toDataURL) {
+          reject(new Error("QR library missing"));
+          return;
+        }
+        QRCode.toDataURL(
+          text,
+          {
+            width: px,
+            margin: 2,
+            errorCorrectionLevel: "M",
+            color: { dark: "#0f172a", light: "#ffffff" },
+          },
+          (err, url) => {
+            if (err || !url) reject(err || new Error("QR failed"));
+            else resolve(url);
+          }
+        );
+      });
+    }
+
+    async function downloadQrAtScale(scale) {
+      const px = QR_BASE_SIZE * (scale || 1);
+      const filename = qrDownloadFilename();
+      try {
+        const dataUrl = await generateQrDataUrl(link, px);
+        downloadQrPng(dataUrl, filename);
+        const panel = $("#pay_qr_size_panel");
+        if (panel) panel.classList.add("hidden");
+      } catch (e) {
+        // fallback: текущий canvas (только «обычный»)
+        const c = $("#pay_qr_canvas");
+        if (c && c.toDataURL && scale === 1) {
+          downloadQrPng(c.toDataURL("image/png"), filename);
+          return;
+        }
+        showAlert("Не удалось сформировать QR");
+      }
+    }
+
     const dl = $("#pay_qr_download");
     if (dl) {
       dl.onclick = () => {
-        const c = $("#pay_qr_canvas");
-        const im = $("#pay_qr_img");
-        let href = "";
-        if (c && c.toDataURL) href = c.toDataURL("image/png");
-        else if (im) href = im.src;
-        if (!href) return;
-        const a = document.createElement("a");
-        a.href = href;
-        a.download = "payment-qr.png";
-        a.click();
+        const panel = $("#pay_qr_size_panel");
+        if (!panel) {
+          downloadQrAtScale(1);
+          return;
+        }
+        panel.classList.toggle("hidden");
       };
     }
+    $$(".pay-qr-size-btn").forEach((btn) => {
+      btn.onclick = () => {
+        const scale = parseInt(btn.getAttribute("data-qr-scale") || "1", 10) || 1;
+        downloadQrAtScale(scale);
+      };
+    });
     const qrShare = $("#pay_qr_share");
     if (qrShare) {
       qrShare.onclick = async () => {
@@ -4971,6 +5050,7 @@
           title: "QR-код шаблона",
           fromTemplate: true,
           subtitle: btn.dataset.name ? ("шаблон: " + btn.dataset.name) : "",
+          downloadName: btn.dataset.name || "",
         });
       };
     });

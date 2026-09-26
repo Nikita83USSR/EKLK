@@ -16,7 +16,7 @@
     })();
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Unbounded:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260926tpl2" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260926qr1" />
   <link rel="stylesheet" href="/static/css/pro-theme.css?v=20260915pro2" />
   <link rel="stylesheet" href="/static/css/minimal-theme.css?v=20260915min1" />
 </head>
@@ -1263,6 +1263,12 @@
             <button type="button" class="btn btn-secondary btn-sm" id="pay_qr_download">Скачать QR</button>
             <button type="button" class="btn btn-secondary btn-sm" id="pay_qr_share">Поделиться QR</button>
           </div>
+          <div id="pay_qr_size_panel" class="pay-qr-size-panel hidden" role="group" aria-label="Размер QR">
+            <span class="hint" style="margin:0">Размер:</span>
+            <button type="button" class="btn btn-secondary btn-sm pay-qr-size-btn" data-qr-scale="1">Обычный</button>
+            <button type="button" class="btn btn-secondary btn-sm pay-qr-size-btn" data-qr-scale="2">Средний</button>
+            <button type="button" class="btn btn-secondary btn-sm pay-qr-size-btn" data-qr-scale="4">Большой</button>
+          </div>
         </div>
         <div class="pay-action-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
           <button type="button" class="btn btn-sm" id="pay_go_link" title="Открыть ссылку на оплату">Перейти в платёж</button>
@@ -1276,7 +1282,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260926tpl3"></script>
+  <script src="/static/js/app.js?v=20260926qr1"></script>
   <script src="/static/js/sections/dashboard.js?v=20260915pro2"></script>
   <script src="/static/js/sections/catalog.js?v=20260825c"></script>
   <script src="/static/js/sections/reports.js?v=20260825c"></script>
