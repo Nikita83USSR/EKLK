@@ -16,7 +16,7 @@
     })();
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Unbounded:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260924itemlay1" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260926tpl1" />
   <link rel="stylesheet" href="/static/css/pro-theme.css?v=20260915pro2" />
   <link rel="stylesheet" href="/static/css/minimal-theme.css?v=20260915min1" />
 </head>
@@ -651,8 +651,9 @@
             </div>
             <div class="row row-3">
               <div>
-                <label>Цена, руб <span class="req">*</span></label>
-                <input id="tpl_price" type="number" min="0" step="0.01" placeholder="120" />
+                <label>Цена, руб</label>
+                <input id="tpl_price" type="number" min="0" step="0.01" placeholder="пусто = покупатель вводит сам" />
+                <p class="hint" style="margin:4px 0 0;font-size:0.75rem">Если не указывать — плавающая сумма на ссылке</p>
               </div>
               <div>
                 <label>Количество</label>
@@ -675,8 +676,8 @@
               <div>
                 <label>Признак расчёта</label>
                 <select id="tpl_method">
-                  <option value="full_prepayment" selected>Предоплата 100%</option>
-                  <option value="full_payment">Полный расчёт</option>
+                  <option value="full_payment" selected>Полный расчёт</option>
+                  <option value="full_prepayment">Предоплата 100%</option>
                   <option value="prepayment">Предоплата</option>
                   <option value="advance">Аванс</option>
                   <option value="partial_payment">Частичный расчёт</option>
@@ -719,6 +720,25 @@
                 <select id="tpl_store"></select>
               </div>
             </div>
+
+            <div id="tpl_agentBox" class="extra-buyer hidden mt-2">
+              <p class="hint" style="margin-bottom:10px">Данные поставщика обязательны для агентской схемы (как в чеке).</p>
+              <div class="row">
+                <div>
+                  <label>Наименование поставщика <span class="req">*</span></label>
+                  <input id="tpl_sup_name" placeholder="ООО Поставщик" autocomplete="off" />
+                </div>
+                <div>
+                  <label>ИНН поставщика <span class="req">*</span></label>
+                  <input id="tpl_sup_inn" placeholder="7707083893" inputmode="numeric" maxlength="12" autocomplete="off" />
+                </div>
+                <div>
+                  <label>Телефон поставщика <span class="req">*</span></label>
+                  <input id="tpl_sup_phone" placeholder="+79001234567" autocomplete="off" />
+                </div>
+              </div>
+            </div>
+
             <div class="row">
               <div class="checkbox-row">
                 <input type="checkbox" id="tpl_req_email" checked />
@@ -1253,7 +1273,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260924navfix1"></script>
+  <script src="/static/js/app.js?v=20260926tpl1"></script>
   <script src="/static/js/sections/dashboard.js?v=20260915pro2"></script>
   <script src="/static/js/sections/catalog.js?v=20260825c"></script>
   <script src="/static/js/sections/reports.js?v=20260825c"></script>

@@ -4877,7 +4877,7 @@
     const id = tpl.templateId || "";
     const name = escHtml(tpl.name || "Без названия");
     const product = escHtml(tpl.product || "—");
-    const price = tpl.price != null ? Number(tpl.price).toFixed(2) : "—";
+    const price = tpl.price != null && tpl.price !== "" ? Number(tpl.price).toFixed(2) + " ₽" : "сумма от покупателя";
     const count = tpl.count != null ? tpl.count : 1;
     const link = qrUrlForTemplate(tpl);
     const providers = (tpl.qrPay && tpl.qrPay.allowedProviders) || [];
@@ -4895,7 +4895,7 @@
           '<div class="tpl-card-head">' +
             '<div>' +
               '<div class="tpl-card-title">' + name + '</div>' +
-              '<div class="tpl-card-meta">' + product + ' · <b>' + price + ' ₽</b> × ' + count +
+              '<div class="tpl-card-meta">' + product + ' · <b>' + price + '</b> × ' + count +
                 ' · ' + escHtml(tpl.vat || "none") +
                 ' · ' + escHtml(tpl.paymentMethod || "") +
               '</div>' +
@@ -5041,10 +5041,14 @@
     $("#tpl_price").value = "";
     $("#tpl_count").value = "1";
     $("#tpl_vat").value = "none";
-    $("#tpl_method").value = "full_prepayment";
+    $("#tpl_method").value = "full_payment";
     $("#tpl_object").value = "service";
     $("#tpl_operation").value = "sell";
     $("#tpl_agent").value = "non_agent";
+    if ($("#tpl_sup_name")) $("#tpl_sup_name").value = "";
+    if ($("#tpl_sup_inn")) $("#tpl_sup_inn").value = "";
+    if ($("#tpl_sup_phone")) $("#tpl_sup_phone").value = "";
+    syncTplAgentBox();
     $("#tpl_req_email").checked = true;
     $("#tpl_req_phone").checked = false;
     const err = $("#tpl_form_error");
@@ -5091,6 +5095,10 @@
           if (tpl.paymentObject) $("#tpl_object").value = tpl.paymentObject;
           if (tpl.operationType) $("#tpl_operation").value = tpl.operationType;
           if (tpl.agentType) $("#tpl_agent").value = tpl.agentType;
+          if ($("#tpl_sup_name")) $("#tpl_sup_name").value = tpl.supplierName || "";
+          if ($("#tpl_sup_inn")) $("#tpl_sup_inn").value = tpl.supplierInn || "";
+          if ($("#tpl_sup_phone")) $("#tpl_sup_phone").value = tpl.supplierPhone || "";
+          syncTplAgentBox();
           $("#tpl_req_email").checked = !!tpl.requireClientEmail;
           $("#tpl_req_phone").checked = !!tpl.requireClientPhone;
           const qp = tpl.qrPay || {};
@@ -5125,11 +5133,16 @@
   function collectTplBody() {
     const name = ($("#tpl_name").value || "").trim();
     const product = ($("#tpl_product").value || "").trim();
-    const price = parseFloat($("#tpl_price").value);
+    const priceRaw = ($("#tpl_price").value || "").trim();
     const count = parseFloat($("#tpl_count").value) || 1;
     if (!name) throw new Error("Укажите наименование шаблона");
     if (!product) throw new Error("Укажите наименование товара/услуги");
-    if (!(price >= 0) || isNaN(price)) throw new Error("Укажите корректную цену");
+    // Пустая цена = плавающая сумма (EcomKassa: поле price не передаём)
+    let price = null;
+    if (priceRaw !== "") {
+      price = parseFloat(priceRaw);
+      if (!(price >= 0) || isNaN(price)) throw new Error("Укажите корректную цену или оставьте поле пустым");
+    }
     const storeId = parseInt($("#tpl_store").value, 10);
     if (!storeId) throw new Error("Выберите магазин");
     const allowedProviders = $$(".tpl-prov")
@@ -5138,32 +5151,51 @@
     if (!allowedProviders.length) {
       throw new Error("Выберите хотя бы один способ оплаты (QR Pay)");
     }
-    const qrPay = {
-      allowedProviders,
-      storeId,
-    };
-    // userId = firmId (UUID) — иначе EcomKassa: error.expected.uuid
-    const hid = $("#tpl_user_id");
-    if (hid && isUuid(hid.value)) {
-      qrPay.userId = hid.value.trim();
-    } else if (firmData && isUuid(firmData.firm_id)) {
-      qrPay.userId = String(firmData.firm_id).trim();
-    }
-    return {
+    const agentType = ($("#tpl_agent") && $("#tpl_agent").value) || "non_agent";
+    const body = {
       name,
       product,
-      price,
       count,
       vat: $("#tpl_vat").value || "none",
-      paymentMethod: $("#tpl_method").value || "full_prepayment",
+      paymentMethod: $("#tpl_method").value || "full_payment",
       paymentObject: $("#tpl_object").value || "service",
       operationType: $("#tpl_operation").value || "sell",
-      agentType: $("#tpl_agent").value || "non_agent",
+      agentType,
       requireClientEmail: !!$("#tpl_req_email").checked,
       requireClientPhone: !!$("#tpl_req_phone").checked,
       requireClientData: true,
-      qrPay,
+      qrPay: {
+        allowedProviders,
+        storeId,
+      },
     };
+    if (price != null) body.price = price;
+    // userId = firmId (UUID) — иначе EcomKassa: error.expected.uuid
+    const hid = $("#tpl_user_id");
+    if (hid && isUuid(hid.value)) {
+      body.qrPay.userId = hid.value.trim();
+    } else if (firmData && isUuid(firmData.firm_id)) {
+      body.qrPay.userId = String(firmData.firm_id).trim();
+    }
+    if (agentType && agentType !== "non_agent") {
+      const sn = ($("#tpl_sup_name") && $("#tpl_sup_name").value.trim()) || "";
+      const si = ($("#tpl_sup_inn") && $("#tpl_sup_inn").value.trim()) || "";
+      const sp = ($("#tpl_sup_phone") && $("#tpl_sup_phone").value.trim()) || "";
+      if (!sn || !si || !sp) {
+        throw new Error("Для агента укажите наименование, ИНН и телефон поставщика");
+      }
+      body.supplierName = sn;
+      body.supplierInn = si;
+      body.supplierPhone = sp;
+    }
+    return body;
+  }
+
+  function syncTplAgentBox() {
+    const box = $("#tpl_agentBox");
+    if (!box) return;
+    const t = ($("#tpl_agent") && $("#tpl_agent").value) || "non_agent";
+    box.classList.toggle("hidden", !t || t === "non_agent");
   }
 
   async function saveTpl() {
@@ -5202,6 +5234,9 @@
     if ($("#t_refresh")) $("#t_refresh").onclick = () => loadTemplates();
     if ($("#t_create")) $("#t_create").onclick = () => openTplModal(null);
     if ($("#tpl_save")) $("#tpl_save").onclick = () => saveTpl();
+    if ($("#tpl_agent")) {
+      $("#tpl_agent").addEventListener("change", () => syncTplAgentBox());
+    }
     $$("[data-close-tpl]").forEach((el) => {
       el.onclick = () => closeTplModal();
     });
