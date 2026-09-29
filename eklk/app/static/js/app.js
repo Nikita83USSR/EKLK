@@ -5824,6 +5824,8 @@
     if (dn) dn.onclick = () => helperRespond(false);
   }
 
+  bindSupportUI();
+
   // CORE: minimal public API for section modules (catalog, reports, …)
   window.EKLK = {
     get token() { return token; },
