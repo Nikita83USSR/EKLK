@@ -24,7 +24,7 @@ class TemplateCreate(BaseModel):
     price: Optional[float] = Field(default=None, ge=0)
     count: Optional[float] = Field(default=1, gt=0)
     vat: Optional[str] = Field(default="none")
-    paymentMethod: Optional[str] = Field(default="full_prepayment")
+    paymentMethod: Optional[str] = Field(default="full_payment")
     paymentObject: Optional[str] = Field(default="service")
     operationType: Optional[str] = Field(default="sell")
     agentType: Optional[str] = Field(default="non_agent")

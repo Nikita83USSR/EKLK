@@ -2309,6 +2309,10 @@
     opts = opts || {};
     const modal = $("#payLinkModal");
     if (!modal) return;
+    // имя файла при скачивании QR (шаблон / платёж)
+    modal.dataset.qrName = String(opts.downloadName || opts.fileName || "").trim();
+    const sizePanel = $("#pay_qr_size_panel");
+    if (sizePanel) sizePanel.classList.add("hidden");
     const titleEl = $("#payLinkModalTitle");
     if (titleEl) titleEl.textContent = opts.title || "Ссылка на оплату";
     const input = $("#pay_link_input");
@@ -2426,21 +2430,195 @@
       }
       img.src = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=" + encodeURIComponent(link);
     }
+    const QR_BASE_SIZE = 180;
+
+    function sanitizeQrFilename(name) {
+      let s = String(name || "").trim();
+      if (!s) s = "qr";
+      // только запрещённые в Windows/macOS символы; кириллица/пробелы/тире — ок
+      s = s.replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ").trim();
+      if (!s) s = "qr";
+      if (s.length > 80) s = s.slice(0, 80).trim();
+      if (!/\.png$/i.test(s)) s += ".png";
+      return s;
+    }
+
+    function qrDownloadFilename() {
+      const modal = $("#payLinkModal");
+      const fromModal = modal && modal.dataset.qrName;
+      if (fromModal) return sanitizeQrFilename(fromModal);
+      const meta = ($("#pay_modal_meta") && $("#pay_modal_meta").textContent) || "";
+      const m = meta.match(/шаблон:\s*(.+)$/i);
+      if (m) return sanitizeQrFilename(m[1]);
+      return "payment-qr.png";
+    }
+
+    function downloadBlobAsFile(blob, filename) {
+      if (!blob) return false;
+      try {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename || "qr.png";
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          try { a.remove(); } catch (e) {}
+          try { URL.revokeObjectURL(url); } catch (e) {}
+        }, 1500);
+        return true;
+      } catch (e) {
+        console.warn("downloadBlobAsFile", e);
+        return false;
+      }
+    }
+
+    function dataUrlToBlob(dataUrl) {
+      try {
+        const parts = String(dataUrl).split(",");
+        const mime = (parts[0].match(/:(.*?);/) || [])[1] || "image/png";
+        const bin = atob(parts[1]);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        return new Blob([arr], { type: mime });
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function scaleElToBlob(srcEl, px) {
+      return new Promise((resolve) => {
+        if (!srcEl) return resolve(null);
+        try {
+          const out = document.createElement("canvas");
+          out.width = px;
+          out.height = px;
+          const ctx = out.getContext("2d");
+          if (!ctx) return resolve(null);
+          ctx.imageSmoothingEnabled = false;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, px, px);
+          ctx.drawImage(srcEl, 0, 0, px, px);
+          out.toBlob((b) => resolve(b || null), "image/png");
+        } catch (e) {
+          console.warn("scaleElToBlob", e);
+          resolve(null);
+        }
+      });
+    }
+
+    function generateQrBlob(text, px) {
+      return new Promise((resolve, reject) => {
+        if (typeof QRCode === "undefined" || typeof QRCode.toCanvas !== "function") {
+          reject(new Error("QRCode missing"));
+          return;
+        }
+        const tmp = document.createElement("canvas");
+        try {
+          QRCode.toCanvas(
+            tmp,
+            text,
+            {
+              width: px,
+              margin: 2,
+              color: { dark: "#0f172a", light: "#ffffff" },
+            },
+            (err) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              tmp.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob empty"))), "image/png");
+            }
+          );
+        } catch (e) {
+          reject(e);
+        }
+      });
+    }
+
+    async function fetchQrServerBlob(text, px) {
+      const size = Math.max(80, Math.min(1000, px || 180));
+      const url =
+        "https://api.qrserver.com/v1/create-qr-code/?size=" +
+        size +
+        "x" +
+        size +
+        "&margin=8&data=" +
+        encodeURIComponent(text);
+      const resp = await fetch(url, { mode: "cors" });
+      if (!resp.ok) throw new Error("qrserver " + resp.status);
+      return await resp.blob();
+    }
+
+    async function downloadQrAtScale(scale) {
+      const s = scale || 1;
+      const px = QR_BASE_SIZE * s;
+      const filename = qrDownloadFilename();
+      const text = String(link || ($("#pay_link_input") && $("#pay_link_input").value) || "").trim();
+      if (!text) {
+        showAlert("Нет ссылки для QR");
+        return;
+      }
+
+      let blob = null;
+
+      // 1) Локальная генерация (после починки CDN)
+      try {
+        blob = await generateQrBlob(text, px);
+      } catch (e) {
+        console.warn("generateQrBlob", e);
+      }
+
+      // 2) Масштаб с canvas в модалке (не с cross-origin img)
+      if (!blob) {
+        const c = $("#pay_qr_canvas");
+        if (c && c.width) {
+          blob = await scaleElToBlob(c, px);
+        }
+      }
+
+      // 3) Внешний QR API → blob (обход taint canvas)
+      if (!blob) {
+        try {
+          blob = await fetchQrServerBlob(text, px);
+        } catch (e) {
+          console.warn("fetchQrServerBlob", e);
+        }
+      }
+
+      if (blob && downloadBlobAsFile(blob, filename)) {
+        const panel = $("#pay_qr_size_panel");
+        if (panel) panel.classList.add("hidden");
+        return;
+      }
+
+      showAlert("Не удалось сформировать QR");
+    }
+
     const dl = $("#pay_qr_download");
     if (dl) {
-      dl.onclick = () => {
-        const c = $("#pay_qr_canvas");
-        const im = $("#pay_qr_img");
-        let href = "";
-        if (c && c.toDataURL) href = c.toDataURL("image/png");
-        else if (im) href = im.src;
-        if (!href) return;
-        const a = document.createElement("a");
-        a.href = href;
-        a.download = "payment-qr.png";
-        a.click();
+      dl.onclick = (ev) => {
+        if (ev) ev.preventDefault();
+        const panel = $("#pay_qr_size_panel");
+        if (!panel) {
+          downloadQrAtScale(1);
+          return;
+        }
+        panel.classList.toggle("hidden");
       };
     }
+    $$(".pay-qr-size-btn").forEach((btn) => {
+      btn.onclick = (ev) => {
+        if (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+        }
+        const scale = parseInt(btn.getAttribute("data-qr-scale") || "1", 10) || 1;
+        downloadQrAtScale(scale);
+      };
+    });
     const qrShare = $("#pay_qr_share");
     if (qrShare) {
       qrShare.onclick = async () => {
@@ -4884,7 +5062,7 @@
     const id = tpl.templateId || "";
     const name = escHtml(tpl.name || "Без названия");
     const product = escHtml(tpl.product || "—");
-    const price = tpl.price != null ? Number(tpl.price).toFixed(2) : "—";
+    const price = tpl.price != null && tpl.price !== "" ? Number(tpl.price).toFixed(2) + " ₽" : "сумма от покупателя";
     const count = tpl.count != null ? tpl.count : 1;
     const link = qrUrlForTemplate(tpl);
     const providers = (tpl.qrPay && tpl.qrPay.allowedProviders) || [];
@@ -4902,7 +5080,7 @@
           '<div class="tpl-card-head">' +
             '<div>' +
               '<div class="tpl-card-title">' + name + '</div>' +
-              '<div class="tpl-card-meta">' + product + ' · <b>' + price + ' ₽</b> × ' + count +
+              '<div class="tpl-card-meta">' + product + ' · <b>' + price + '</b> × ' + count +
                 ' · ' + escHtml(tpl.vat || "none") +
                 ' · ' + escHtml(tpl.paymentMethod || "") +
               '</div>' +
@@ -4911,6 +5089,7 @@
               '</div>' +
             '</div>' +
             '<div class="tpl-card-actions">' +
+              '<button type="button" class="btn btn-sm btn-secondary tpl-dup" data-id="' + escHtml(id) + '" title="Создать копию шаблона">Копировать</button>' +
               '<button type="button" class="btn btn-sm btn-secondary tpl-edit" data-id="' + escHtml(id) + '">Изменить</button>' +
               '<button type="button" class="btn btn-sm btn-secondary tpl-del" data-id="' + escHtml(id) + '">Удалить</button>' +
             '</div>' +
@@ -4942,6 +5121,13 @@
         }
       };
     });
+    $$(".tpl-dup").forEach((btn) => {
+      btn.onclick = (ev) => {
+        if (ev) ev.stopPropagation();
+        const id = btn.dataset.id;
+        if (id) openTplModal(id, { asCopy: true });
+      };
+    });
     $$(".tpl-edit").forEach((btn) => {
       btn.onclick = (ev) => {
         if (ev) ev.stopPropagation();
@@ -4970,6 +5156,7 @@
           title: "QR-код шаблона",
           fromTemplate: true,
           subtitle: btn.dataset.name ? ("шаблон: " + btn.dataset.name) : "",
+          downloadName: btn.dataset.name || "",
         });
       };
     });
@@ -5026,10 +5213,17 @@
     const el = $("#tpl_store");
     if (!el) return;
     const stores = storesList();
-    const cur = selected != null ? String(selected) : String(getSelectedStoreId() || "");
+    let cur = selected != null && selected !== "" ? String(selected) : String(getSelectedStoreId() || "");
     if (!stores.length) {
-      el.innerHTML = '<option value="' + escHtml(cur || "990") + '">' + escHtml(cur || "990") + "</option>";
+      el.innerHTML = cur
+        ? '<option value="' + escHtml(cur) + '">' + escHtml(cur) + "</option>"
+        : '<option value="">Нет магазинов в профиле</option>';
       return;
+    }
+    const ids = new Set(stores.map((s) => String(s.store_id)));
+    if (!ids.has(cur)) {
+      const fromSession = String(getSelectedStoreId() || "");
+      cur = ids.has(fromSession) ? fromSession : String(stores[0].store_id);
     }
     el.innerHTML = stores
       .map((s) => {
@@ -5040,20 +5234,42 @@
       .join("");
   }
 
+
+  function syncTplPriceFloat() {
+    const floatOn = !!( $("#tpl_price_float") && $("#tpl_price_float").checked );
+    const priceEl = $("#tpl_price");
+    if (!priceEl) return;
+    if (floatOn) {
+      priceEl.value = "";
+      priceEl.disabled = true;
+      priceEl.placeholder = "сумма от покупателя";
+    } else {
+      priceEl.disabled = false;
+      priceEl.placeholder = "0.00";
+    }
+  }
+
   function resetTplForm() {
     $("#tpl_id").value = "";
     if ($("#tpl_user_id")) $("#tpl_user_id").value = "";
     $("#tpl_name").value = "";
     $("#tpl_product").value = "";
     $("#tpl_price").value = "";
+    if ($("#tpl_price_float")) $("#tpl_price_float").checked = false;
+    syncTplPriceFloat();
     $("#tpl_count").value = "1";
     $("#tpl_vat").value = "none";
-    $("#tpl_method").value = "full_prepayment";
+    $("#tpl_method").value = "full_payment";
     $("#tpl_object").value = "service";
     $("#tpl_operation").value = "sell";
     $("#tpl_agent").value = "non_agent";
+    if ($("#tpl_sup_name")) $("#tpl_sup_name").value = "";
+    if ($("#tpl_sup_inn")) $("#tpl_sup_inn").value = "";
+    if ($("#tpl_sup_phone")) $("#tpl_sup_phone").value = "";
+    syncTplAgentBox();
     $("#tpl_req_email").checked = true;
     $("#tpl_req_phone").checked = false;
+    if ($("#tpl_req_fio")) $("#tpl_req_fio").checked = true;
     const err = $("#tpl_form_error");
     if (err) { err.classList.add("hidden"); err.textContent = ""; }
     fillTplStoreSelect();
@@ -5064,52 +5280,103 @@
     return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(String(s || "").trim());
   }
 
-  /** userId для qrPay: firmId (UUID фирмы) или из существующих шаблонов. */
-  async function findKnownCashierUserId() {
-    if (firmData && isUuid(firmData.firm_id)) {
-      return String(firmData.firm_id).trim();
-    }
+  /** userId кассира для qrPay — НЕ firmId (иначе EcomKassa: need to define store and cashier). */
+  async function findKnownCashierUserId(preferStoreId) {
+    const firmId =
+      firmData && isUuid(firmData.firm_id)
+        ? String(firmData.firm_id).trim().toLowerCase()
+        : "";
+    const isCashier = (uid) => {
+      if (!isUuid(uid)) return false;
+      if (firmId && String(uid).trim().toLowerCase() === firmId) return false;
+      return true;
+    };
     try {
       const items = await api("/templates");
       const list = Array.isArray(items) ? items : [];
+      if (preferStoreId != null && preferStoreId !== "") {
+        const want = String(preferStoreId);
+        for (const tpl of list) {
+          const qp = tpl && tpl.qrPay;
+          if (qp && String(qp.storeId) === want && isCashier(qp.userId)) {
+            return String(qp.userId).trim();
+          }
+        }
+      }
       for (const tpl of list) {
         const uid = tpl && tpl.qrPay && tpl.qrPay.userId;
-        if (isUuid(uid)) return String(uid).trim();
+        if (isCashier(uid)) return String(uid).trim();
       }
     } catch (e) { /* ignore */ }
     return "";
   }
 
-  function openTplModal(templateId) {
+  function copyTplName(name) {
+    const base = String(name || "Шаблон").trim() || "Шаблон";
+    const suffix = " (копия)";
+    const max = 128;
+    if (base.length + suffix.length <= max) return base + suffix;
+    return base.slice(0, Math.max(1, max - suffix.length)).trimEnd() + suffix;
+  }
+
+  /** Заполнить форму из объекта шаблона. asCopy=true → без id, имя с «(копия)». */
+  function fillTplFormFromTpl(tpl, asCopy) {
+    if (!tpl) return;
+    if (asCopy) {
+      $("#tpl_id").value = "";
+      $("#tpl_name").value = copyTplName(tpl.name || "");
+    } else {
+      $("#tpl_id").value = tpl.templateId || "";
+      $("#tpl_name").value = tpl.name || "";
+    }
+    $("#tpl_product").value = tpl.product || "";
+    const hasFixedPrice = tpl.price != null && tpl.price !== "";
+    if ($("#tpl_price_float")) $("#tpl_price_float").checked = !hasFixedPrice;
+    $("#tpl_price").value = hasFixedPrice ? tpl.price : "";
+    syncTplPriceFloat();
+    $("#tpl_count").value = tpl.count != null ? tpl.count : 1;
+    if (tpl.vat) $("#tpl_vat").value = tpl.vat;
+    if (tpl.paymentMethod) $("#tpl_method").value = tpl.paymentMethod;
+    if (tpl.paymentObject) $("#tpl_object").value = tpl.paymentObject;
+    if (tpl.operationType) $("#tpl_operation").value = tpl.operationType;
+    if (tpl.agentType) $("#tpl_agent").value = tpl.agentType;
+    if ($("#tpl_sup_name")) $("#tpl_sup_name").value = tpl.supplierName || "";
+    if ($("#tpl_sup_inn")) $("#tpl_sup_inn").value = tpl.supplierInn || "";
+    if ($("#tpl_sup_phone")) $("#tpl_sup_phone").value = tpl.supplierPhone || "";
+    syncTplAgentBox();
+    $("#tpl_req_email").checked = !!tpl.requireClientEmail;
+    $("#tpl_req_phone").checked = !!tpl.requireClientPhone;
+    if ($("#tpl_req_fio")) $("#tpl_req_fio").checked = !!tpl.requireClientData;
+    const qp = tpl.qrPay || {};
+    if ($("#tpl_user_id") && qp.userId) $("#tpl_user_id").value = qp.userId;
+    fillTplStoreSelect(qp.storeId);
+    fillTplProviders(qp.allowedProviders || []);
+  }
+
+  function openTplModal(templateId, opts) {
+    const asCopy = !!(opts && opts.asCopy);
     const modal = $("#tplModal");
     if (!modal) return;
     resetTplForm();
-    $("#tpl_modal_title").textContent = templateId ? "Редактировать шаблон" : "Новый шаблон";
     if (templateId) {
+      $("#tpl_modal_title").textContent = asCopy ? "Копия шаблона" : "Редактировать шаблон";
       api("/templates/" + encodeURIComponent(templateId))
         .then((tpl) => {
-          $("#tpl_id").value = tpl.templateId || templateId;
-          $("#tpl_name").value = tpl.name || "";
-          $("#tpl_product").value = tpl.product || "";
-          $("#tpl_price").value = tpl.price != null ? tpl.price : "";
-          $("#tpl_count").value = tpl.count != null ? tpl.count : 1;
-          if (tpl.vat) $("#tpl_vat").value = tpl.vat;
-          if (tpl.paymentMethod) $("#tpl_method").value = tpl.paymentMethod;
-          if (tpl.paymentObject) $("#tpl_object").value = tpl.paymentObject;
-          if (tpl.operationType) $("#tpl_operation").value = tpl.operationType;
-          if (tpl.agentType) $("#tpl_agent").value = tpl.agentType;
-          $("#tpl_req_email").checked = !!tpl.requireClientEmail;
-          $("#tpl_req_phone").checked = !!tpl.requireClientPhone;
-          const qp = tpl.qrPay || {};
-          if ($("#tpl_user_id") && qp.userId) $("#tpl_user_id").value = qp.userId;
-          fillTplStoreSelect(qp.storeId);
-          fillTplProviders(qp.allowedProviders || []);
+          fillTplFormFromTpl(tpl, asCopy);
+          // Копия: userId из исходника или firm UUID
+          if (asCopy && $("#tpl_user_id") && !isUuid($("#tpl_user_id").value)) {
+            findKnownCashierUserId().then((uid) => {
+              if (uid && $("#tpl_user_id") && !$("#tpl_user_id").value) {
+                $("#tpl_user_id").value = uid;
+              }
+            });
+          }
         })
         .catch((e) => showAlert(e.message || String(e)));
     } else {
+      $("#tpl_modal_title").textContent = "Новый шаблон";
       fillTplStoreSelect();
       fillTplProviders([]);
-      // для создания: заранее подтянуть UUID кассира из существующих шаблонов
       findKnownCashierUserId().then((uid) => {
         if (uid && $("#tpl_user_id") && !$("#tpl_user_id").value) {
           $("#tpl_user_id").value = uid;
@@ -5132,11 +5399,18 @@
   function collectTplBody() {
     const name = ($("#tpl_name").value || "").trim();
     const product = ($("#tpl_product").value || "").trim();
-    const price = parseFloat($("#tpl_price").value);
+    const floatPrice = !!( $("#tpl_price_float") && $("#tpl_price_float").checked );
+    const priceRaw = ($("#tpl_price").value || "").trim();
     const count = parseFloat($("#tpl_count").value) || 1;
     if (!name) throw new Error("Укажите наименование шаблона");
     if (!product) throw new Error("Укажите наименование товара/услуги");
-    if (!(price >= 0) || isNaN(price)) throw new Error("Укажите корректную цену");
+    // Плавающая сумма: не передаём price в API (EcomKassa)
+    let price = null;
+    if (!floatPrice) {
+      if (priceRaw === "") throw new Error("Укажите цену или включите «Покупатель вводит сам»");
+      price = parseFloat(priceRaw);
+      if (!(price >= 0) || isNaN(price)) throw new Error("Укажите корректную цену");
+    }
     const storeId = parseInt($("#tpl_store").value, 10);
     if (!storeId) throw new Error("Выберите магазин");
     const allowedProviders = $$(".tpl-prov")
@@ -5145,32 +5419,54 @@
     if (!allowedProviders.length) {
       throw new Error("Выберите хотя бы один способ оплаты (QR Pay)");
     }
-    const qrPay = {
-      allowedProviders,
-      storeId,
-    };
-    // userId = firmId (UUID) — иначе EcomKassa: error.expected.uuid
-    const hid = $("#tpl_user_id");
-    if (hid && isUuid(hid.value)) {
-      qrPay.userId = hid.value.trim();
-    } else if (firmData && isUuid(firmData.firm_id)) {
-      qrPay.userId = String(firmData.firm_id).trim();
-    }
-    return {
+    const agentType = ($("#tpl_agent") && $("#tpl_agent").value) || "non_agent";
+    const body = {
       name,
       product,
-      price,
       count,
       vat: $("#tpl_vat").value || "none",
-      paymentMethod: $("#tpl_method").value || "full_prepayment",
+      paymentMethod: $("#tpl_method").value || "full_payment",
       paymentObject: $("#tpl_object").value || "service",
       operationType: $("#tpl_operation").value || "sell",
-      agentType: $("#tpl_agent").value || "non_agent",
+      agentType,
       requireClientEmail: !!$("#tpl_req_email").checked,
       requireClientPhone: !!$("#tpl_req_phone").checked,
-      requireClientData: true,
-      qrPay,
+      requireClientData: !!($("#tpl_req_fio") && $("#tpl_req_fio").checked),
+      qrPay: {
+        allowedProviders,
+        storeId,
+      },
     };
+    if (price != null) body.price = price;
+    // userId кассира: не подставляем firmId
+    const firmIdStr =
+      firmData && isUuid(firmData.firm_id) ? String(firmData.firm_id).trim().toLowerCase() : "";
+    const hid = $("#tpl_user_id");
+    if (hid && isUuid(hid.value)) {
+      const uid = hid.value.trim();
+      if (!firmIdStr || uid.toLowerCase() !== firmIdStr) {
+        body.qrPay.userId = uid;
+      }
+    }
+    if (agentType && agentType !== "non_agent") {
+      const sn = ($("#tpl_sup_name") && $("#tpl_sup_name").value.trim()) || "";
+      const si = ($("#tpl_sup_inn") && $("#tpl_sup_inn").value.trim()) || "";
+      const sp = ($("#tpl_sup_phone") && $("#tpl_sup_phone").value.trim()) || "";
+      if (!sn || !si || !sp) {
+        throw new Error("Для агента укажите наименование, ИНН и телефон поставщика");
+      }
+      body.supplierName = sn;
+      body.supplierInn = si;
+      body.supplierPhone = sp;
+    }
+    return body;
+  }
+
+  function syncTplAgentBox() {
+    const box = $("#tpl_agentBox");
+    if (!box) return;
+    const t = ($("#tpl_agent") && $("#tpl_agent").value) || "non_agent";
+    box.classList.toggle("hidden", !t || t === "non_agent");
   }
 
   async function saveTpl() {
@@ -5178,6 +5474,14 @@
     if (errEl) { errEl.classList.add("hidden"); errEl.textContent = ""; }
     try {
       const body = collectTplBody();
+      // добить кассира из рабочих шаблонов (тот же store предпочтительнее)
+      if (body.qrPay && !body.qrPay.userId) {
+        const uid = await findKnownCashierUserId(body.qrPay.storeId);
+        if (uid) {
+          body.qrPay.userId = uid;
+          if ($("#tpl_user_id")) $("#tpl_user_id").value = uid;
+        }
+      }
       const id = ($("#tpl_id").value || "").trim();
       if (id) {
         await api("/templates/" + encodeURIComponent(id), {
@@ -5209,6 +5513,12 @@
     if ($("#t_refresh")) $("#t_refresh").onclick = () => loadTemplates();
     if ($("#t_create")) $("#t_create").onclick = () => openTplModal(null);
     if ($("#tpl_save")) $("#tpl_save").onclick = () => saveTpl();
+    if ($("#tpl_agent")) {
+      $("#tpl_agent").addEventListener("change", () => syncTplAgentBox());
+    }
+    if ($("#tpl_price_float")) {
+      $("#tpl_price_float").addEventListener("change", () => syncTplPriceFloat());
+    }
     $$("[data-close-tpl]").forEach((el) => {
       el.onclick = () => closeTplModal();
     });

@@ -16,7 +16,7 @@
     })();
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Unbounded:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260925exe1" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20260929merge1" />
   <link rel="stylesheet" href="/static/css/pro-theme.css?v=20260915pro2" />
   <link rel="stylesheet" href="/static/css/minimal-theme.css?v=20260915min1" />
 </head>
@@ -653,8 +653,12 @@
             </div>
             <div class="row row-3">
               <div>
-                <label>Цена, руб <span class="req">*</span></label>
-                <input id="tpl_price" type="number" min="0" step="0.01" placeholder="120" />
+                <label>Цена, руб</label>
+                <input id="tpl_price" type="number" min="0" step="0.01" placeholder="0.00" />
+                <label class="checkbox-row" for="tpl_price_float" style="margin:6px 0 0;align-items:center;gap:6px;font-weight:normal;font-size:0.85rem;cursor:pointer">
+                  <input type="checkbox" id="tpl_price_float" style="margin:0" />
+                  <span>Покупатель вводит сам</span>
+                </label>
               </div>
               <div>
                 <label>Количество</label>
@@ -677,8 +681,8 @@
               <div>
                 <label>Признак расчёта</label>
                 <select id="tpl_method">
-                  <option value="full_prepayment" selected>Предоплата 100%</option>
-                  <option value="full_payment">Полный расчёт</option>
+                  <option value="full_payment" selected>Полный расчёт</option>
+                  <option value="full_prepayment">Предоплата 100%</option>
                   <option value="prepayment">Предоплата</option>
                   <option value="advance">Аванс</option>
                   <option value="partial_payment">Частичный расчёт</option>
@@ -721,6 +725,25 @@
                 <select id="tpl_store"></select>
               </div>
             </div>
+
+            <div id="tpl_agentBox" class="extra-buyer hidden mt-2">
+              <p class="hint" style="margin-bottom:10px">Данные поставщика обязательны для агентской схемы (как в чеке).</p>
+              <div class="row">
+                <div>
+                  <label>Наименование поставщика <span class="req">*</span></label>
+                  <input id="tpl_sup_name" placeholder="ООО Поставщик" autocomplete="off" />
+                </div>
+                <div>
+                  <label>ИНН поставщика <span class="req">*</span></label>
+                  <input id="tpl_sup_inn" placeholder="7707083893" inputmode="numeric" maxlength="12" autocomplete="off" />
+                </div>
+                <div>
+                  <label>Телефон поставщика <span class="req">*</span></label>
+                  <input id="tpl_sup_phone" placeholder="+79001234567" autocomplete="off" />
+                </div>
+              </div>
+            </div>
+
             <div class="row">
               <div class="checkbox-row">
                 <input type="checkbox" id="tpl_req_email" checked />
@@ -729,6 +752,10 @@
               <div class="checkbox-row">
                 <input type="checkbox" id="tpl_req_phone" />
                 <label for="tpl_req_phone">Требовать телефон покупателя</label>
+              </div>
+              <div class="checkbox-row">
+                <input type="checkbox" id="tpl_req_fio" checked />
+                <label for="tpl_req_fio">Требовать Ф. И. О.</label>
               </div>
             </div>
             <div class="section-title" style="margin-top:12px;font-size:0.9rem">Способы оплаты (QR Pay)</div>
@@ -1321,6 +1348,12 @@
             <button type="button" class="btn btn-secondary btn-sm" id="pay_qr_download">Скачать QR</button>
             <button type="button" class="btn btn-secondary btn-sm" id="pay_qr_share">Поделиться QR</button>
           </div>
+          <div id="pay_qr_size_panel" class="pay-qr-size-panel hidden" role="group" aria-label="Размер QR">
+            <span class="hint" style="margin:0">Размер:</span>
+            <button type="button" class="btn btn-secondary btn-sm pay-qr-size-btn" data-qr-scale="1">Обычный</button>
+            <button type="button" class="btn btn-secondary btn-sm pay-qr-size-btn" data-qr-scale="2">Средний</button>
+            <button type="button" class="btn btn-secondary btn-sm pay-qr-size-btn" data-qr-scale="4">Большой</button>
+          </div>
         </div>
         <div class="pay-action-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
           <button type="button" class="btn btn-sm" id="pay_go_link" title="Открыть ссылку на оплату">Перейти в платёж</button>
@@ -1331,10 +1364,10 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260925exe1"></script>
+  <script src="/static/js/app.js?v=20260929merge1"></script>
   <script src="/static/js/sections/dashboard.js?v=20260915pro2"></script>
   <script src="/static/js/sections/catalog.js?v=20260825c"></script>
   <script src="/static/js/sections/reports.js?v=20260825c"></script>

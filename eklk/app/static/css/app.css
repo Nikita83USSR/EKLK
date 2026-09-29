@@ -3604,3 +3604,14 @@ body[data-theme="glass"] .nav-dropdown-menu {
 .it-cat-btn { display: none !important; }
 .it-name-wrap .it-name { padding-right: 8px; }
 .it-name-float .it-name-wide { width: 100%; }
+
+
+/* QR download size picker (pay link modal) */
+.pay-qr-size-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.pay-qr-size-panel.hidden { display: none !important; }
