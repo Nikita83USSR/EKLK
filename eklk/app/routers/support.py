@@ -29,6 +29,12 @@ async def support_config(user: CurrentUser):
     return PublicConfigOut(**svc.public_config())
 
 
+@router.get("/bootstrap", response_model=PublicConfigOut)
+async def support_bootstrap():
+    """Без авторизации: host/key для автоустановщика (ключ hbbs публичный)."""
+    return PublicConfigOut(**svc.public_config())
+
+
 @router.get("/me")
 async def support_me(user: CurrentUser):
     login = str(user["username"])

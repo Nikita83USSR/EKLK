@@ -25,6 +25,9 @@ const rustdeskVersion = "1.3.9"
 
 var buildMode = "helper"
 
+// Задаётся при сборке: -X main.defaultAPIBase=https://lk.example.com
+var defaultAPIBase = ""
+
 func mode() string {
 	if buildMode == "admin" {
 		return "admin"
@@ -36,14 +39,33 @@ func main() {
 	fmt.Println("EKLK", mode(), "setup · RustDesk", rustdeskVersion)
 
 	host, key, apiBase := loadConfig()
-	if host == "" {
-		fmt.Println("Не задан EKLK_RD_HOST.")
-		fmt.Println("Рядом с .exe положите eklk-remote.env:")
-		fmt.Println("  EKLK_RD_HOST=remote.example.com")
-		fmt.Println("  EKLK_RD_KEY=ключ_hbbs")
-		if mode() == "admin" {
-			fmt.Println("  EKLK_API_BASE=https://your-eklk-host")
+	// Авто: host/key с ЛК, если локально не заданы
+	if host == "" || key == "" {
+		base := apiBase
+		if base == "" {
+			base = strings.TrimSpace(defaultAPIBase)
 		}
+		if base != "" {
+			fmt.Println("Загрузка настроек с сервера:", base)
+			h, k, err := fetchBootstrap(base)
+			if err != nil {
+				fmt.Println("Не удалось получить настройки:", err)
+			} else {
+				if host == "" {
+					host = h
+				}
+				if key == "" {
+					key = k
+				}
+				if apiBase == "" {
+					apiBase = strings.TrimRight(base, "/")
+				}
+			}
+		}
+	}
+	if host == "" {
+		fmt.Println("Не задан EKLK_RD_HOST (и автозагрузка с ЛК не удалась).")
+		fmt.Println("Рядом с .exe можно положить eklk-remote.env или пересобрать setup с defaultAPIBase.")
 		writeTemplateEnv()
 		waitExit(1)
 		return
@@ -51,8 +73,10 @@ func main() {
 
 	if mode() == "admin" {
 		if apiBase == "" {
-			fmt.Println("Для админ-клиента нужен EKLK_API_BASE в eklk-remote.env")
-			fmt.Println("Пример: EKLK_API_BASE=https://lk.example.com")
+			apiBase = strings.TrimSpace(defaultAPIBase)
+		}
+		if apiBase == "" {
+			fmt.Println("Для админ-клиента нужен EKLK_API_BASE (или сборка с defaultAPIBase)")
 			writeTemplateEnv()
 			waitExit(1)
 			return
@@ -220,6 +244,41 @@ func rustdeskURL() (label, url string) {
 		return "x86_64", base + "rustdesk-" + rustdeskVersion + "-x86_64.exe"
 	}
 	return "x86-sciter", base + "rustdesk-" + rustdeskVersion + "-x86-sciter.exe"
+}
+
+
+func fetchBootstrap(apiBase string) (host, key string, err error) {
+	apiBase = strings.TrimRight(strings.TrimSpace(apiBase), "/")
+	if apiBase == "" {
+		return "", "", fmt.Errorf("пустой API base")
+	}
+	url := apiBase + "/api/v1/support/bootstrap"
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", "", err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return "", "", fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(raw), 120))
+	}
+	var cfg struct {
+		RDHost  string `json:"rd_host"`
+		RDKey   string `json:"rd_key"`
+		Enabled bool   `json:"enabled"`
+	}
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return "", "", err
+	}
+	if strings.TrimSpace(cfg.RDHost) == "" {
+		return "", "", fmt.Errorf("rd_host пуст на сервере (задайте SUPPORT_RD_HOST)")
+	}
+	return strings.TrimSpace(cfg.RDHost), strings.TrimSpace(cfg.RDKey), nil
 }
 
 func loadConfig() (host, key, apiBase string) {
