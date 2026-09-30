@@ -140,6 +140,21 @@ async def end_session(session_id: str, user: CurrentUser, db: AsyncSession = Dep
     return {"ok": True}
 
 
+@router.get("/download/ping")
+async def download_ping(user: CurrentUser):
+    """Диагностика: есть ли роуты и кэш (без скачивания файла)."""
+    host = (settings.support_rd_host or "").strip()
+    key = (settings.support_rd_key or "").strip()
+    info = svc.cache_status()
+    return {
+        "ok": True,
+        "login": user.get("username"),
+        "rd_host_set": bool(host),
+        "rd_key_set": bool(key),
+        "cache": info,
+    }
+
+
 async def _download_rustdesk(arch: str, *, as_admin: bool, user: dict) -> FileResponse:
     host = (settings.support_rd_host or "").strip()
     key = (settings.support_rd_key or "").strip()

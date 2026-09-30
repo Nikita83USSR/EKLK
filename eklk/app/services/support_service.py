@@ -301,7 +301,30 @@ def cached_rustdesk_path(arch: str) -> Path:
     return path
 
 
+def cache_status() -> dict[str, Any]:
+    """Paths and presence of cached official binaries."""
+    out: dict[str, Any] = {
+        "cache_dir": str(_CACHE_DIR),
+        "cache_dir_exists": _CACHE_DIR.is_dir(),
+        "version": RUSTDESK_CLIENT_VERSION,
+        "files": {},
+    }
+    for arch, name in (
+        ("x64", f"rustdesk-{RUSTDESK_CLIENT_VERSION}-x86_64.exe"),
+        ("x86", f"rustdesk-{RUSTDESK_CLIENT_VERSION}-x86-sciter.exe"),
+    ):
+        path = _CACHE_DIR / name
+        out["files"][arch] = {
+            "name": name,
+            "path": str(path),
+            "exists": path.is_file(),
+            "size": path.stat().st_size if path.is_file() else 0,
+        }
+    return out
+
+
 def public_config() -> dict[str, Any]:
+
     host = (settings.support_rd_host or "").strip()
     key = (settings.support_rd_key or "").strip()
     return {
