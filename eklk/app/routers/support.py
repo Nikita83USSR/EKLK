@@ -140,7 +140,7 @@ async def end_session(session_id: str, user: CurrentUser, db: AsyncSession = Dep
     return {"ok": True}
 
 
-def _download_rustdesk(arch: str, *, as_admin: bool, user: dict) -> FileResponse:
+async def _download_rustdesk(arch: str, *, as_admin: bool, user: dict) -> FileResponse:
     host = (settings.support_rd_host or "").strip()
     key = (settings.support_rd_key or "").strip()
     if not host or not key:
@@ -150,18 +150,24 @@ def _download_rustdesk(arch: str, *, as_admin: bool, user: dict) -> FileResponse
         )
     if as_admin and not svc.is_support_admin(str(user["username"])):
         raise HTTPException(status_code=403, detail="Только для администратора поддержки")
+    from starlette.concurrency import run_in_threadpool
+
     try:
-        path = svc.cached_rustdesk_path(arch)
+        path = await run_in_threadpool(svc.cached_rustdesk_path, arch)
         filename = svc.rustdesk_download_filename(host, key)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.exception("support download failed")
+        raise HTTPException(status_code=500, detail=f"Ошибка подготовки файла: {e}")
     log_action(
         "support_download",
         f"arch={arch} admin={as_admin} file={path.name}",
         user_id=user["username"],
     )
+    # filename may contain = , # — Starlette quotes Content-Disposition
     return FileResponse(
         path=str(path),
         media_type="application/octet-stream",
@@ -176,7 +182,7 @@ async def download_helper_windows(
     arch: str = Query("x64", description="x64 | x86"),
 ):
     """Официальный подписанный RustDesk с host/key в имени файла (для клиента)."""
-    return _download_rustdesk(arch, as_admin=False, user=user)
+    return await _download_rustdesk(arch, as_admin=False, user=user)
 
 
 @router.get("/download/admin-windows")
@@ -185,4 +191,4 @@ async def download_admin_windows(
     arch: str = Query("x64", description="x64 | x86"),
 ):
     """Официальный подписанный RustDesk с host/key в имени файла (только support-admin)."""
-    return _download_rustdesk(arch, as_admin=True, user=user)
+    return await _download_rustdesk(arch, as_admin=True, user=user)

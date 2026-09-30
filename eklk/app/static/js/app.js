@@ -5718,7 +5718,17 @@
         try {
           const j = await res.json();
           if (j && j.detail) msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
-        } catch (e) {}
+        } catch (e) {
+          try {
+            const t = await res.text();
+            if (t) msg = msg + ": " + t.slice(0, 200);
+          } catch (e2) {}
+        }
+        if (res.status === 404) {
+          msg =
+            msg +
+            " — проверьте: git pull (cache/), SUPPORT_RD_HOST/KEY в .env, перезапуск uvicorn";
+        }
         showAlert(msg);
         return;
       }

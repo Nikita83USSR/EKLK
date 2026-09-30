@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
+import urllib.request
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -258,19 +259,50 @@ def rustdesk_download_filename(host: str, key: str) -> str:
     return f"rustdesk-host={h},key={k}#.exe"
 
 
+def _rustdesk_release_url(name: str) -> str:
+    return (
+        f"https://github.com/rustdesk/rustdesk/releases/download/"
+        f"{RUSTDESK_CLIENT_VERSION}/{name}"
+    )
+
+
+def _ensure_cache_dir() -> Path:
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    return _CACHE_DIR
+
+
 def cached_rustdesk_path(arch: str) -> Path:
-    """arch: 'x64' | 'x86'. Raises FileNotFoundError if cache missing."""
+    """arch: 'x64' | 'x86'. Uses local cache; downloads from GitHub if missing."""
     arch = (arch or "x64").lower().strip()
     if arch in ("x86", "32", "i386", "i686", "sciter"):
         name = f"rustdesk-{RUSTDESK_CLIENT_VERSION}-x86-sciter.exe"
     else:
         name = f"rustdesk-{RUSTDESK_CLIENT_VERSION}-x86_64.exe"
     path = _CACHE_DIR / name
-    if not path.is_file():
+    if path.is_file() and path.stat().st_size > 1_000_000:
+        return path
+
+    # Self-heal: pull official signed binary once
+    _ensure_cache_dir()
+    url = _rustdesk_release_url(name)
+    tmp = path.with_suffix(path.suffix + ".part")
+    logger.info("rustdesk cache miss — downloading %s → %s", url, path)
+    try:
+        urllib.request.urlretrieve(url, str(tmp))
+        if not tmp.is_file() or tmp.stat().st_size < 1_000_000:
+            raise FileNotFoundError(f"Скачанный файл слишком мал: {tmp}")
+        tmp.replace(path)
+    except Exception as e:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except Exception:
+            pass
         raise FileNotFoundError(
-            f"Нет кэша {name}. Положите официальный standalone в "
-            f"eklk/app/static/remote/cache/"
-        )
+            f"Нет кэша {name} ({path}). Автозагрузка с GitHub не удалась: {e}. "
+            f"Положите файл вручную в eklk/app/static/remote/cache/"
+        ) from e
+    logger.info("rustdesk cache ready: %s (%s bytes)", path, path.stat().st_size)
     return path
 
 
