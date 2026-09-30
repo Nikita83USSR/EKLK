@@ -5693,13 +5693,58 @@
       const cfg = await api("/support/config");
       if (cfgEl) {
         cfgEl.textContent = cfg.rd_host
-          ? "Сервер: " + cfg.rd_host + " — пропишите его в eklk-remote.env установщика"
+          ? "Сервер: " + cfg.rd_host + " — уже вшит в имя скачиваемого файла"
           : "Сервер удалёнки на стороне EKLK ещё не настроен (SUPPORT_RD_HOST)";
       }
     } catch (e) {}
     const saved = localStorage.getItem("eklk_helper_agent_id") || "";
     const inp = document.getElementById("help_agent_id");
     if (inp && saved && !inp.value) inp.value = saved;
+  }
+
+  /** Download official RustDesk with host/key in filename (auth required). */
+  async function downloadRustDeskClient(kind, arch) {
+    const path =
+      kind === "admin"
+        ? "/support/download/admin-windows?arch=" + encodeURIComponent(arch || "x64")
+        : "/support/download/helper-windows?arch=" + encodeURIComponent(arch || "x64");
+    try {
+      showAlert("Скачивание RustDesk…", "success");
+      const headers = {};
+      if (token) headers["Authorization"] = "Bearer " + token;
+      const res = await fetch("/api/v1" + path, { headers, credentials: "same-origin" });
+      if (!res.ok) {
+        let msg = "Ошибка скачивания (" + res.status + ")";
+        try {
+          const j = await res.json();
+          if (j && j.detail) msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+        } catch (e) {}
+        showAlert(msg);
+        return;
+      }
+      const cd = res.headers.get("Content-Disposition") || "";
+      let filename = "rustdesk.exe";
+      const m = /filename\*?=(?:UTF-8''|")?([^";\n]+)/i.exec(cd);
+      if (m) {
+        try {
+          filename = decodeURIComponent(m[1].replace(/"/g, "").trim());
+        } catch (e) {
+          filename = m[1].replace(/"/g, "").trim();
+        }
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      showAlert("Файл сохранён: " + filename + " — запустите его", "success");
+    } catch (e) {
+      showAlert((e && e.message) || "Не удалось скачать");
+    }
   }
 
   async function helperGoOnline() {
@@ -5822,6 +5867,14 @@
     if (al) al.onclick = () => helperRespond(true);
     const dn = document.getElementById("help_deny");
     if (dn) dn.onclick = () => helperRespond(false);
+    const helpWin = document.getElementById("help_dl_win");
+    if (helpWin) helpWin.onclick = () => downloadRustDeskClient("helper", helpWin.getAttribute("data-arch") || "x64");
+    const helpX86 = document.getElementById("help_dl_win_x86");
+    if (helpX86) helpX86.onclick = () => downloadRustDeskClient("helper", "x86");
+    const adm = document.getElementById("sup_dl_admin");
+    if (adm) adm.onclick = () => downloadRustDeskClient("admin", adm.getAttribute("data-arch") || "x64");
+    const admX86 = document.getElementById("sup_dl_admin_x86");
+    if (admX86) admX86.onclick = () => downloadRustDeskClient("admin", "x86");
   }
 
   bindSupportUI();

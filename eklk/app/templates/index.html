@@ -1116,7 +1116,8 @@
           <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
             <span>Удалённая поддержка</span>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <a class="btn btn-secondary btn-sm" id="sup_dl_admin" href="/static/remote/EKLK-Admin-Setup.exe">Админ Windows</a>
+              <button type="button" class="btn btn-secondary btn-sm" id="sup_dl_admin" data-arch="x64">Админ Win x64</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="sup_dl_admin_x86" data-arch="x86">Админ Win 32</button>
               <button type="button" class="btn btn-sm" id="sup_refresh">Обновить</button>
             </div>
           </div>
@@ -1153,10 +1154,11 @@
       <section id="tab-helper" class="tab-panel hidden">
         <div class="card" style="max-width:640px">
           <div class="section-title">Помощник поддержки</div>
-          <p class="hint" style="margin-bottom:12px">Установите программу один раз. Пока она запущена, специалист видит вашу организацию в списке и может подключиться <b>только после вашего разрешения</b>.</p>
-          <div class="row" style="margin-bottom:12px">
-            <a class="btn btn-secondary" id="help_dl_win" href="/static/remote/EKLK-Helper-Setup.exe">Скачать для Windows</a>
-            <a class="btn btn-secondary" id="help_dl_mac" href="/static/remote/EKLK-Helper-macOS.zip">Скачать для macOS</a>
+          <p class="hint" style="margin-bottom:12px">Скачайте официальный RustDesk (уже с нашим сервером в имени файла) → запустите → скопируйте ID → «Я в сети». Специалист подключится <b>только после вашего разрешения</b>.</p>
+          <div class="row" style="margin-bottom:12px;flex-wrap:wrap;gap:8px">
+            <button type="button" class="btn btn-secondary" id="help_dl_win" data-arch="x64">Windows 64-bit</button>
+            <button type="button" class="btn btn-secondary" id="help_dl_win_x86" data-arch="x86">Windows 32-bit</button>
+            <a class="btn btn-secondary" id="help_dl_mac" href="/static/remote/EKLK-Helper-macOS.zip">macOS</a>
           </div>
           <div id="help_cfg" class="hint" style="margin-bottom:12px"></div>
           <div class="row">

@@ -15,6 +15,47 @@
 
 Полный форк UI RustDesk не используется — берётся официальный клиент, только ваш сервер и сценарий EKLK. Так выше совместимость Win/macOS.
 
+
+## Рекомендуемый способ (Windows) — официальный клиент
+
+Кастомные `EKLK-*-Setup.exe` **без цифровой подписи** часто блокируются SmartScreen/антивирусом.
+
+Вместо них ЛК отдаёт **официальный подписанный** standalone RustDesk с host/key в **имени файла**:
+
+```
+rustdesk-host=YOUR_HOST,key=YOUR_KEY#.exe
+```
+
+API (только для авторизованных пользователей):
+
+| Endpoint | Кто |
+|----------|-----|
+| `GET /api/v1/support/download/helper-windows?arch=x64\|x86` | любой залогиненный |
+| `GET /api/v1/support/download/admin-windows?arch=x64\|x86` | только `SUPPORT_ADMIN_LOGINS` |
+
+Кэш бинарников (в git):
+
+```
+eklk/app/static/remote/cache/rustdesk-1.3.9-x86_64.exe
+eklk/app/static/remote/cache/rustdesk-1.3.9-x86-sciter.exe
+```
+
+Обновить кэш:
+
+```bash
+VER=1.3.9
+mkdir -p eklk/app/static/remote/cache
+curl -L -o eklk/app/static/remote/cache/rustdesk-$VER-x86_64.exe \
+  https://github.com/rustdesk/rustdesk/releases/download/$VER/rustdesk-$VER-x86_64.exe
+curl -L -o eklk/app/static/remote/cache/rustdesk-$VER-x86-sciter.exe \
+  https://github.com/rustdesk/rustdesk/releases/download/$VER/rustdesk-$VER-x86-sciter.exe
+```
+
+Сценарий для пользователя: Скачать → Запустить → скопировать ID в ЛК → «Я в сети».
+
+Legacy Setup.exe остаются в `static/remote/` как запасной вариант.
+
+
 ## Быстрый старт
 
 1. Поднять `remote/server` , взять `id_ed25519.pub`.

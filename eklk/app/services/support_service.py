@@ -6,6 +6,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 from sqlalchemy import select
@@ -228,15 +229,66 @@ async def end_session(db: AsyncSession, session_id: str, login: str, as_admin: b
     await db.commit()
 
 
+# Official RustDesk standalone (signed). Cached under static/remote/cache/.
+RUSTDESK_CLIENT_VERSION = "1.3.9"
+_CACHE_DIR = Path(__file__).resolve().parent.parent / "static" / "remote" / "cache"
+
+
+def _sanitize_filename_part(value: str) -> str:
+    """Windows filename-safe fragment (no invalid path chars)."""
+    out = []
+    for ch in (value or "").strip():
+        if ch in '<>:"/\|?*':
+            out.append("_")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def rustdesk_download_filename(host: str, key: str) -> str:
+    """Filename that pre-configures official RustDesk (Windows only).
+
+    Format: rustdesk-host=HOST,key=KEY#.exe
+    Trailing # protects key if browser appends (1) on re-download.
+    """
+    h = _sanitize_filename_part(host)
+    k = _sanitize_filename_part(key)
+    if not h or not k:
+        raise ValueError("SUPPORT_RD_HOST и SUPPORT_RD_KEY должны быть заданы")
+    return f"rustdesk-host={h},key={k}#.exe"
+
+
+def cached_rustdesk_path(arch: str) -> Path:
+    """arch: 'x64' | 'x86'. Raises FileNotFoundError if cache missing."""
+    arch = (arch or "x64").lower().strip()
+    if arch in ("x86", "32", "i386", "i686", "sciter"):
+        name = f"rustdesk-{RUSTDESK_CLIENT_VERSION}-x86-sciter.exe"
+    else:
+        name = f"rustdesk-{RUSTDESK_CLIENT_VERSION}-x86_64.exe"
+    path = _CACHE_DIR / name
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Нет кэша {name}. Положите официальный standalone в "
+            f"eklk/app/static/remote/cache/"
+        )
+    return path
+
+
 def public_config() -> dict[str, Any]:
     host = (settings.support_rd_host or "").strip()
     key = (settings.support_rd_key or "").strip()
     return {
         "rd_host": host,
         "rd_key": key,
-        "helper_windows_url": "/static/remote/EKLK-Helper-Setup.exe",
+        # Official signed RustDesk with host/key in filename (auth required)
+        "helper_windows_url": "/api/v1/support/download/helper-windows?arch=x64",
+        "helper_windows_x86_url": "/api/v1/support/download/helper-windows?arch=x86",
+        "admin_windows_url": "/api/v1/support/download/admin-windows?arch=x64",
+        "admin_windows_x86_url": "/api/v1/support/download/admin-windows?arch=x86",
         "helper_macos_url": "/static/remote/EKLK-Helper-macOS.zip",
-        "admin_windows_url": "/static/remote/EKLK-Admin-Setup.exe",
         "remote_env_example_url": "/static/remote/eklk-remote.env.example",
-        "enabled": bool(host),
+        # legacy unsigned installers (fallback)
+        "helper_windows_legacy_url": "/static/remote/EKLK-Helper-Setup.exe",
+        "admin_windows_legacy_url": "/static/remote/EKLK-Admin-Setup.exe",
+        "enabled": bool(host and key),
     }

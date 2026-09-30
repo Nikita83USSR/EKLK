@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import CurrentUser
 from app.db import get_db
 from app.schemas.support import (
@@ -136,3 +138,51 @@ async def end_session(session_id: str, user: CurrentUser, db: AsyncSession = Dep
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     return {"ok": True}
+
+
+def _download_rustdesk(arch: str, *, as_admin: bool, user: dict) -> FileResponse:
+    host = (settings.support_rd_host or "").strip()
+    key = (settings.support_rd_key or "").strip()
+    if not host or not key:
+        raise HTTPException(
+            status_code=503,
+            detail="Удалёнка не настроена (SUPPORT_RD_HOST / SUPPORT_RD_KEY)",
+        )
+    if as_admin and not svc.is_support_admin(str(user["username"])):
+        raise HTTPException(status_code=403, detail="Только для администратора поддержки")
+    try:
+        path = svc.cached_rustdesk_path(arch)
+        filename = svc.rustdesk_download_filename(host, key)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    log_action(
+        "support_download",
+        f"arch={arch} admin={as_admin} file={path.name}",
+        user_id=user["username"],
+    )
+    return FileResponse(
+        path=str(path),
+        media_type="application/octet-stream",
+        filename=filename,
+        content_disposition_type="attachment",
+    )
+
+
+@router.get("/download/helper-windows")
+async def download_helper_windows(
+    user: CurrentUser,
+    arch: str = Query("x64", description="x64 | x86"),
+):
+    """Официальный подписанный RustDesk с host/key в имени файла (для клиента)."""
+    return _download_rustdesk(arch, as_admin=False, user=user)
+
+
+@router.get("/download/admin-windows")
+async def download_admin_windows(
+    user: CurrentUser,
+    arch: str = Query("x64", description="x64 | x86"),
+):
+    """Официальный подписанный RustDesk с host/key в имени файла (только support-admin)."""
+    return _download_rustdesk(arch, as_admin=True, user=user)
