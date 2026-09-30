@@ -237,13 +237,8 @@ _CACHE_DIR = Path(__file__).resolve().parent.parent / "static" / "remote" / "cac
 
 def _sanitize_filename_part(value: str) -> str:
     """Windows filename-safe fragment (no invalid path chars)."""
-    out = []
-    for ch in (value or "").strip():
-        if ch in '<>:"/\|?*':
-            out.append("_")
-        else:
-            out.append(ch)
-    return "".join(out)
+    bad = set('<>:"/\\|?*')
+    return "".join("_" if ch in bad else ch for ch in (value or "").strip())
 
 
 def rustdesk_download_filename(host: str, key: str) -> str:
