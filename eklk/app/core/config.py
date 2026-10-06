@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     # Bitrix24: менеджер по ИНН (расширение, не ядро)
     # Входящий вебхук: https://xxx.bitrix24.ru/rest/1/xxxxx/
     bitrix24_webhook_url: str = ""
+    # ID воронки сделок (crm.deal CATEGORY_ID). Пусто = все воронки.
+    bitrix24_deal_category_id: str = ""
 
 
 @lru_cache

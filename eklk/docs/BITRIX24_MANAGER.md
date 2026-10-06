@@ -44,7 +44,23 @@ https://ВАШ_ПОРТАЛ.bitrix24.ru/rest/1/xxxxxxxxxxxxxxxx/
 
 ```bash
 BITRIX24_WEBHOOK_URL=https://ВАШ_ПОРТАЛ.bitrix24.ru/rest/1/xxxxxxxxxxxxxxxx/
+# Только сделки из этой воронки (CATEGORY_ID). Пусто = все воронки.
+BITRIX24_DEAL_CATEGORY_ID=0
 ```
+
+### ID воронки
+
+В Bitrix24 у сделок поле **CATEGORY_ID** — номер воронки.
+
+- `0` — обычно общая воронка по умолчанию  
+- другие ID — дополнительные воронки  
+
+Как узнать:
+
+1. CRM → Сделки → настройка воронок (в URL или в интерфейсе часто виден id), или  
+2. REST: `crm.dealcategory.list` / `crm.category.list` (entityTypeId=2) через тот же вебхук.
+
+Если переменная **пуста** — фильтр по воронке не применяется.
 
 Перезапустите приложение (uvicorn / systemd / docker).
 
@@ -100,6 +116,6 @@ curl -s -H "Authorization: Bearer TOKEN" https://ВАШ-EKLK/api/v1/bitrix/manag
 | `app/services/bitrix_manager.py` | batch-запрос |
 | `app/routers/bitrix_manager.py` | `GET /api/v1/bitrix/manager` |
 | `app/static/js/sections/dashboard.js` | виджет |
-| `app/core/config.py` | `bitrix24_webhook_url` |
+| `app/core/config.py` | `bitrix24_webhook_url`, `bitrix24_deal_category_id` |
 
 Без `BITRIX24_WEBHOOK_URL` виджет покажет сообщение об ошибке конфигурации (ядро ЛК работает как раньше).

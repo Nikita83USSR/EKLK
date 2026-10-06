@@ -83,12 +83,9 @@ async def fetch_manager_by_inn(inn: str) -> dict[str, Any]:
         "find_deal": _batch_cmd_query(
             "crm.deal.list",
             {
-                "filter": {
-                    "COMPANY_ID": "$result[find_company][0][ENTITY_ID]",
-                    "CLOSED": "N",
-                },
+                "filter": _deal_filter(),
                 "order": {"ID": "DESC"},
-                "select": ["ID", "ASSIGNED_BY_ID", "TITLE", "CLOSED"],
+                "select": ["ID", "ASSIGNED_BY_ID", "TITLE", "CLOSED", "CATEGORY_ID"],
             },
         ),
         # user.get принимает ID напрямую
