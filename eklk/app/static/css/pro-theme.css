@@ -415,6 +415,7 @@ body[data-theme="pro"] .nav-dropdown-menu {
 body[data-theme="pro"] .nav-dropdown-menu button {
   padding: 10px 12px;
   border-radius: 9px;
+  text-align: left;
 }
 
 body[data-theme="pro"] .nav-dropdown-menu button:hover,

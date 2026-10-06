@@ -85,6 +85,7 @@ body[data-theme="minimal"] .nav-dropdown-menu button {
   padding: 6px 10px;
   border-radius: 4px;
   font-size: 12px;
+  text-align: left;
 }
 
 body[data-theme="minimal"] .nav-dropdown-menu button:hover,
