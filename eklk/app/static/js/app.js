@@ -3012,7 +3012,9 @@
         if (org) org.classList.add("active");
         $("#settings-org") && $("#settings-org").classList.remove("hidden");
         $("#settings-stores") && $("#settings-stores").classList.add("hidden");
+        $("#settings-integrations") && $("#settings-integrations").classList.add("hidden");
         $("#settings-appearance") && $("#settings-appearance").classList.add("hidden");
+        $("#settings-helper") && $("#settings-helper").classList.add("hidden");
       }
     }
     if (tab === "reports" && window.EKLK_REPORTS && typeof window.EKLK_REPORTS.onShow === "function") {
@@ -3029,6 +3031,22 @@
       loadSupportOnline().catch((e) => console.warn("support", e));
     }
     if (tab === "helper") {
+      // «Помощник» перенесён в настройки — открываем settings + подвкладку
+      $$(".tab-panel").forEach((p) => p.classList.add("hidden"));
+      const settingsPanel = $("#tab-settings");
+      if (settingsPanel) settingsPanel.classList.remove("hidden");
+      $$(".settings-tab").forEach((b) => {
+        b.classList.toggle("active", b.dataset.settingsTab === "helper");
+      });
+      $("#settings-org") && $("#settings-org").classList.add("hidden");
+      $("#settings-stores") && $("#settings-stores").classList.add("hidden");
+      $("#settings-integrations") && $("#settings-integrations").classList.add("hidden");
+      $("#settings-appearance") && $("#settings-appearance").classList.add("hidden");
+      $("#settings-helper") && $("#settings-helper").classList.remove("hidden");
+      // снять active с nav (helper больше не в меню)
+      $$(".nav button[data-tab], .user-info button[data-tab], #headerAiBtn").forEach((b) => {
+        b.classList.remove("active");
+      });
       initHelperPanel().catch((e) => console.warn("helper", e));
     }
     // Товарные строки: пересчёт stacked после показа (F5 при zoom ≠ 100%)
@@ -4831,9 +4849,13 @@
       $("#settings-stores") && $("#settings-stores").classList.toggle("hidden", name !== "stores");
       $("#settings-integrations") && $("#settings-integrations").classList.toggle("hidden", name !== "integrations");
       $("#settings-appearance") && $("#settings-appearance").classList.toggle("hidden", name !== "appearance");
+      $("#settings-helper") && $("#settings-helper").classList.toggle("hidden", name !== "helper");
       // если были на каталоге — вернуться в настройки
       if ($("#tab-settings") && $("#tab-settings").classList.contains("hidden")) {
         showTab("settings", true);
+      }
+      if (name === "helper") {
+        initHelperPanel().catch((e) => console.warn("helper", e));
       }
     };
   });
