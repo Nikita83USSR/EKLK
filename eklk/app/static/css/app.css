@@ -3628,3 +3628,40 @@ body[data-theme="glass"] .nav-dropdown-menu {
   margin-top: 8px;
 }
 .pay-qr-size-panel.hidden { display: none !important; }
+
+
+/* Bitrix24 manager widget (dashboard extension) */
+.dash-manager-card {
+  margin-top: 4px;
+  border-style: dashed;
+  opacity: 0.95;
+}
+.dash-manager-body {
+  margin-top: 8px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.dash-manager-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.dash-manager-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.dash-manager-row a {
+  color: var(--accent, #16a34a);
+  text-decoration: none;
+}
+.dash-manager-row a:hover {
+  text-decoration: underline;
+}
+.dash-manager-miss {
+  color: var(--muted);
+  font-size: 0.82rem;
+}

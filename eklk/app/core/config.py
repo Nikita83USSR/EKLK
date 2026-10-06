@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     # Через сколько секунд без heartbeat агент считается offline
     support_presence_ttl_seconds: int = 90
 
+    # Bitrix24: менеджер по ИНН (расширение, не ядро)
+    # Входящий вебхук: https://xxx.bitrix24.ru/rest/1/xxxxx/
+    bitrix24_webhook_url: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:
