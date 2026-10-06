@@ -3500,7 +3500,7 @@ body[data-theme="glass"] .nav-dropdown-menu {
 }
 .nav-dropdown-menu button {
   width: 100%;
-  text-align: left;
+  text-align: center;
   border: none;
   background: transparent;
   color: var(--text);
