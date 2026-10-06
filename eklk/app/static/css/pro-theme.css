@@ -412,14 +412,23 @@ body[data-theme="pro"] .nav-dropdown-menu {
   box-shadow: 0 18px 50px rgba(0,0,0,.45);
 }
 
-body[data-theme="pro"] .nav-dropdown-menu button {
+/* выше специфичности .nav button / :last-child — иначе padding: 10px 0 ломает выравнивание */
+body[data-theme="pro"] .nav-dropdown-menu button,
+body[data-theme="pro"] .nav-dropdown-menu button:last-child {
+  width: 100%;
   padding: 10px 12px;
+  border: 0;
   border-radius: 9px;
   text-align: left;
+  background: transparent;
+  color: var(--text);
+  letter-spacing: normal;
 }
 
 body[data-theme="pro"] .nav-dropdown-menu button:hover,
-body[data-theme="pro"] .nav-dropdown-menu button.active {
+body[data-theme="pro"] .nav-dropdown-menu button.active,
+body[data-theme="pro"] .nav-dropdown-menu button:last-child:hover,
+body[data-theme="pro"] .nav-dropdown-menu button:last-child.active {
   color: var(--text);
   background: #242427;
 }
