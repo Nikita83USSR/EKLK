@@ -52,6 +52,19 @@ def _batch_cmd_query(method: str, params: dict[str, Any]) -> str:
     return f"{method}?{qs}" if qs else method
 
 
+
+def _deal_filter() -> dict:
+    """Фильтр сделок: компания из batch + открытые + опционально воронка."""
+    f = {
+        "COMPANY_ID": "$result[find_company][0][ENTITY_ID]",
+        "CLOSED": "N",
+    }
+    cat = (settings.bitrix24_deal_category_id or "").strip()
+    if cat:
+        f["CATEGORY_ID"] = cat
+    return f
+
+
 async def fetch_manager_by_inn(inn: str) -> dict[str, Any]:
     """
     Batch: requisite (ИНН) → активная сделка → ответственный менеджер.
