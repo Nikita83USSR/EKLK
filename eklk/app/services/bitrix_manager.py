@@ -107,8 +107,23 @@ async def fetch_manager_by_inn(inn: str) -> dict[str, Any]:
         logger.warning(f"bitrix batch HTTP {resp.status_code}: {data}")
         raise RuntimeError("Ошибка ответа Bitrix24")
 
-    result = (data.get("result") or {}).get("result") or data.get("result") or {}
-    result_error = (data.get("result") or {}).get("result_error") or data.get("result_error") or {}
+    # Формат batch: { result: { result: {...}, result_error: {...}|[] , ... } }
+    outer = data.get("result")
+    if isinstance(outer, dict) and "result" in outer:
+        result = outer.get("result") or {}
+        result_error = outer.get("result_error") or {}
+    else:
+        result = outer if isinstance(outer, dict) else {}
+        result_error = data.get("result_error") or {}
+
+    # Bitrix часто отдаёт пустой result_error как [] — не dict
+    if not isinstance(result, dict):
+        logger.warning(f"bitrix batch unexpected result type: {type(result)} data={data!r:.500}")
+        raise RuntimeError("Некорректный ответ batch Bitrix24")
+    if isinstance(result_error, list):
+        result_error = {}
+    if not isinstance(result_error, dict):
+        result_error = {}
 
     # --- find_company ---
     companies = result.get("find_company")

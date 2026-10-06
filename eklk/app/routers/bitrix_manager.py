@@ -41,4 +41,8 @@ async def get_my_manager(user: CurrentUser) -> dict[str, Any]:
         return {"success": False, "error": str(e)}
     except Exception as e:
         log_action("bitrix_manager_err", str(e), level="error", user_id=login)
-        return {"success": False, "error": "Внутренняя ошибка поиска менеджера"}
+        # Показываем краткую причину (не секрет) — иначе в UI только «внутренняя ошибка»
+        msg = str(e).strip() or e.__class__.__name__
+        if len(msg) > 180:
+            msg = msg[:180] + "…"
+        return {"success": False, "error": f"Ошибка поиска менеджера: {msg}"}
