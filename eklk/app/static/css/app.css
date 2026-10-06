@@ -2263,6 +2263,11 @@ body[data-theme="glass"] .modal-footer {
   .nav > button[data-tab="ai-cashier"] {
     display: none !important;
   }
+  /* Поддержка (admin) — не дублируем в mobile-меню; помощник в настройках */
+  .nav > button[data-tab="support"],
+  #nav_support {
+    display: none !important;
+  }
   .nav {
     grid-area: nav;
     width: 100%;
@@ -2303,6 +2308,14 @@ body[data-theme="glass"] .modal-footer {
 @media (orientation: landscape) {
   .header-ai-btn { display: none !important; }
   .nav > button[data-tab="ai-cashier"] { display: inline-block !important; }
+}
+
+/* Узкий экран: «Поддержка» только desktop (admin-таблица), mobile — помощник в ⚙ */
+@media (max-width: 960px) {
+  .nav > button[data-tab="support"],
+  #nav_support {
+    display: none !important;
+  }
 }
 
 /* Портрет: список чеков, каталог, чек, ссылка на оплату — без выезда за экран */
