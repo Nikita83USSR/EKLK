@@ -379,16 +379,6 @@ body[data-theme="pro"] .container {
   padding-bottom: 56px;
 }
 
-body[data-theme="pro"] .logo::after {
-  content: "PRO";
-  margin-left: 10px;
-  color: #77777d;
-  font-family: "Unbounded", var(--font);
-  font-size: .62rem;
-  letter-spacing: .28em;
-  vertical-align: middle;
-}
-
 body[data-theme="pro"] .header-logo {
   display: inline-block;
   vertical-align: middle;
