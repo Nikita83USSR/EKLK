@@ -289,6 +289,11 @@
     if ($("#appScreen")) $("#appScreen").classList.add("hidden");
     if ($("#loginScreen")) $("#loginScreen").classList.remove("hidden");
     if ($("#appFooter")) $("#appFooter").classList.add("hidden");
+    // Bitrix manager footer column
+    const mgrCol = $("#footer_manager_col");
+    const mgrBody = $("#footer_manager_body");
+    if (mgrCol) mgrCol.hidden = true;
+    if (mgrBody) mgrBody.innerHTML = "";
   }
 
   function money(n) {
@@ -2154,11 +2159,57 @@
     });
   } catch (e) { /* ignore */ }
 
+  /** Bitrix24 manager → footer (background, non-blocking). */
+  function loadFooterManager() {
+    const col = $("#footer_manager_col");
+    const body = $("#footer_manager_body");
+    if (!col || !body) return;
+    col.hidden = true;
+    body.innerHTML = "";
+    const esc = (s) =>
+      String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    // fire-and-forget: dashboard must not wait for Bitrix
+    api("/bitrix/manager")
+      .then((data) => {
+        if (!data || !data.success || !data.manager) {
+          col.hidden = true;
+          return;
+        }
+        const m = data.manager;
+        const name = esc(m.name || "—");
+        const emailRaw = m.email || "";
+        const email = esc(emailRaw);
+        const inner = esc(m.inner_phone || "Не указан");
+        const mailHtml =
+          emailRaw && emailRaw !== "—"
+            ? `<a href="mailto:${email}">${email}</a>`
+            : "—";
+        // основной номер + добавочный из CRM
+        const phoneHtml =
+          `<a href="tel:78006003476">+7 (800) 600-34-76</a>, доб. ${inner}`;
+        body.innerHTML =
+          `<div class="footer-manager-name">${name}</div>` +
+          `<div class="footer-manager-row">✉ ${mailHtml}</div>` +
+          `<div class="footer-manager-row">☎ ${phoneHtml}</div>`;
+        col.hidden = false;
+      })
+      .catch(() => {
+        // optional extension — hide on any failure
+        col.hidden = true;
+      });
+  }
+
   async function afterLogin(loginPayload) {
     try { document.documentElement.classList.add("eklk-authed"); } catch (e) { /* ignore */ }
     if ($("#loginScreen")) $("#loginScreen").classList.add("hidden");
     if ($("#appScreen")) $("#appScreen").classList.remove("hidden");
     if ($("#appFooter")) $("#appFooter").classList.remove("hidden");
+    // менеджер из Bitrix — в фоне, не блокирует дашборд
+    try { loadFooterManager(); } catch (e) { /* ignore */ }
     try {
       // Сначала prefs из БД (тема, магазин firm, last_pay_type)
       const hint =

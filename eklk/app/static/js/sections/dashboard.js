@@ -28,13 +28,6 @@
     if (Number.isNaN(v)) return "—";
     return v.toLocaleString("ru-RU", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " ₽";
   }
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
   function todayISO() {
     const d = new Date();
     const y = d.getFullYear();
@@ -364,44 +357,6 @@
   }
 
 
-  async function loadManager() {
-    const card = $("#dash_manager_card");
-    const body = $("#dash_manager_body");
-    const status = $("#dash_manager_status");
-    if (!card || !body) return;
-    // показываем карточку только если бэкенд ответил осмысленно
-    try {
-      const data = await api("/bitrix/manager");
-      if (!data) {
-        card.hidden = true;
-        return;
-      }
-      if (data.success && data.manager) {
-        const m = data.manager;
-        const name = escapeHtml(m.name || "—");
-        const email = escapeHtml(m.email || "—");
-        const phone = escapeHtml(m.inner_phone || "Не указан");
-        const mailHtml =
-          m.email && m.email !== "—"
-            ? `<a href="mailto:${email}">${email}</a>`
-            : "—";
-        body.innerHTML =
-          `<div class="dash-manager-name">${name}</div>` +
-          `<div class="dash-manager-row">✉ ${mailHtml}</div>` +
-          `<div class="dash-manager-row">☎ доб. ${phone}</div>`;
-        card.hidden = false;
-      } else {
-        // нет в CRM / не настроен вебхук — компактное сообщение, без пугала
-        const err = escapeHtml(data.error || "Менеджер не найден");
-        body.innerHTML = `<p class="dash-manager-miss">${err}</p>`;
-        card.hidden = false;
-      }
-    } catch (e) {
-      // расширение опционально: при сбое просто скрываем
-      card.hidden = true;
-    }
-  }
-
   window.EKLK_HOME = {
     onShow() {
       if (!bound) {
@@ -411,7 +366,6 @@
         syncFilterVisibility();
       }
       load();
-      loadManager();
     },
   };
 })();

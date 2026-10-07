@@ -820,7 +820,8 @@ html.eklk-authed #appScreen { display: flex !important; }
   padding: 0 5%;
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* auto-fit: 3 cols when manager hidden, 4 when visible (hidden=display:none) */
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 24px;
 }
 @media (max-width: 700px) {
@@ -837,6 +838,24 @@ html.eklk-authed #appScreen { display: flex !important; }
 }
 .footer-col a { color: var(--primary); }
 .footer-col a:hover { text-decoration: underline; }
+/* Bitrix manager in footer (background-loaded) */
+.footer-manager-col {
+  min-width: 0;
+}
+.footer-manager-name {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.footer-manager-row {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.footer-manager-row a {
+  color: var(--primary);
+}
 
 /* —— Logo —— */
 .login-logo-wrap {
@@ -1942,7 +1961,7 @@ body[data-theme="glass"] .modal-footer {
     padding: 10px 0 14px;
   }
   .footer-inner {
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 10px;
     font-size: 0.75rem;
   }
@@ -3630,55 +3649,3 @@ body[data-theme="glass"] .nav-dropdown-menu {
 .pay-qr-size-panel.hidden { display: none !important; }
 
 
-/* Bitrix24 manager widget (dashboard extension) */
-.dash-manager-card {
-  margin-top: 4px;
-  border-style: dashed;
-  opacity: 0.95;
-  /* content-sized: don't share equal flex height with metric cards */
-  flex: 0 0 auto;
-  justify-content: flex-start;
-  min-width: 0;
-  overflow: hidden;
-}
-.dash-manager-body {
-  margin-top: 8px;
-  font-size: 0.88rem;
-  line-height: 1.45;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-.dash-manager-name {
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: var(--text);
-  margin-bottom: 6px;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-.dash-manager-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  color: var(--muted);
-  margin-top: 2px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-.dash-manager-row a {
-  color: var(--accent, #16a34a);
-  text-decoration: none;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-.dash-manager-row a:hover {
-  text-decoration: underline;
-}
-.dash-manager-miss {
-  color: var(--muted);
-  font-size: 0.82rem;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}

@@ -16,7 +16,7 @@
     })();
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Unbounded:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/app.css?v=20260929merge1" />
+  <link rel="stylesheet" href="/static/css/app.css?v=20261007mgr1" />
   <link rel="stylesheet" href="/static/css/pro-theme.css?v=20260915pro2" />
   <link rel="stylesheet" href="/static/css/minimal-theme.css?v=20260915min1" />
 </head>
@@ -168,13 +168,6 @@
                 <div class="dash-card">
                   <div class="dash-metric-label">Наличные (CASH)</div>
                   <div class="dash-metric-value" id="dash_cash">—</div>
-                </div>
-                <!-- Bitrix24: менеджер по ИНН (расширение) -->
-                <div class="dash-card dash-manager-card" id="dash_manager_card" hidden>
-                  <div class="dash-metric-label">Ваш менеджер</div>
-                  <div id="dash_manager_body" class="dash-manager-body">
-                    <p class="hint" id="dash_manager_status">Загрузка…</p>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1287,6 +1280,11 @@
         <div>Пн–Пт 9:00 – 18:00 Мск</div>
         <div><a href="mailto:support@ecomkassa.ru">support@ecomkassa.ru</a></div>
       </div>
+      <!-- Bitrix24: менеджер по ИНН (расширение) — подгрузка в фоне после login -->
+      <div class="footer-col footer-manager-col" id="footer_manager_col" hidden>
+        <div class="footer-title">Ваш менеджер</div>
+        <div id="footer_manager_body" class="footer-manager-body"></div>
+      </div>
       <div class="footer-col">
         <div class="footer-title">Документы</div>
         <div><a href="https://ecomkassa.ru/helpcenter" target="_blank" rel="noopener">Инструкции</a></div>
@@ -1376,8 +1374,8 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=20260929online1"></script>
-  <script src="/static/js/sections/dashboard.js?v=20261006b24"></script>
+  <script src="/static/js/app.js?v=20261007mgr1"></script>
+  <script src="/static/js/sections/dashboard.js?v=20261007mgr1"></script>
   <script src="/static/js/sections/catalog.js?v=20260825c"></script>
   <script src="/static/js/sections/reports.js?v=20260825c"></script>
   <!-- Bitrix24 CRM widget: context (page, login, firm) via onBitrixLiveChat in app.js -->
