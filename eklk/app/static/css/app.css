@@ -3635,17 +3635,27 @@ body[data-theme="glass"] .nav-dropdown-menu {
   margin-top: 4px;
   border-style: dashed;
   opacity: 0.95;
+  /* content-sized: don't share equal flex height with metric cards */
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  min-width: 0;
+  overflow: hidden;
 }
 .dash-manager-body {
   margin-top: 8px;
   font-size: 0.88rem;
   line-height: 1.45;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .dash-manager-name {
   font-weight: 600;
   font-size: 0.95rem;
   color: var(--text);
   margin-bottom: 6px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .dash-manager-row {
   display: flex;
@@ -3653,10 +3663,15 @@ body[data-theme="glass"] .nav-dropdown-menu {
   gap: 4px 10px;
   color: var(--muted);
   margin-top: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .dash-manager-row a {
   color: var(--accent, #16a34a);
   text-decoration: none;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .dash-manager-row a:hover {
   text-decoration: underline;
@@ -3664,4 +3679,6 @@ body[data-theme="glass"] .nav-dropdown-menu {
 .dash-manager-miss {
   color: var(--muted);
   font-size: 0.82rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
