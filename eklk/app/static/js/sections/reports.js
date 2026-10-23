@@ -12,8 +12,14 @@
   let knownStores = []; // [{storeId, storeName}]
   const charts = {};
 
-  const DONE_STATUSES = new Set([
-    "done", "completed", "complete", "success", "ok", "ready", "printed",
+  /** Mobile-статусы, где оплаты точно ещё нет — в отчёт не берём. */
+  const UNPAID_MOBILE = new Set([
+    "wait", "waiting", "pending", "process", "processing", "in_progress",
+    "created", "new", "draft", "canceled", "cancelled", "expired", "timeout",
+  ]);
+  /** Статус оплаты в invoice_payload / mobile «успех». */
+  const PAYMENT_DONE = new Set([
+    "done", "completed", "complete", "success", "ok", "paid", "payment", "ready", "printed",
   ]);
 
   const PT_LABELS = {
@@ -486,6 +492,52 @@
     return "—";
   }
 
+
+  function isPaymentDone(detail, mobileStatus) {
+    const fiscal = detail && detail.fiscal;
+    const inv = fiscal && fiscal.invoice_payload;
+    const invSt = String((inv && inv.status) || "").toLowerCase().trim();
+    if (invSt && PAYMENT_DONE.has(invSt)) return true;
+    const mob = String(mobileStatus || (detail && detail.summary && detail.summary.status) || "")
+      .toLowerCase()
+      .trim();
+    if (PAYMENT_DONE.has(mob)) return true;
+    // вторичный признак: в atol есть ненулевой payments[]
+    const atol = (detail && detail.atol5) || {};
+    let doc = atol;
+    if (atol.payload && typeof atol.payload === "object" && !atol.receipt) doc = atol.payload;
+    const receipt = doc.receipt || doc.correction || doc;
+    const pays = (receipt && receipt.payments) || [];
+    if (Array.isArray(pays) && pays.some((p) => Number(p && p.sum) > 0)) return true;
+    return false;
+  }
+
+  /** Статус чека (ФН) — как в ЛК. */
+  function checkStatusLabel(fiscal, mobileStatus) {
+    const st = String(
+      (fiscal && fiscal.status) || mobileStatus || ""
+    ).toLowerCase().trim();
+    if (!st) return "—";
+    if (["fail", "failed", "error"].includes(st)) return "Ошибка";
+    if (["canceled", "cancelled", "expired", "timeout"].includes(st)) return "Отменён";
+    if (["done", "completed", "complete", "success", "ok", "ready", "printed"].includes(st)) return "Завершён";
+    if (["paid", "payment"].includes(st)) return "Фискализация";
+    if (["wait", "waiting", "pending", "process", "processing", "in_progress", "created", "new", "draft"].includes(st)) {
+      return "Ожидает";
+    }
+    return st;
+  }
+
+  function ofdUrlFromFiscal(fiscal) {
+    if (!fiscal || typeof fiscal !== "object") return null;
+    const payload = fiscal.payload;
+    if (payload && typeof payload === "object" && payload.ofd_receipt_url) {
+      return String(payload.ofd_receipt_url);
+    }
+    return null;
+  }
+
+
   function formatInvDate(iso) {
     if (!iso) return "—";
     try {
@@ -509,20 +561,27 @@
     const totalEl = $("#rpt_inv_total");
     if (!tbody) return;
     if (!items || !items.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="hint">Нет завершённых платежей за период</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="hint">Нет завершённых платежей за период</td></tr>`;
       tfoot?.classList.add("hidden");
       if ($("#rpt_inv_xls")) $("#rpt_inv_xls").disabled = true;
       return;
     }
     tbody.innerHTML = items
-      .map(
-        (it) => `<tr>
+      .map((it) => {
+        const ofd = it.ofd_url
+          ? `<a href="${escapeHtml(it.ofd_url)}" target="_blank" rel="noopener">ОФД</a>`
+          : "—";
+        const chk = escapeHtml(it.check_status || "—");
+        const chkClass = (it.check_status === "Ошибка") ? ' style="color:var(--danger)"' : "";
+        return `<tr>
           <td>${escapeHtml(String(it.uuid || it.order_id || "—"))}</td>
           <td>${escapeHtml(formatInvDate(it.date))}</td>
           <td>${escapeHtml(it.client_name || "—")}</td>
           <td style="text-align:right">${money(it.total)}</td>
-        </tr>`
-      )
+          <td${chkClass}>${chk}</td>
+          <td>${ofd}</td>
+        </tr>`;
+      })
       .join("");
     const sum = items.reduce((a, it) => a + (Number(it.total) || 0), 0);
     if (totalEl) totalEl.textContent = money(sum);
@@ -566,12 +625,11 @@
     let offset = 0;
     let pages = 0;
     let rawScanned = 0;
-    const items = [];
+    const candidates = [];
     const statusHist = {};
 
     try {
-      // Тот же путь, что «Документы»: POST /orders/search + пагинация.
-      // API иногда отдаёт limit+1 (=есть ещё); COMPLETED может быть не на первой странице.
+      // 1) Все INVC за период (кроме явно неоплаченных mobile-статусов)
       while (pages < MAX_PAGES) {
         const body = {
           offset,
@@ -582,8 +640,8 @@
         };
         setInvProgress(
           true,
-          Math.min(40, pages * 3),
-          `Поиск… стр. ${pages + 1}, найдено ${items.length}`
+          Math.min(25, pages * 2),
+          `Поиск… стр. ${pages + 1}, кандидатов ${candidates.length}`
         );
         const data = await api("/orders/search", {
           method: "POST",
@@ -597,34 +655,32 @@
           if (!r || typeof r !== "object") continue;
           const st = String(r.status || "").toLowerCase().trim();
           statusHist[st || "—"] = (statusHist[st || "—"] || 0) + 1;
-          if (!DONE_STATUSES.has(st)) continue;
+          if (UNPAID_MOBILE.has(st)) continue;
           const sid = r.store_id != null ? Number(r.store_id) : null;
           if (storeIdNum != null && !Number.isNaN(storeIdNum) && sid !== storeIdNum) {
             continue;
           }
           const oid = r.order_id;
-          items.push({
+          candidates.push({
             uuid: String(oid != null ? oid : r.external_id || ""),
             order_id: oid != null ? Number(oid) : null,
             external_id: r.external_id || null,
             date: r.updated || null,
             total: Number(r.total) || 0,
-            status: String(r.status || ""),
+            mobile_status: String(r.status || ""),
             store_id: sid,
             store_name: r.store_name || null,
-            client_name: null,
           });
         }
 
-        // конец выборки: меньше page size (не limit+1)
         if (rows.length < PAGE) break;
         offset += PAGE;
       }
 
-      items.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
-
-      const total = items.length;
-      if (!total) {
+      // 2) Детализация: оплата (invoice_payload) vs чек (fiscal.status) + ФИО + ОФД
+      const items = [];
+      const nCand = candidates.length;
+      if (!nCand) {
         lastInvoiceReport = {
           items: [],
           total_sum: 0,
@@ -645,22 +701,66 @@
         return;
       }
 
-      setInvProgress(true, 45, `Найдено ${total}. Загрузка ФИО…`);
+      setInvProgress(true, 30, `Проверка оплаты ${nCand}…`);
 
-      for (let i = 0; i < items.length; i++) {
-        const it = items[i];
-        const oid = it.order_id || it.uuid;
+      for (let i = 0; i < nCand; i++) {
+        const cand = candidates[i];
+        const oid = cand.order_id || cand.uuid;
+        let detail = null;
         try {
-          const detail = await api("/orders/" + encodeURIComponent(oid));
-          it.client_name = clientNameFromDetail(detail);
+          detail = await api("/orders/" + encodeURIComponent(oid));
         } catch (_) {
-          it.client_name = "—";
+          detail = null;
         }
-        const pct = 45 + Math.round(((i + 1) / total) * 55);
-        setInvProgress(true, pct, `ФИО ${i + 1} из ${total}`);
-        if ((i + 1) % 5 === 0 || i === total - 1) {
-          renderInvoiceTable(items);
+
+        const paid = isPaymentDone(detail, cand.mobile_status);
+        if (!paid) {
+          const pctSkip = 30 + Math.round(((i + 1) / nCand) * 70);
+          setInvProgress(true, pctSkip, `Проверка ${i + 1}/${nCand} (пропуск)`);
+          continue;
         }
+
+        const fiscal = detail && detail.fiscal;
+        const checkSt = checkStatusLabel(fiscal, cand.mobile_status);
+        const ofd = ofdUrlFromFiscal(fiscal);
+        const clientName = clientNameFromDetail(detail);
+
+        items.push({
+          uuid: cand.uuid,
+          order_id: cand.order_id,
+          external_id: cand.external_id,
+          date: cand.date,
+          total: cand.total,
+          client_name: clientName,
+          check_status: checkSt,
+          ofd_url: ofd,
+          mobile_status: cand.mobile_status,
+        });
+
+        const pct = 30 + Math.round(((i + 1) / nCand) * 70);
+        setInvProgress(true, pct, `Оплата ${items.length} · проверено ${i + 1}/${nCand}`);
+        if (items.length % 5 === 0) renderInvoiceTable(items);
+      }
+
+      items.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+
+      const total = items.length;
+      if (!total) {
+        lastInvoiceReport = {
+          items: [],
+          total_sum: 0,
+          since,
+          until,
+          raw_scanned: rawScanned,
+          status_hist: statusHist,
+        };
+        setInvProgress(false, 0, "");
+        renderInvoiceTable([]);
+        alert(
+          `Завершённых платежей нет (кандидатов ${nCand}, просмотрено ${rawScanned})`,
+          "success"
+        );
+        return;
       }
 
       const sum = items.reduce((a, it) => a + (Number(it.total) || 0), 0);
@@ -673,7 +773,7 @@
         raw_scanned: rawScanned,
       };
       renderInvoiceTable(items);
-      setInvProgress(true, 100, `Готово: ${total} из ${rawScanned} просмотренных`);
+      setInvProgress(true, 100, `Готово: ${total} платежей`);
       setTimeout(() => setInvProgress(false, 0, ""), 1500);
       alert(`Отчёт готов: ${total} платежей`, "success");
     } catch (e) {
@@ -696,15 +796,17 @@
     }
     const items = lastInvoiceReport.items;
     const rows = [
-      ["UUID", "Дата", "ФИО покупателя", "Сумма, ₽"],
+      ["UUID", "Дата", "ФИО покупателя", "Сумма, ₽", "Чек", "ОФД"],
       ...items.map((it) => [
         String(it.uuid || it.order_id || ""),
         formatInvDate(it.date),
         it.client_name || "—",
         Number(it.total) || 0,
+        it.check_status || "—",
+        it.ofd_url || "",
       ]),
       [],
-      ["Итого", "", "", lastInvoiceReport.total_sum],
+      ["Итого", "", "", lastInvoiceReport.total_sum, "", ""],
       ["Период с", lastInvoiceReport.since || ""],
       ["Период по", lastInvoiceReport.until || ""],
       ["Записей", items.length],
