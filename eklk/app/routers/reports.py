@@ -21,6 +21,7 @@ from app.schemas.reports import (
     ReportPoint,
     ReportResponse,
     ReportHistoryItem,
+    ReportHistoryCreate,
     InvoiceReportItem,
     InvoiceReportResponse,
 )
@@ -427,6 +428,31 @@ async def report_history(user: CurrentUser):
         for h in hist
         if isinstance(h, dict)
     ]
+
+
+@router.post("/history", response_model=ReportHistoryItem)
+async def add_report_history(body: ReportHistoryCreate, user: CurrentUser):
+    """Добавить запись в историю (для клиентских отчётов: ссылки на оплату)."""
+    session = get_session(user["username"])
+    if not session:
+        raise HTTPException(status_code=401, detail="Сессия истекла")
+    hist = list(session.get("report_history") or [])
+    item = {
+        "id": str(uuid.uuid4())[:8],
+        "reportType": body.reportType,
+        "params": body.params or {},
+        "fetchedAt": datetime.now(timezone.utc).isoformat(),
+        "summary": body.summary or {},
+    }
+    hist.insert(0, item)
+    update_session_fields(user["username"], report_history=hist[:30])
+    return ReportHistoryItem(
+        id=item["id"],
+        reportType=item["reportType"],
+        params=item["params"],
+        fetchedAt=item["fetchedAt"],
+        summary=item["summary"],
+    )
 
 
 @router.delete("/history")

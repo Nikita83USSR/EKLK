@@ -241,6 +241,19 @@
       .join("");
   }
 
+  function historyTypeLabel(t) {
+    const key = String(t || "").toUpperCase();
+    if (key === "INVOICE_PAYMENTS" || key === "INVOICE") return "Ссылки на оплату";
+    const map = {
+      DAILY: "Дневной",
+      WEEKLY: "Недельный",
+      MONTHLY: "Месячный",
+      QUARTERLY: "Квартальный",
+      ANNUAL: "Годовой",
+    };
+    return map[key] || t || "Отчёт";
+  }
+
   async function loadHistory() {
     const box = $("#rpt_history");
     if (!box) return;
@@ -253,17 +266,59 @@
       box.innerHTML = items
         .map((h) => {
           const s = h.summary || {};
+          const type = String(h.reportType || "").toUpperCase();
+          const title = historyTypeLabel(h.reportType);
+          const when = escapeHtml((h.fetchedAt || "").slice(0, 19));
+          if (type === "INVOICE_PAYMENTS" || type === "INVOICE") {
+            const period = s.period_label || "";
+            const cnt = s.total_count ?? s.points ?? "—";
+            const sum = s.total_sum ?? s.income;
+            return `<div class="tpl-card" style="padding:8px 10px;margin-bottom:6px">
+              <div><strong>${escapeHtml(title)}</strong> · ${when}</div>
+              <div class="hint">Платежей: ${cnt} · сумма${period ? " (" + escapeHtml(period) + ")" : ""}: ${money(sum)} ₽</div>
+            </div>`;
+          }
           const income = s.income ?? s.balance;
           const total = s.total_checks ?? s.total_signed;
           const period = s.period_label || "";
           return `<div class="tpl-card" style="padding:8px 10px;margin-bottom:6px">
-            <div><strong>${escapeHtml(h.reportType)}</strong> · ${escapeHtml((h.fetchedAt || "").slice(0, 19))}</div>
+            <div><strong>${escapeHtml(title)}</strong> · ${when}</div>
             <div class="hint">Чеки: ${money(total)} · доход${period ? " (" + escapeHtml(period) + ")" : ""}: ${money(income)} ₽ · точек: ${s.points ?? "—"}</div>
           </div>`;
         })
         .join("");
     } catch {
       box.innerHTML = `<p class="hint">История недоступна</p>`;
+    }
+  }
+
+  async function pushInvoiceHistory(report) {
+    if (!report) return;
+    const period =
+      (report.since || "").slice(0, 10) +
+      " — " +
+      (report.until || "").slice(0, 10);
+    try {
+      await api("/reports/history", {
+        method: "POST",
+        body: JSON.stringify({
+          reportType: "INVOICE_PAYMENTS",
+          params: {
+            since: report.since,
+            until: report.until,
+            store_id: report.store_id ?? null,
+          },
+          summary: {
+            period_label: period,
+            total_count: (report.items || []).length,
+            total_sum: report.total_sum,
+            points: (report.items || []).length,
+          },
+        }),
+      });
+      await loadHistory();
+    } catch (_) {
+      /* история не критична */
     }
   }
 
@@ -528,6 +583,22 @@
     return st;
   }
 
+  /** Статус платежа (invoice_payload / mobile). */
+  function paymentStatusLabel(detail, mobileStatus) {
+    const fiscal = detail && detail.fiscal;
+    const inv = fiscal && fiscal.invoice_payload;
+    const invSt = String((inv && inv.status) || "").toLowerCase().trim();
+    const st = invSt || String(mobileStatus || (detail && detail.summary && detail.summary.status) || "").toLowerCase().trim();
+    if (!st) return "—";
+    if (PAYMENT_DONE.has(st)) return "Завершён";
+    if (["fail", "failed", "error"].includes(st)) return "Ошибка";
+    if (["canceled", "cancelled", "expired", "timeout"].includes(st)) return "Отменён";
+    if (["wait", "waiting", "pending", "process", "processing", "in_progress", "created", "new", "draft"].includes(st)) {
+      return "Ожидает";
+    }
+    return st;
+  }
+
   function ofdUrlFromFiscal(fiscal) {
     if (!fiscal || typeof fiscal !== "object") return null;
     const payload = fiscal.payload;
@@ -561,7 +632,7 @@
     const totalEl = $("#rpt_inv_total");
     if (!tbody) return;
     if (!items || !items.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="hint">Нет завершённых платежей за период</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="hint">Нет завершённых платежей за период</td></tr>`;
       tfoot?.classList.add("hidden");
       if ($("#rpt_inv_xls")) $("#rpt_inv_xls").disabled = true;
       return;
@@ -571,13 +642,16 @@
         const ofd = it.ofd_url
           ? `<a href="${escapeHtml(it.ofd_url)}" target="_blank" rel="noopener">ОФД</a>`
           : "—";
+        const pay = escapeHtml(it.payment_status || "—");
         const chk = escapeHtml(it.check_status || "—");
+        const payClass = (it.payment_status === "Ошибка") ? ' style="color:var(--danger)"' : "";
         const chkClass = (it.check_status === "Ошибка") ? ' style="color:var(--danger)"' : "";
         return `<tr>
           <td>${escapeHtml(String(it.uuid || it.order_id || "—"))}</td>
           <td>${escapeHtml(formatInvDate(it.date))}</td>
           <td>${escapeHtml(it.client_name || "—")}</td>
           <td style="text-align:right">${money(it.total)}</td>
+          <td${payClass}>${pay}</td>
           <td${chkClass}>${chk}</td>
           <td>${ofd}</td>
         </tr>`;
@@ -721,6 +795,7 @@
         }
 
         const fiscal = detail && detail.fiscal;
+        const paySt = paymentStatusLabel(detail, cand.mobile_status);
         const checkSt = checkStatusLabel(fiscal, cand.mobile_status);
         const ofd = ofdUrlFromFiscal(fiscal);
         const clientName = clientNameFromDetail(detail);
@@ -732,6 +807,7 @@
           date: cand.date,
           total: cand.total,
           client_name: clientName,
+          payment_status: paySt,
           check_status: checkSt,
           ofd_url: ofd,
           mobile_status: cand.mobile_status,
@@ -775,6 +851,7 @@
       renderInvoiceTable(items);
       setInvProgress(true, 100, `Готово: ${total} платежей`);
       setTimeout(() => setInvProgress(false, 0, ""), 1500);
+      await pushInvoiceHistory(lastInvoiceReport);
       alert(`Отчёт готов: ${total} платежей`, "success");
     } catch (e) {
       setInvProgress(false, 0, "");
@@ -796,17 +873,18 @@
     }
     const items = lastInvoiceReport.items;
     const rows = [
-      ["UUID", "Дата", "ФИО покупателя", "Сумма, ₽", "Чек", "ОФД"],
+      ["UUID", "Дата", "ФИО покупателя", "Сумма, ₽", "Платёж", "Чек", "ОФД"],
       ...items.map((it) => [
         String(it.uuid || it.order_id || ""),
         formatInvDate(it.date),
         it.client_name || "—",
         Number(it.total) || 0,
+        it.payment_status || "—",
         it.check_status || "—",
         it.ofd_url || "",
       ]),
       [],
-      ["Итого", "", "", lastInvoiceReport.total_sum, "", ""],
+      ["Итого", "", "", lastInvoiceReport.total_sum, "", "", ""],
       ["Период с", lastInvoiceReport.since || ""],
       ["Период по", lastInvoiceReport.until || ""],
       ["Записей", items.length],
@@ -817,7 +895,25 @@
     XLSX.writeFile(wb, `eklk-invoice-payments-${tag}.xlsx`);
   }
 
+  function bindReportAccordions() {
+    document.querySelectorAll(".rpt-accordion-head").forEach((btn) => {
+      if (btn.dataset.boundAcc) return;
+      btn.dataset.boundAcc = "1";
+      btn.addEventListener("click", (e) => {
+        // не сворачивать при клике по вложенным контролам (их нет в head)
+        e.preventDefault();
+        const id = btn.getAttribute("data-rpt-acc");
+        const card = (id && document.getElementById(id)) || btn.closest(".rpt-accordion");
+        if (!card) return;
+        const open = !card.classList.contains("is-open");
+        card.classList.toggle("is-open", open);
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+    });
+  }
+
   function bind() {
+    bindReportAccordions();
     const now = new Date();
     const yNow = now.getFullYear();
     const mNow = now.getMonth() + 1;

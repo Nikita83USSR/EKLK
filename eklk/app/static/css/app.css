@@ -3649,3 +3649,67 @@ body[data-theme="glass"] .nav-dropdown-menu {
 .pay-qr-size-panel.hidden { display: none !important; }
 
 
+
+/* Reports accordion blocks */
+.rpt-accordion {
+  overflow: hidden;
+}
+.rpt-accordion-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 0 0 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.rpt-accordion-head:hover {
+  opacity: 0.92;
+}
+.rpt-accordion-head:focus-visible {
+  outline: 2px solid var(--accent, #10b981);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.rpt-accordion-chevron {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.28s ease;
+  opacity: 0.55;
+  margin-right: 4px;
+  margin-bottom: 4px;
+}
+.rpt-accordion.is-open .rpt-accordion-chevron {
+  transform: rotate(-135deg);
+  margin-bottom: 0;
+  margin-top: 4px;
+}
+.rpt-accordion-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.32s ease;
+}
+.rpt-accordion.is-open .rpt-accordion-body {
+  grid-template-rows: 1fr;
+}
+.rpt-accordion-body-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+.rpt-accordion:not(.is-open) .rpt-accordion-body-inner {
+  visibility: hidden;
+}
+.rpt-accordion.is-open .rpt-accordion-body-inner {
+  visibility: visible;
+  transition: visibility 0s;
+}

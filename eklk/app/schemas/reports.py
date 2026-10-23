@@ -36,6 +36,13 @@ class ReportHistoryItem(BaseModel):
     summary: Optional[dict] = None
 
 
+class ReportHistoryCreate(BaseModel):
+    """Клиент может добавить запись (например, отчёт по ссылкам на оплату)."""
+    reportType: str = Field(..., min_length=1, max_length=64)
+    params: dict = Field(default_factory=dict)
+    summary: Optional[dict] = None
+
+
 class InvoiceReportItem(BaseModel):
     """Строка отчёта по платежам INVC (без ФИО — обогащается на клиенте)."""
     uuid: str

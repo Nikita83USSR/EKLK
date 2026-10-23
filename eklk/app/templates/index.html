@@ -994,165 +994,184 @@
       <div id="tab-reports" class="tab-panel hidden">
         <div class="check-layout reports-layout">
           <div>
-            <div class="card">
-              <div class="section-title">Отчёты по расчётам</div>
-              <div class="form-grid reports-filters">
-                <label>Тип отчёта
-                  <select id="rpt_type" class="input">
-                    <option value="daily">Дневной</option>
-                    <option value="weekly">Недельный</option>
-                    <option value="monthly" selected>Месячный</option>
-                    <option value="quarterly">Квартальный</option>
-                    <option value="annual">Годовой</option>
-                  </select>
-                </label>
-                <label id="rpt_date_wrap">Дата
-                  <input type="date" id="rpt_date" class="input" />
-                </label>
-                <label id="rpt_year_wrap" class="hidden">Год
-                  <input type="number" id="rpt_year" class="input" min="2020" max="2100" />
-                </label>
-                <label id="rpt_month_wrap" class="hidden">Месяц
-                  <select id="rpt_month" class="input">
-                    <option value="1">Январь</option><option value="2">Февраль</option>
-                    <option value="3">Март</option><option value="4">Апрель</option>
-                    <option value="5">Май</option><option value="6">Июнь</option>
-                    <option value="7">Июль</option><option value="8">Август</option>
-                    <option value="9">Сентябрь</option><option value="10">Октябрь</option>
-                    <option value="11">Ноябрь</option><option value="12">Декабрь</option>
-                  </select>
-                </label>
-                <label id="rpt_quarter_wrap" class="hidden">Квартал
-                  <select id="rpt_quarter" class="input">
-                    <option value="1">I</option><option value="2">II</option>
-                    <option value="3">III</option><option value="4">IV</option>
-                  </select>
-                </label>
-                <label>Типы документов
-                  <select id="rpt_order_types" class="input">
-                    <option value="">Все</option>
-                    <option value="VCHR">Чеки (VCHR)</option>
-                    <option value="INVC">Счета (INVC)</option>
-                    <option value="CORD">Курьер (CORD)</option>
-                    <option value="VCHR,INVC">Чеки + счета</option>
-                  </select>
-                </label>
-              </div>
-              <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-                <button type="button" class="btn" id="rpt_load">Сформировать</button>
-                <button type="button" class="btn btn-secondary" id="rpt_xls" disabled>Скачать XLS</button>
-              </div>
-            </div>
-
-            <div class="card" style="margin-top:16px" id="rpt_summary_card">
-              <div class="section-title">Сводка</div>
-              <div id="rpt_summary" class="hint">Выберите период и нажмите «Сформировать».</div>
-            </div>
-
-            <div class="card" style="margin-top:16px" id="rpt_charts_card">
-              <div class="section-title">Графики</div>
-              <div class="reports-charts">
-                <div class="rpt-chart-box">
-                  <div class="hint" style="margin-bottom:6px">По типам оплаты, ₽</div>
-                  <canvas id="rpt_chart_pay" height="220"></canvas>
-                </div>
-                <div class="rpt-chart-box rpt-chart-wide">
-                  <div class="hint" style="margin-bottom:6px">Динамика по периодам, ₽</div>
-                  <canvas id="rpt_chart_time" height="240"></canvas>
+            <!-- Отчёт по ссылкам на оплату -->
+            <div class="card rpt-accordion is-open" id="rpt_inv_card" style="margin-bottom:16px">
+              <button type="button" class="rpt-accordion-head" aria-expanded="true" data-rpt-acc="rpt_inv_card">
+                <span class="section-title" style="border:none;padding:0;margin:0">Отчет по ссылкам на оплату</span>
+                <span class="rpt-accordion-chevron" aria-hidden="true"></span>
+              </button>
+              <div class="rpt-accordion-body">
+                <div class="rpt-accordion-body-inner">
+                  <p class="hint" style="margin-bottom:12px">Период — не более 1 года.</p>
+                  <div class="form-grid reports-filters">
+                    <label>С
+                      <input type="datetime-local" id="rpt_inv_since" class="input" />
+                    </label>
+                    <label>По
+                      <input type="datetime-local" id="rpt_inv_until" class="input" />
+                    </label>
+                    <label>Магазин
+                      <select id="rpt_inv_store" class="input">
+                        <option value="">Все магазины</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                    <button type="button" class="btn" id="rpt_inv_load">Сформировать</button>
+                    <button type="button" class="btn btn-secondary" id="rpt_inv_xls" disabled>Скачать XLS</button>
+                  </div>
+                  <div id="rpt_inv_progress" class="hidden" style="margin-top:14px">
+                    <div class="cat-busy-progress-wrap">
+                      <div class="cat-busy-progress-bar">
+                        <div class="cat-busy-progress-fill" id="rpt_inv_progress_fill" style="width:0%"></div>
+                      </div>
+                      <div class="cat-busy-progress-label hint" id="rpt_inv_progress_label">Подготовка…</div>
+                    </div>
+                  </div>
+                  <div class="orders-table-wrap" style="margin-top:16px">
+                    <table class="orders-table" id="rpt_inv_table">
+                      <thead>
+                        <tr>
+                          <th>UUID</th>
+                          <th>Дата</th>
+                          <th>ФИО покупателя</th>
+                          <th style="text-align:right">Сумма, ₽</th>
+                          <th>Платёж</th>
+                          <th>Чек</th>
+                          <th>ОФД</th>
+                        </tr>
+                      </thead>
+                      <tbody id="rpt_inv_tbody">
+                        <tr><td colspan="7" class="hint">Укажите период и нажмите «Сформировать»</td></tr>
+                      </tbody>
+                      <tfoot id="rpt_inv_tfoot" class="hidden">
+                        <tr>
+                          <td colspan="3" style="text-align:right"><strong>Итого</strong></td>
+                          <td style="text-align:right"><strong id="rpt_inv_total">0,00</strong></td>
+                          <td colspan="3"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div class="card" style="margin-top:16px">
-              <div class="section-title">Детализация (points)</div>
-              <div class="orders-table-wrap">
-                <table class="orders-table" id="rpt_table">
-                  <thead>
-                    <tr>
-                      <th>Период</th>
-                      <th>Кассир</th>
-                      <th>Точка</th>
-                      <th>Тип оплаты</th>
-                      <th style="text-align:right">Сумма, ₽</th>
-                    </tr>
-                  </thead>
-                  <tbody id="rpt_tbody">
-                    <tr><td colspan="5" class="hint">Нет данных</td></tr>
-                  </tbody>
-                </table>
+            <!-- Отчёты по расчётам -->
+            <div class="card rpt-accordion is-open" id="rpt_calc_card" style="margin-bottom:16px">
+              <button type="button" class="rpt-accordion-head" aria-expanded="true" data-rpt-acc="rpt_calc_card">
+                <span class="section-title" style="border:none;padding:0;margin:0">Отчёты по расчётам</span>
+                <span class="rpt-accordion-chevron" aria-hidden="true"></span>
+              </button>
+              <div class="rpt-accordion-body">
+                <div class="rpt-accordion-body-inner">
+                  <div class="form-grid reports-filters">
+                    <label>Тип отчёта
+                      <select id="rpt_type" class="input">
+                        <option value="daily">Дневной</option>
+                        <option value="weekly">Недельный</option>
+                        <option value="monthly" selected>Месячный</option>
+                        <option value="quarterly">Квартальный</option>
+                        <option value="annual">Годовой</option>
+                      </select>
+                    </label>
+                    <label id="rpt_date_wrap">Дата
+                      <input type="date" id="rpt_date" class="input" />
+                    </label>
+                    <label id="rpt_year_wrap" class="hidden">Год
+                      <input type="number" id="rpt_year" class="input" min="2020" max="2100" />
+                    </label>
+                    <label id="rpt_month_wrap" class="hidden">Месяц
+                      <select id="rpt_month" class="input">
+                        <option value="1">Январь</option><option value="2">Февраль</option>
+                        <option value="3">Март</option><option value="4">Апрель</option>
+                        <option value="5">Май</option><option value="6">Июнь</option>
+                        <option value="7">Июль</option><option value="8">Август</option>
+                        <option value="9">Сентябрь</option><option value="10">Октябрь</option>
+                        <option value="11">Ноябрь</option><option value="12">Декабрь</option>
+                      </select>
+                    </label>
+                    <label id="rpt_quarter_wrap" class="hidden">Квартал
+                      <select id="rpt_quarter" class="input">
+                        <option value="1">I</option><option value="2">II</option>
+                        <option value="3">III</option><option value="4">IV</option>
+                      </select>
+                    </label>
+                    <label>Типы документов
+                      <select id="rpt_order_types" class="input">
+                        <option value="">Все</option>
+                        <option value="VCHR">Чеки (VCHR)</option>
+                        <option value="INVC">Счета (INVC)</option>
+                        <option value="CORD">Курьер (CORD)</option>
+                        <option value="VCHR,INVC">Чеки + счета</option>
+                      </select>
+                    </label>
+                    <label>Магазин
+                      <select id="rpt_store" class="input">
+                        <option value="">Все магазины</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+                    <button type="button" class="btn" id="rpt_load">Сформировать</button>
+                    <button type="button" class="btn btn-secondary" id="rpt_xls" disabled>Скачать XLS</button>
+                  </div>
+
+                  <div style="margin-top:16px" id="rpt_summary_card">
+                    <div class="section-title">Сводка</div>
+                    <div id="rpt_summary" class="hint">Выберите период и нажмите «Сформировать».</div>
+                  </div>
+
+                  <div style="margin-top:16px" id="rpt_charts_card">
+                    <div class="section-title">Графики</div>
+                    <div class="reports-charts">
+                      <div class="rpt-chart-box">
+                        <div class="hint" style="margin-bottom:6px">По типам оплаты, ₽</div>
+                        <canvas id="rpt_chart_pay" height="220"></canvas>
+                      </div>
+                      <div class="rpt-chart-box rpt-chart-wide">
+                        <div class="hint" style="margin-bottom:6px">Динамика по периодам, ₽</div>
+                        <canvas id="rpt_chart_time" height="240"></canvas>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style="margin-top:16px">
+                    <div class="section-title">Детализация (points)</div>
+                    <div class="orders-table-wrap">
+                      <table class="orders-table" id="rpt_table">
+                        <thead>
+                          <tr>
+                            <th>Период</th>
+                            <th>Кассир</th>
+                            <th>Точка</th>
+                            <th>Тип оплаты</th>
+                            <th style="text-align:right">Сумма, ₽</th>
+                          </tr>
+                        </thead>
+                        <tbody id="rpt_tbody">
+                          <tr><td colspan="5" class="hint">Нет данных</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+
           <aside class="orders-detail-pane">
             <div class="card">
               <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
-                <span>История (сессия)</span>
+                <span>История отчётов</span>
                 <button type="button" class="btn btn-sm btn-secondary" id="rpt_hist_clear">Очистить</button>
               </div>
-              <p class="hint" style="margin-bottom:8px">Хранится только в сессии сервера до рестарта.</p>
+              <p class="hint" style="margin-bottom:8px">Хранится в сессии сервера до рестарта.</p>
               <div id="rpt_history" class="templates-list">
                 <p class="hint">Пока пусто</p>
               </div>
             </div>
           </aside>
-        </div>
-
-        <!-- Отдельный блок: платежи invoice (завершённые) -->
-        <div class="card" style="margin-top:20px" id="rpt_inv_card">
-          <div class="section-title">Платежи (invoice)</div>
-          <p class="hint" style="margin-bottom:12px">
-            Завершённые счета на оплату за период. ФИО покупателя подтягивается из состава чека (atol-5 / atol-4).
-            Период — не более 1 года.
-          </p>
-          <div class="form-grid reports-filters">
-            <label>С
-              <input type="datetime-local" id="rpt_inv_since" class="input" />
-            </label>
-            <label>По
-              <input type="datetime-local" id="rpt_inv_until" class="input" />
-            </label>
-            <label>Магазин
-              <select id="rpt_inv_store" class="input">
-                <option value="">Все магазины</option>
-              </select>
-            </label>
-          </div>
-          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            <button type="button" class="btn" id="rpt_inv_load">Сформировать</button>
-            <button type="button" class="btn btn-secondary" id="rpt_inv_xls" disabled>Скачать XLS</button>
-          </div>
-          <div id="rpt_inv_progress" class="hidden" style="margin-top:14px">
-            <div class="cat-busy-progress-wrap">
-              <div class="cat-busy-progress-bar">
-                <div class="cat-busy-progress-fill" id="rpt_inv_progress_fill" style="width:0%"></div>
-              </div>
-              <div class="cat-busy-progress-label hint" id="rpt_inv_progress_label">Подготовка…</div>
-            </div>
-          </div>
-          <div class="orders-table-wrap" style="margin-top:16px">
-            <table class="orders-table" id="rpt_inv_table">
-              <thead>
-                <tr>
-                  <th>UUID</th>
-                  <th>Дата</th>
-                  <th>ФИО покупателя</th>
-                  <th style="text-align:right">Сумма, ₽</th>
-                  <th>Чек</th>
-                  <th>ОФД</th>
-                </tr>
-              </thead>
-              <tbody id="rpt_inv_tbody">
-                <tr><td colspan="6" class="hint">Укажите период и нажмите «Сформировать»</td></tr>
-              </tbody>
-              <tfoot id="rpt_inv_tfoot" class="hidden">
-                <tr>
-                  <td colspan="3" style="text-align:right"><strong>Итого</strong></td>
-                  <td style="text-align:right"><strong id="rpt_inv_total">0,00</strong></td>
-                  <td colspan="2"></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
         </div>
       </div>
 
@@ -1434,7 +1453,7 @@
   <script src="/static/js/app.js?v=20261007mgr1"></script>
   <script src="/static/js/sections/dashboard.js?v=20261007mgr1"></script>
   <script src="/static/js/sections/catalog.js?v=20260825c"></script>
-  <script src="/static/js/sections/reports.js?v=20261023inv3"></script>
+  <script src="/static/js/sections/reports.js?v=20261023inv6"></script>
   <!-- Bitrix24 CRM widget: context (page, login, firm) via onBitrixLiveChat in app.js -->
   <script data-skip-moving="true">
   (function(w,d,u){
