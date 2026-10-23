@@ -379,14 +379,24 @@
 
   // ─── Invoice payments report ───────────────────────────────────────────
 
+  /**
+   * Тот же формат, что в app.js (документы): yyyy-MM-dd'T'HH:mm:ss.SSSZ
+   * EcomKassa без millis/offset отвечает ошибкой парсинга даты.
+   */
   function toIsoLocal(val) {
     if (!val) return null;
-    // datetime-local: 2026-10-23T12:00 → ISO with Z approximation
-    const s = String(val).trim();
+    let s = String(val).trim();
     if (!s) return null;
-    if (s.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(s)) return s;
-    // treat as local wall time → append :00 if needed, keep as-is for backend parse
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) return s + ":00";
+    s = s.replace(/Z$/i, "").replace(/[+\-]\d{2}:?\d{2}$/, "");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s += "T00:00:00";
+    else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) s += ":00";
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(s)) s += ".000";
+    else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$/.test(s)) {
+      const base = s.split(".")[0];
+      const frac = (s.split(".")[1] || "0").replace(/\D/g, "").padEnd(3, "0").slice(0, 3);
+      s = base + "." + frac;
+    }
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/.test(s)) s += "Z";
     return s;
   }
 
@@ -530,16 +540,19 @@
     const since = toIsoLocal(sinceRaw);
     const until = toIsoLocal(untilRaw);
     const storeId = $("#rpt_inv_store")?.value || "";
+    const storeIdNum = storeId !== "" ? Number(storeId) : null;
 
-    // client-side 1 year guard (backend also checks)
     try {
       const ds = new Date(since);
       const du = new Date(until);
+      if (Number.isNaN(ds.getTime()) || Number.isNaN(du.getTime())) {
+        return alert("Некорректный период", "error");
+      }
       if (du < ds) return alert("«По» не может быть раньше «С»", "error");
       const days = (du - ds) / (24 * 3600 * 1000);
       if (days > 366) return alert("Период не более 1 года", "error");
     } catch (_) {
-      /* backend validates */
+      return alert("Некорректный период", "error");
     }
 
     invBusy = true;
@@ -548,32 +561,91 @@
     setInvProgress(true, 0, "Поиск платежей…");
     renderInvoiceTable([]);
 
-    try {
-      const qs = new URLSearchParams();
-      qs.set("since", since);
-      qs.set("until", until);
-      if (storeId) qs.set("store_id", storeId);
+    const PAGE = 500;
+    const MAX_PAGES = 40;
+    let offset = 0;
+    let pages = 0;
+    let rawScanned = 0;
+    const items = [];
+    const statusHist = {};
 
-      const data = await api("/reports/invoices?" + qs.toString());
-      let items = Array.isArray(data.items) ? data.items.slice() : [];
-      // safety: only done (backend already filters)
-      items = items.filter((it) => DONE_STATUSES.has(String(it.status || "").toLowerCase()));
+    try {
+      // Тот же путь, что «Документы»: POST /orders/search + пагинация.
+      // API иногда отдаёт limit+1 (=есть ещё); COMPLETED может быть не на первой странице.
+      while (pages < MAX_PAGES) {
+        const body = {
+          offset,
+          limit: PAGE,
+          order_types: ["INVC"],
+          since,
+          until,
+        };
+        setInvProgress(
+          true,
+          Math.min(40, pages * 3),
+          `Поиск… стр. ${pages + 1}, найдено ${items.length}`
+        );
+        const data = await api("/orders/search", {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        const rows = Array.isArray(data.result) ? data.result : [];
+        pages += 1;
+        rawScanned += rows.length;
+
+        for (const r of rows) {
+          if (!r || typeof r !== "object") continue;
+          const st = String(r.status || "").toLowerCase().trim();
+          statusHist[st || "—"] = (statusHist[st || "—"] || 0) + 1;
+          if (!DONE_STATUSES.has(st)) continue;
+          const sid = r.store_id != null ? Number(r.store_id) : null;
+          if (storeIdNum != null && !Number.isNaN(storeIdNum) && sid !== storeIdNum) {
+            continue;
+          }
+          const oid = r.order_id;
+          items.push({
+            uuid: String(oid != null ? oid : r.external_id || ""),
+            order_id: oid != null ? Number(oid) : null,
+            external_id: r.external_id || null,
+            date: r.updated || null,
+            total: Number(r.total) || 0,
+            status: String(r.status || ""),
+            store_id: sid,
+            store_name: r.store_name || null,
+            client_name: null,
+          });
+        }
+
+        // конец выборки: меньше page size (не limit+1)
+        if (rows.length < PAGE) break;
+        offset += PAGE;
+      }
+
+      items.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
 
       const total = items.length;
       if (!total) {
         lastInvoiceReport = {
           items: [],
           total_sum: 0,
-          since: data.since,
-          until: data.until,
+          since,
+          until,
+          raw_scanned: rawScanned,
+          status_hist: statusHist,
         };
         setInvProgress(false, 0, "");
         renderInvoiceTable([]);
-        alert("Завершённых платежей за период нет", "success");
+        const histStr = Object.keys(statusHist)
+          .map((k) => `${k}: ${statusHist[k]}`)
+          .join(", ");
+        alert(
+          `Завершённых платежей нет (просмотрено ${rawScanned}, статусы: ${histStr || "—"})`,
+          "success"
+        );
         return;
       }
 
-      setInvProgress(true, 2, `Найдено ${total}. Загрузка ФИО…`);
+      setInvProgress(true, 45, `Найдено ${total}. Загрузка ФИО…`);
 
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
@@ -584,9 +656,8 @@
         } catch (_) {
           it.client_name = "—";
         }
-        const pct = Math.round(((i + 1) / total) * 100);
+        const pct = 45 + Math.round(((i + 1) / total) * 55);
         setInvProgress(true, pct, `ФИО ${i + 1} из ${total}`);
-        // partial render every 5 rows or last
         if ((i + 1) % 5 === 0 || i === total - 1) {
           renderInvoiceTable(items);
         }
@@ -596,13 +667,14 @@
       lastInvoiceReport = {
         items,
         total_sum: Math.round(sum * 100) / 100,
-        since: data.since,
-        until: data.until,
-        store_id: data.store_id,
+        since,
+        until,
+        store_id: storeIdNum,
+        raw_scanned: rawScanned,
       };
       renderInvoiceTable(items);
-      setInvProgress(true, 100, `Готово: ${total} платежей`);
-      setTimeout(() => setInvProgress(false, 0, ""), 1200);
+      setInvProgress(true, 100, `Готово: ${total} из ${rawScanned} просмотренных`);
+      setTimeout(() => setInvProgress(false, 0, ""), 1500);
       alert(`Отчёт готов: ${total} платежей`, "success");
     } catch (e) {
       setInvProgress(false, 0, "");
