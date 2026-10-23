@@ -34,3 +34,29 @@ class ReportHistoryItem(BaseModel):
     params: dict
     fetchedAt: str
     summary: Optional[dict] = None
+
+
+class InvoiceReportItem(BaseModel):
+    """Строка отчёта по платежам INVC (без ФИО — обогащается на клиенте)."""
+    uuid: str
+    order_id: Optional[int] = None
+    external_id: Optional[str] = None
+    date: Optional[str] = None
+    total: Optional[float] = None
+    status: Optional[str] = None
+    store_id: Optional[int] = None
+    store_name: Optional[str] = None
+    # заполняется на клиенте из atol-5 / atol-4
+    client_name: Optional[str] = None
+
+
+class InvoiceReportResponse(BaseModel):
+    reportType: str = "INVOICE_PAYMENTS"
+    since: Optional[str] = None
+    until: Optional[str] = None
+    store_id: Optional[int] = None
+    items: List[InvoiceReportItem] = []
+    total_count: int = 0
+    total_sum: float = 0.0
+    pages_scanned: int = 0
+    raw_scanned: int = 0

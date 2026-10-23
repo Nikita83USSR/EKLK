@@ -17,10 +17,24 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.clients.ecomkassa import EcomKassaClient, EcomKassaError
 from app.core.deps import CurrentUser, get_session, update_session_fields
-from app.schemas.reports import ReportPoint, ReportResponse, ReportHistoryItem
+from app.schemas.reports import (
+    ReportPoint,
+    ReportResponse,
+    ReportHistoryItem,
+    InvoiceReportItem,
+    InvoiceReportResponse,
+)
 from app.utils.logger import log_action
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
+
+# Статусы «завершён» для отчёта по платежам INVC (как в UI списка документов)
+INVOICE_DONE_STATUSES = frozenset(
+    {"done", "completed", "complete", "success", "ok", "ready", "printed"}
+)
+INVOICE_SEARCH_PAGE = 500
+INVOICE_MAX_PAGES = 40  # safety: 40 * 500 = 20_000 сырых записей
+INVOICE_MAX_PERIOD_DAYS = 366
 
 # Типы оплаты EcomKassa reports API
 PAYMENT_LABELS = {
@@ -420,3 +434,148 @@ async def clear_report_history(user: CurrentUser):
     if get_session(user["username"]):
         update_session_fields(user["username"], report_history=[])
     return {"ok": True}
+
+
+def _parse_iso_dt(value: str) -> datetime:
+    """Parse ISO / datetime-local into aware UTC datetime."""
+    s = (value or "").strip()
+    if not s:
+        raise ValueError("empty")
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        # date only YYYY-MM-DD
+        dt = datetime.fromisoformat(s + "T00:00:00")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _is_invoice_done(status: object) -> bool:
+    key = str(status or "").lower().strip()
+    return key in INVOICE_DONE_STATUSES
+
+
+@router.get("/invoices", response_model=InvoiceReportResponse)
+async def report_invoices(
+    user: CurrentUser,
+    since: str = Query(..., description="ISO / datetime-local start"),
+    until: str = Query(..., description="ISO / datetime-local end"),
+    store_id: Optional[int] = Query(None, description="Filter by store; omit = all"),
+):
+    """
+    Список завершённых платежей INVC за период.
+
+    Mobile search отдаёт страницы до 500 записей смешанных статусов.
+    Листаем offset, пока API не исчерпается, оставляя только done-статусы
+    (и опционально store_id). ФИО покупателя — на клиенте через /orders/{id}.
+    """
+    try:
+        dt_since = _parse_iso_dt(since)
+        dt_until = _parse_iso_dt(until)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Некорректный формат since/until")
+
+    if dt_until < dt_since:
+        raise HTTPException(status_code=400, detail="«По» не может быть раньше «С»")
+
+    if (dt_until - dt_since).days > INVOICE_MAX_PERIOD_DAYS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Период не более {INVOICE_MAX_PERIOD_DAYS} дней (1 год)",
+        )
+
+    # Нормализуем в ISO UTC с миллисекундами — как ждёт mobile API
+    since_iso = dt_since.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    until_iso = dt_until.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+    client = _client_for(user)
+    items: list[InvoiceReportItem] = []
+    pages = 0
+    raw_scanned = 0
+    offset = 0
+
+    try:
+        while pages < INVOICE_MAX_PAGES:
+            data = await client.search_orders(
+                offset=offset,
+                limit=INVOICE_SEARCH_PAGE,
+                since=since_iso,
+                until=until_iso,
+                order_types=["INVC"],
+            )
+            rows = data.get("result") or []
+            if not isinstance(rows, list):
+                rows = []
+            pages += 1
+            raw_scanned += len(rows)
+
+            for raw in rows:
+                if not isinstance(raw, dict):
+                    continue
+                if not _is_invoice_done(raw.get("status")):
+                    continue
+                sid = raw.get("storeId")
+                try:
+                    sid_int = int(sid) if sid is not None else None
+                except (TypeError, ValueError):
+                    sid_int = None
+                if store_id is not None and sid_int != int(store_id):
+                    continue
+
+                oid = raw.get("orderId")
+                try:
+                    total_val = float(raw.get("total") or 0)
+                except (TypeError, ValueError):
+                    total_val = 0.0
+
+                items.append(
+                    InvoiceReportItem(
+                        uuid=str(oid if oid is not None else raw.get("externalId") or ""),
+                        order_id=int(oid) if oid is not None else None,
+                        external_id=raw.get("externalId"),
+                        date=raw.get("updated"),
+                        total=round(total_val, 2),
+                        status=str(raw.get("status") or ""),
+                        store_id=sid_int,
+                        store_name=raw.get("storeName"),
+                    )
+                )
+
+            if len(rows) < INVOICE_SEARCH_PAGE:
+                break
+            offset += INVOICE_SEARCH_PAGE
+
+        # Сортировка по дате убыв. (как в документах)
+        def _date_key(it: InvoiceReportItem):
+            return it.date or ""
+
+        items.sort(key=_date_key, reverse=True)
+        total_sum = round(sum((it.total or 0.0) for it in items), 2)
+
+        log_action(
+            "reports_invoices",
+            f"items={len(items)} raw={raw_scanned} pages={pages} store={store_id}",
+            user_id=user["username"],
+        )
+
+        return InvoiceReportResponse(
+            reportType="INVOICE_PAYMENTS",
+            since=since_iso,
+            until=until_iso,
+            store_id=store_id,
+            items=items,
+            total_count=len(items),
+            total_sum=total_sum,
+            pages_scanned=pages,
+            raw_scanned=raw_scanned,
+        )
+    except EcomKassaError as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": str(e), "code": e.code, "raw": e.raw},
+        )
+    finally:
+        await client.close()
