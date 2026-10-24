@@ -298,27 +298,28 @@
       (report.since || "").slice(0, 10) +
       " — " +
       (report.until || "").slice(0, 10);
+    const body = {
+      reportType: "INVOICE_PAYMENTS",
+      params: {
+        since: report.since || null,
+        until: report.until || null,
+        store_id: report.store_id != null ? report.store_id : null,
+      },
+      summary: {
+        period_label: period,
+        total_count: (report.items && report.items.length) || 0,
+        total_sum: Number(report.total_sum) || 0,
+        points: (report.items && report.items.length) || 0,
+      },
+    };
     try {
       await api("/reports/history", {
         method: "POST",
-        body: JSON.stringify({
-          reportType: "INVOICE_PAYMENTS",
-          params: {
-            since: report.since,
-            until: report.until,
-            store_id: report.store_id ?? null,
-          },
-          summary: {
-            period_label: period,
-            total_count: (report.items || []).length,
-            total_sum: report.total_sum,
-            points: (report.items || []).length,
-          },
-        }),
+        body: JSON.stringify(body),
       });
       await loadHistory();
-    } catch (_) {
-      /* история не критична */
+    } catch (e) {
+      console.warn("invoice history push failed", e);
     }
   }
 
@@ -567,12 +568,16 @@
     return false;
   }
 
-  /** Статус чека (ФН) — как в ЛК. */
+  /** Статус чека (ФН) — fiscal.status; mobile не подмешиваем (FAILED ≠ ошибка чека всегда). */
   function checkStatusLabel(fiscal, mobileStatus) {
-    const st = String(
-      (fiscal && fiscal.status) || mobileStatus || ""
-    ).toLowerCase().trim();
-    if (!st) return "—";
+    const st = String((fiscal && fiscal.status) || "").toLowerCase().trim();
+    if (!st) {
+      // fallback только если fiscal нет совсем
+      const mob = String(mobileStatus || "").toLowerCase().trim();
+      if (["fail", "failed", "error"].includes(mob)) return "Ошибка";
+      if (PAYMENT_DONE.has(mob)) return "Завершён";
+      return "—";
+    }
     if (["fail", "failed", "error"].includes(st)) return "Ошибка";
     if (["canceled", "cancelled", "expired", "timeout"].includes(st)) return "Отменён";
     if (["done", "completed", "complete", "success", "ok", "ready", "printed"].includes(st)) return "Завершён";
@@ -583,20 +588,30 @@
     return st;
   }
 
-  /** Статус платежа (invoice_payload / mobile). */
+  /**
+   * Статус ПЛАТЕЖА — только invoice_payload / факт оплаты.
+   * Mobile FAILED часто означает ошибку чека, а не платежа — не путать.
+   */
   function paymentStatusLabel(detail, mobileStatus) {
     const fiscal = detail && detail.fiscal;
     const inv = fiscal && fiscal.invoice_payload;
     const invSt = String((inv && inv.status) || "").toLowerCase().trim();
-    const st = invSt || String(mobileStatus || (detail && detail.summary && detail.summary.status) || "").toLowerCase().trim();
-    if (!st) return "—";
-    if (PAYMENT_DONE.has(st)) return "Завершён";
-    if (["fail", "failed", "error"].includes(st)) return "Ошибка";
-    if (["canceled", "cancelled", "expired", "timeout"].includes(st)) return "Отменён";
-    if (["wait", "waiting", "pending", "process", "processing", "in_progress", "created", "new", "draft"].includes(st)) {
-      return "Ожидает";
+    if (invSt) {
+      if (PAYMENT_DONE.has(invSt)) return "Завершён";
+      if (["fail", "failed", "error"].includes(invSt)) return "Ошибка";
+      if (["canceled", "cancelled", "expired", "timeout"].includes(invSt)) return "Отменён";
+      if (["wait", "waiting", "pending"].includes(invSt)) return "Ожидает";
+      return invSt;
     }
-    return st;
+    // Нет invoice_payload (иногда report по store падает) — если оплата подтверждена иначе
+    if (isPaymentDone(detail, mobileStatus)) return "Завершён";
+    const mob = String(
+      mobileStatus || (detail && detail.summary && detail.summary.status) || ""
+    ).toLowerCase().trim();
+    if (PAYMENT_DONE.has(mob)) return "Завершён";
+    if (["wait", "waiting", "pending"].includes(mob)) return "Ожидает";
+    // mobile fail без признаков оплаты — не считаем статусом платежа «Ошибка»
+    return "—";
   }
 
   function ofdUrlFromFiscal(fiscal) {
@@ -760,11 +775,13 @@
           total_sum: 0,
           since,
           until,
+          store_id: storeIdNum,
           raw_scanned: rawScanned,
           status_hist: statusHist,
         };
         setInvProgress(false, 0, "");
         renderInvoiceTable([]);
+        await pushInvoiceHistory(lastInvoiceReport);
         const histStr = Object.keys(statusHist)
           .map((k) => `${k}: ${statusHist[k]}`)
           .join(", ");
@@ -795,7 +812,9 @@
         }
 
         const fiscal = detail && detail.fiscal;
-        const paySt = paymentStatusLabel(detail, cand.mobile_status);
+        // В отчёт попадают только оплаченные → платёж всегда «Завершён».
+        // Статус чека — отдельно из fiscal.status (fail ≠ ошибка платежа).
+        const paySt = "Завершён";
         const checkSt = checkStatusLabel(fiscal, cand.mobile_status);
         const ofd = ofdUrlFromFiscal(fiscal);
         const clientName = clientNameFromDetail(detail);
@@ -827,11 +846,13 @@
           total_sum: 0,
           since,
           until,
+          store_id: storeIdNum,
           raw_scanned: rawScanned,
           status_hist: statusHist,
         };
         setInvProgress(false, 0, "");
         renderInvoiceTable([]);
+        await pushInvoiceHistory(lastInvoiceReport);
         alert(
           `Завершённых платежей нет (кандидатов ${nCand}, просмотрено ${rawScanned})`,
           "success"
@@ -895,19 +916,50 @@
     XLSX.writeFile(wb, `eklk-invoice-payments-${tag}.xlsx`);
   }
 
+  const ACC_STORAGE_KEY = "eklk_rpt_accordion";
+
+  function readAccState() {
+    try {
+      return JSON.parse(sessionStorage.getItem(ACC_STORAGE_KEY) || "{}") || {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function writeAccState(id, open) {
+    try {
+      const st = readAccState();
+      st[id] = !!open;
+      sessionStorage.setItem(ACC_STORAGE_KEY, JSON.stringify(st));
+    } catch (_) { /* ignore */ }
+  }
+
   function bindReportAccordions() {
+    const saved = readAccState();
+    document.querySelectorAll(".rpt-accordion").forEach((card) => {
+      const id = card.id || "";
+      const btn = card.querySelector(".rpt-accordion-head");
+      // по умолчанию свёрнуты; если в sessionStorage есть значение — применяем
+      let open = false;
+      if (id && Object.prototype.hasOwnProperty.call(saved, id)) {
+        open = !!saved[id];
+      }
+      card.classList.toggle("is-open", open);
+      if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+
     document.querySelectorAll(".rpt-accordion-head").forEach((btn) => {
       if (btn.dataset.boundAcc) return;
       btn.dataset.boundAcc = "1";
       btn.addEventListener("click", (e) => {
-        // не сворачивать при клике по вложенным контролам (их нет в head)
         e.preventDefault();
-        const id = btn.getAttribute("data-rpt-acc");
+        const id = btn.getAttribute("data-rpt-acc") || "";
         const card = (id && document.getElementById(id)) || btn.closest(".rpt-accordion");
         if (!card) return;
         const open = !card.classList.contains("is-open");
         card.classList.toggle("is-open", open);
         btn.setAttribute("aria-expanded", open ? "true" : "false");
+        if (id) writeAccState(id, open);
       });
     });
   }

@@ -3713,3 +3713,20 @@ body[data-theme="glass"] .nav-dropdown-menu {
   visibility: visible;
   transition: visibility 0s;
 }
+
+
+/* External link in header nav (Новости) */
+.nav-ext-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+  color: inherit;
+  text-decoration: none;
+  opacity: 0.85;
+  font-size: inherit;
+  border-radius: 6px;
+}
+.nav-ext-link:hover {
+  opacity: 1;
+  background: var(--hover-bg, rgba(0, 0, 0, 0.06));
+}

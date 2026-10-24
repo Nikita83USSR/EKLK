@@ -55,6 +55,7 @@
         </div>
         <nav class="nav">
           <!-- URL: /home /create /payment /templates /orders /settings (см. app.js route) -->
+          <a class="nav-ext-link" href="https://ecomkassa.ru/news" target="_blank" rel="noopener">Новости</a>
           <button type="button" data-tab="home">Главная</button>
           <button type="button" data-tab="create">Чек</button>
           <div class="nav-dropdown" id="nav_payments">
@@ -995,8 +996,8 @@
         <div class="check-layout reports-layout">
           <div>
             <!-- Отчёт по ссылкам на оплату -->
-            <div class="card rpt-accordion is-open" id="rpt_inv_card" style="margin-bottom:16px">
-              <button type="button" class="rpt-accordion-head" aria-expanded="true" data-rpt-acc="rpt_inv_card">
+            <div class="card rpt-accordion" id="rpt_inv_card" style="margin-bottom:16px">
+              <button type="button" class="rpt-accordion-head" aria-expanded="false" data-rpt-acc="rpt_inv_card">
                 <span class="section-title" style="border:none;padding:0;margin:0">Отчет по ссылкам на оплату</span>
                 <span class="rpt-accordion-chevron" aria-hidden="true"></span>
               </button>
@@ -1058,8 +1059,8 @@
             </div>
 
             <!-- Отчёты по расчётам -->
-            <div class="card rpt-accordion is-open" id="rpt_calc_card" style="margin-bottom:16px">
-              <button type="button" class="rpt-accordion-head" aria-expanded="true" data-rpt-acc="rpt_calc_card">
+            <div class="card rpt-accordion" id="rpt_calc_card" style="margin-bottom:16px">
+              <button type="button" class="rpt-accordion-head" aria-expanded="false" data-rpt-acc="rpt_calc_card">
                 <span class="section-title" style="border:none;padding:0;margin:0">Отчёты по расчётам</span>
                 <span class="rpt-accordion-chevron" aria-hidden="true"></span>
               </button>
@@ -1365,7 +1366,7 @@
       <div class="footer-col">
         <div class="footer-title">Документы</div>
         <div><a href="https://ecomkassa.ru/helpcenter" target="_blank" rel="noopener">Инструкции</a></div>
-        <div><a href="https://app.ecomkassa.ru/assets/docs/leasing-public-ru.pdf" target="_blank" rel="noopener">Оферта на аренду касс</a></div>
+        <div><a href="https://ecomkassa.ru/ofertaarendakassy" target="_blank" rel="noopener">Оферта на аренду касс</a></div>
         <div><a href="https://app.ecomkassa.ru/assets/docs/license-agreement-ru.pdf" target="_blank" rel="noopener">Публичный договор оферты</a></div>
       </div>
     </div>
@@ -1453,7 +1454,7 @@
   <script src="/static/js/app.js?v=20261007mgr1"></script>
   <script src="/static/js/sections/dashboard.js?v=20261007mgr1"></script>
   <script src="/static/js/sections/catalog.js?v=20260825c"></script>
-  <script src="/static/js/sections/reports.js?v=20261023inv6"></script>
+  <script src="/static/js/sections/reports.js?v=20261023inv7"></script>
   <!-- Bitrix24 CRM widget: context (page, login, firm) via onBitrixLiveChat in app.js -->
   <script data-skip-moving="true">
   (function(w,d,u){
