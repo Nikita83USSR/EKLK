@@ -23,19 +23,30 @@
   }
 
   const VAT_LABELS = {
-    VAT_NONE: "Без НДС", none: "Без НДС",
-    VAT_0PCT: "0%", vat0: "0%",
-    VAT_5PCT: "5%", vat5: "5%",
-    VAT_7PCT: "7%", vat7: "7%",
-    VAT_10PCT: "10%", vat10: "10%",
-    VAT_22PCT: "22%", vat22: "22%",
-    VAT_20PCT: "20%", vat20: "20%",
-    VAT_105PCT: "5/105", vat105: "5/105",
-    VAT_107PCT: "7/107", vat107: "7/107",
-    VAT_110PCT: "10/110", vat110: "10/110",
-    VAT_122PCT: "22/122", vat122: "22/122",
-    VAT_120PCT: "20/120", vat120: "20/120",
+    VAT_NONE: "Без НДС", none: "Без НДС", vat_none: "Без НДС",
+    VAT_0PCT: "НДС 0%", vat0: "НДС 0%", vat_0pct: "НДС 0%",
+    VAT_5PCT: "НДС 5%", vat5: "НДС 5%", vat_5pct: "НДС 5%",
+    VAT_7PCT: "НДС 7%", vat7: "НДС 7%", vat_7pct: "НДС 7%",
+    VAT_10PCT: "НДС 10%", vat10: "НДС 10%", vat_10pct: "НДС 10%",
+    VAT_22PCT: "НДС 22%", vat22: "НДС 22%", vat_22pct: "НДС 22%",
+    VAT_20PCT: "НДС 20% (старая)", vat20: "НДС 20% (старая)", vat_20pct: "НДС 20% (старая)",
+    VAT_105PCT: "НДС 5/105", vat105: "НДС 5/105", vat_105pct: "НДС 5/105",
+    VAT_107PCT: "НДС 7/107", vat107: "НДС 7/107", vat_107pct: "НДС 7/107",
+    VAT_110PCT: "НДС 10/110", vat110: "НДС 10/110", vat_110pct: "НДС 10/110",
+    VAT_122PCT: "НДС 22/122", vat122: "НДС 22/122", vat_122pct: "НДС 22/122",
+    VAT_120PCT: "НДС 20/120 (старая)", vat120: "НДС 20/120 (старая)", vat_120pct: "НДС 20/120 (старая)",
   };
+
+  function vatLabel(v) {
+    if (v == null || v === "") return "—";
+    const s = String(v).trim();
+    if (VAT_LABELS[s]) return VAT_LABELS[s];
+    const lower = s.toLowerCase();
+    if (VAT_LABELS[lower]) return VAT_LABELS[lower];
+    const norm = lower.replace(/%/g, "");
+    if (VAT_LABELS[norm]) return VAT_LABELS[norm];
+    return s;
+  }
   const PO_LABELS = {
     COMMODITY: "Товар", commodity: "Товар",
     SERVICE: "Услуга", service: "Услуга",
@@ -175,7 +186,7 @@
               <td>${escapeHtml(it.name || "")}</td>
               <td><code>${escapeHtml(it.sku || "")}</code></td>
               <td>${money(it.price)}</td>
-              <td>${VAT_LABELS[it.vatType] || it.vatType || "—"}</td>
+              <td>${vatLabel(it.vatType)}</td>
               <td>${PO_LABELS[it.paymentObject] || it.paymentObject || "—"}</td>
               <td style="white-space:nowrap">
                 <button type="button" class="btn btn-sm btn-secondary cat-edit" data-id="${id}">✎</button>

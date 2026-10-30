@@ -188,8 +188,8 @@ def _map_item(raw: dict) -> CatalogItemOut:
         name=raw.get("name"),
         sku=raw.get("sku"),
         price=raw.get("price"),
-        vatType=raw.get("vatType"),
-        paymentObject=raw.get("paymentObject"),
+        vatType=_norm_vat(raw.get("vatType")),
+        paymentObject=_norm_po(raw.get("paymentObject")),
         taxId=raw.get("taxId") or raw.get("taxIdentity"),
         raw=raw,
     )
