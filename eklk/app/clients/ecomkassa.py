@@ -973,11 +973,18 @@ class EcomKassaClient:
         # normalize enum -> mobile lowercase
         vat_map = {
             "VAT_NONE": "none", "NONE": "none",
-            "VAT_0": "vat0", "VAT0": "vat0",
+            "VAT_0": "vat0", "VAT0": "vat0", "VAT_0PCT": "vat0",
+            "VAT_5": "vat5", "VAT5": "vat5", "VAT_5PCT": "vat5",
+            "VAT_7": "vat7", "VAT7": "vat7", "VAT_7PCT": "vat7",
             "VAT_10": "vat10", "VAT_10PCT": "vat10", "VAT10": "vat10",
+            "VAT_22": "vat22", "VAT22": "vat22", "VAT_22PCT": "vat22",
             "VAT_20": "vat20", "VAT_20PCT": "vat20", "VAT20": "vat20",
-            "VAT_10_110": "vat110", "VAT_18": "vat18", "VAT_18PCT": "vat18",
-            "VAT_110": "vat110", "VAT_120": "vat120",
+            "VAT_105": "vat105", "VAT_105PCT": "vat105",
+            "VAT_107": "vat107", "VAT_107PCT": "vat107",
+            "VAT_10_110": "vat110", "VAT_110": "vat110", "VAT_110PCT": "vat110",
+            "VAT_122": "vat122", "VAT_122PCT": "vat122",
+            "VAT_120": "vat120", "VAT_120PCT": "vat120",
+            "VAT_18": "vat18", "VAT_18PCT": "vat18",
         }
         vat_l = vat_map.get(vat.upper().replace(" ", ""), vat.lower())
 

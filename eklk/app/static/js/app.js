@@ -1238,13 +1238,16 @@
   const CAT_VAT_TO_FORM = {
     VAT_NONE: "none", none: "none",
     VAT_0PCT: "vat0", vat0: "vat0",
-    VAT_10PCT: "vat10", vat10: "vat10",
-    VAT_110PCT: "vat110", vat110: "vat110",
-    VAT_20PCT: "vat20", vat20: "vat20",
-    VAT_120PCT: "vat120", vat120: "vat120",
     VAT_5PCT: "vat5", vat5: "vat5",
     VAT_7PCT: "vat7", vat7: "vat7",
+    VAT_10PCT: "vat10", vat10: "vat10",
     VAT_22PCT: "vat22", vat22: "vat22",
+    VAT_20PCT: "vat20", vat20: "vat20",
+    VAT_105PCT: "vat105", vat105: "vat105",
+    VAT_107PCT: "vat107", vat107: "vat107",
+    VAT_110PCT: "vat110", vat110: "vat110",
+    VAT_122PCT: "vat122", vat122: "vat122",
+    VAT_120PCT: "vat120", vat120: "vat120",
   };
   const CAT_PO_TO_FORM = {
     COMMODITY: "1", commodity: "1",
@@ -3862,19 +3865,26 @@
   function orderTypeLabel(row) {
     if (!row) return "—";
     const raw = row.raw || {};
+    const isCorr = row.is_correction === true || raw.isCorrection === true;
+    const isSale = !(row.is_sale === false || raw.isSale === false);
+
     const op = String(
       raw.operation || raw.operationType || raw.receiptOperation || raw.atolOperation || ""
     ).toLowerCase();
-    if (op.includes("correction")) {
+    if (op && (op.includes("sell") || op.includes("buy") || op.includes("correction"))) {
       return typeLabel(op);
     }
-    if (row.is_correction === true || raw.isCorrection === true) {
-      if (row.is_sale === false || raw.isSale === false) {
-        return "Чек коррекции (возврат)";
-      }
-      return "Чек коррекции";
+
+    if (isCorr) {
+      return isSale ? "Коррекция прихода" : "Коррекция возврата прихода";
     }
-    return typeLabel(row.order_type);
+
+    const ot = String(row.order_type || "").toUpperCase();
+    if (ot === "INVC") return "Счёт на оплату";
+    if (ot === "CORD") return "Курьер";
+
+    // VCHR и прочее: направление приход / возврат
+    return isSale ? "Приход" : "Возврат прихода";
   }
 
   function formatMoney(n) {

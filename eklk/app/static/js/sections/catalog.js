@@ -25,11 +25,16 @@
   const VAT_LABELS = {
     VAT_NONE: "Без НДС", none: "Без НДС",
     VAT_0PCT: "0%", vat0: "0%",
+    VAT_5PCT: "5%", vat5: "5%",
+    VAT_7PCT: "7%", vat7: "7%",
     VAT_10PCT: "10%", vat10: "10%",
-    VAT_110PCT: "10/110", vat110: "10/110",
+    VAT_22PCT: "22%", vat22: "22%",
     VAT_20PCT: "20%", vat20: "20%",
+    VAT_105PCT: "5/105", vat105: "5/105",
+    VAT_107PCT: "7/107", vat107: "7/107",
+    VAT_110PCT: "10/110", vat110: "10/110",
+    VAT_122PCT: "22/122", vat122: "22/122",
     VAT_120PCT: "20/120", vat120: "20/120",
-    vat5: "5%", vat7: "7%", vat22: "22%",
   };
   const PO_LABELS = {
     COMMODITY: "Товар", commodity: "Товар",
@@ -218,7 +223,7 @@
     const poRaw = item ? (item.paymentObject || "COMMODITY") : "COMMODITY";
     const vatSel = $("#cat_vat");
     const poSel = $("#cat_po");
-    const vatMap = {none:"VAT_NONE",vat0:"VAT_0PCT",vat10:"VAT_10PCT",vat110:"VAT_110PCT",vat20:"VAT_20PCT",vat120:"VAT_120PCT"};
+    const vatMap = {none:"VAT_NONE",vat0:"VAT_0PCT",vat5:"VAT_5PCT",vat7:"VAT_7PCT",vat10:"VAT_10PCT",vat22:"VAT_22PCT",vat20:"VAT_20PCT",vat105:"VAT_105PCT",vat107:"VAT_107PCT",vat110:"VAT_110PCT",vat122:"VAT_122PCT",vat120:"VAT_120PCT"};
     const poMap = {commodity:"COMMODITY",service:"SERVICE",job:"JOB",excise:"EXCISE",payment:"PAYMENT",another:"ANOTHER"};
     if (vatSel) vatSel.value = vatMap[String(vatRaw).toLowerCase()] || (String(vatRaw).toUpperCase().startsWith("VAT_") ? String(vatRaw).toUpperCase() : "VAT_NONE");
     if (poSel) poSel.value = poMap[String(poRaw).toLowerCase()] || (["COMMODITY","SERVICE","JOB","EXCISE","PAYMENT","ANOTHER"].includes(String(poRaw).toUpperCase()) ? String(poRaw).toUpperCase() : "COMMODITY");
